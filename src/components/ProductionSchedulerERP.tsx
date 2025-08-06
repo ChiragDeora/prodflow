@@ -2,43 +2,35 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Calendar, Clock, Grid3X3, List, Plus, Filter, Search, Download, Upload, 
-  Settings, Play, Pause, CheckCircle, AlertCircle, Wrench, Package, Home, 
-  Users, BarChart3, FileText, Bell, Menu, X, Save, Edit, Trash2, Eye, 
-  ArrowLeft, ArrowRight, Image, Camera, FileSpreadsheet, ArrowUpDown, 
-  ArrowUp, ArrowDown, Info, HelpCircle, User, LogOut, Pencil
+  HelpCircle, Info, Menu, Package, Plus, Save, Upload, User, Wrench, X
 } from 'lucide-react';
 import { useAuth } from './auth/AuthProvider';
 import ExcelFileReader from './ExcelFileReader';
+import UnitSelector from './UnitSelector';
 import { 
   machineAPI, 
   moldAPI, 
   scheduleAPI, 
   rawMaterialAPI, 
+  packingMaterialAPI,
+  unitAPI,
+  unitManagementSettingsAPI,
   Machine as SupabaseMachine, 
   Mold as SupabaseMold, 
-  ScheduleJob as SupabaseScheduleJob 
+  ScheduleJob as SupabaseScheduleJob,
+  RawMaterial as SupabaseRawMaterial,
+  PackingMaterial as SupabasePackingMaterial,
+  Unit
 } from '../lib/supabase';
 import { authAPI, userProfileAPI } from '../lib/auth';
+import { moduleRegistry, getAvailableModules, getModule } from './modules/moduleRegistry';
 
 // Type definitions (using Supabase types)
 type Machine = SupabaseMachine;
 type Mold = SupabaseMold;
 type ScheduleJob = SupabaseScheduleJob;
-
-// Raw Material interface based on the sample data
-interface RawMaterial {
-  id?: string; // Optional since database auto-generates UUID
-  sl_no: number;
-  type1: string; // Short form like "PP"
-  type2: string; // Full form like "HP", "ICP", "RCP" - treated as primary key
-  grade: string;
-  supplier: string;
-  mfi: number;
-  density: number;
-  created_at?: string;
-  updated_at?: string;
-}
+type RawMaterial = SupabaseRawMaterial;
+type PackingMaterial = SupabasePackingMaterial;
 
 interface JobForm {
   date: string;
@@ -62,10 +54,10 @@ interface MenuItem {
 }
 
 type ModuleType = 'scheduler' | 'masters' | 'approvals' | 'reports' | 'operators' | 'profile';
-type ModalType = 'job' | 'machine' | 'mold' | 'view_machine' | 'view_mold' | 'view_schedule' | '';
+type ModalType = 'job' | 'machine' | 'mold' | 'packing_material' | 'raw_material' | 'view_machine' | 'view_mold' | 'view_schedule' | 'view_packing_material' | 'view_raw_material' | '';
 type ActionType = 'edit' | 'delete' | 'view' | 'approve' | 'mark_done';
-type ItemType = 'machine' | 'mold' | 'schedule' | 'material' | 'product' | 'raw_material';
-type DataType = 'machines' | 'molds' | 'raw_materials';
+type ItemType = 'machine' | 'mold' | 'schedule' | 'material' | 'product' | 'raw_material' | 'packing_material';
+type DataType = 'machines' | 'molds' | 'raw_materials' | 'packing_materials';
 
 const ProductionSchedulerERP: React.FC = () => {
   const [currentModule, setCurrentModule] = useState<ModuleType>(() => {
@@ -89,9 +81,21 @@ const ProductionSchedulerERP: React.FC = () => {
     }
     return new Date().toISOString().split('T')[0];
   });
+
+  // Unit filter state - now using unit IDs instead of names
+  const [selectedUnit, setSelectedUnit] = useState<string>(() => {
+    // Try to get the selected unit from localStorage with user-specific key, default to 'all'
+    if (typeof window !== 'undefined') {
+      const userId = localStorage.getItem('currentUserId') || 'default';
+      const saved = localStorage.getItem(`prodSchedulerSelectedUnit_${userId}`);
+      return saved || 'all';
+    }
+    return 'all';
+  });
+
   const [showModal, setShowModal] = useState<boolean>(false);
   const [modalType, setModalType] = useState<ModalType>('');
-  const [editingItem, setEditingItem] = useState<Machine | Mold | ScheduleJob | RawMaterial | null>(null);
+  const [editingItem, setEditingItem] = useState<Machine | Mold | ScheduleJob | RawMaterial | PackingMaterial | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [viewingNameplate, setViewingNameplate] = useState<string | null>(null);
   const [showExcelReader, setShowExcelReader] = useState<boolean>(false);
@@ -99,27 +103,7 @@ const ProductionSchedulerERP: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [showInfoModal, setShowInfoModal] = useState<boolean>(false);
   const [infoModalType, setInfoModalType] = useState<string>('');
-  
-  // Sorting state with user-specific persistence
-  const [sortField, setSortField] = useState<string>(() => {
-    // Try to get the sort field from localStorage with user-specific key, default to 'machine_id'
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      const saved = localStorage.getItem(`prodSchedulerSortField_${userId}`);
-      return saved || 'machine_id';
-    }
-    return 'machine_id';
-  });
-  
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(() => {
-    // Try to get the sort direction from localStorage with user-specific key, default to 'asc'
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      const saved = localStorage.getItem(`prodSchedulerSortDirection_${userId}`);
-      return (saved as 'asc' | 'desc') || 'asc';
-    }
-    return 'asc';
-  });
+
   
   // Separate sorting states for Machine Master and Mold Master tabs
   const [machineSortField, setMachineSortField] = useState<string>(() => {
@@ -185,12 +169,45 @@ const ProductionSchedulerERP: React.FC = () => {
     }
     return 'asc';
   });
+
+  // Packing Materials sorting state with user-specific persistence
+  const [packingMaterialSortField, setPackingMaterialSortField] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const userId = localStorage.getItem('currentUserId') || 'default';
+      const saved = localStorage.getItem(`prodSchedulerPackingMaterialSortField_${userId}`);
+      return saved || 'sl_no';
+    }
+    return 'sl_no';
+  });
+  
+  const [packingMaterialSortDirection, setPackingMaterialSortDirection] = useState<'asc' | 'desc'>(() => {
+    if (typeof window !== 'undefined') {
+      const userId = localStorage.getItem('currentUserId') || 'default';
+      const saved = localStorage.getItem(`prodSchedulerPackingMaterialSortDirection_${userId}`);
+      return (saved as 'asc' | 'desc') || 'asc';
+    }
+    return 'asc';
+  });
+
+  // Packing Materials category filter state with user-specific persistence
+  const [packingMaterialCategoryFilter, setPackingMaterialCategoryFilter] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const userId = localStorage.getItem('currentUserId') || 'default';
+      const saved = localStorage.getItem(`prodSchedulerPackingMaterialCategoryFilter_${userId}`);
+      return saved || 'all';
+    }
+    return 'all';
+  });
   
   // Data from Supabase
   const [machinesMaster, setMachinesMaster] = useState<Machine[]>([]);
   const [moldsMaster, setMoldsMaster] = useState<Mold[]>([]);
   const [rawMaterialsMaster, setRawMaterialsMaster] = useState<RawMaterial[]>([]);
+  const [packingMaterialsMaster, setPackingMaterialsMaster] = useState<PackingMaterial[]>([]);
   const [scheduleData, setScheduleData] = useState<ScheduleJob[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [unitManagementEnabled, setUnitManagementEnabled] = useState(false);
+  const [defaultUnit, setDefaultUnit] = useState('Unit 1');
 
   // Handle nameplate image upload
   const handleNameplateUpload = (file: File): Promise<string> => {
@@ -293,24 +310,41 @@ const ProductionSchedulerERP: React.FC = () => {
         return;
       }
       
-      const [machines, molds, schedules, rawMaterials] = await Promise.all([
+      const [machines, molds, schedules, rawMaterials, packingMaterials, unitsData] = await Promise.all([
         machineAPI.getAll(),
         moldAPI.getAll(),
         scheduleAPI.getAll(),
-        rawMaterialAPI.getAll()
+        rawMaterialAPI.getAll(),
+        packingMaterialAPI.getAll(),
+        unitAPI.getAll()
       ]);
       
       console.log('Data loaded successfully:', { 
         machines: machines.length, 
         molds: molds.length, 
         schedules: schedules.length,
-        raw_materials: rawMaterials.length
+        raw_materials: rawMaterials.length,
+        packing_materials: packingMaterials.length,
+        units: unitsData.length
       });
       
       setMachinesMaster(machines);
       setMoldsMaster(molds);
       setScheduleData(schedules);
       setRawMaterialsMaster(rawMaterials);
+      setPackingMaterialsMaster(packingMaterials);
+      setUnits(unitsData);
+      
+        // Load unit management settings
+  try {
+    const enabled = await unitManagementSettingsAPI.isUnitManagementEnabled();
+    const defaultUnitSetting = await unitManagementSettingsAPI.getDefaultUnit();
+    setUnitManagementEnabled(enabled);
+    setDefaultUnit(defaultUnitSetting);
+    console.log('Unit management settings loaded:', { enabled, defaultUnit: defaultUnitSetting });
+  } catch (error) {
+    console.error('Error loading unit management settings:', error);
+  }
     } catch (error) {
       console.error('Error loading data:', error);
       // If data loading fails due to auth issues, don't retry indefinitely
@@ -360,6 +394,8 @@ const ProductionSchedulerERP: React.FC = () => {
       // Force a re-render to ensure the sorted data is displayed
       setMachinesMaster(prev => [...prev]);
       setMoldsMaster(prev => [...prev]);
+      setRawMaterialsMaster(prev => [...prev]);
+      setPackingMaterialsMaster(prev => [...prev]);
     });
     setShowExcelReader(false);
   };
@@ -413,14 +449,25 @@ const ProductionSchedulerERP: React.FC = () => {
         case 'raw_materials':
           return [
             { column: 'Sl. No.', description: 'Serial number for raw material identification (e.g., 1, 2, 3). Sequential numbering for easy reference.' },
-            { column: 'Type 1', description: 'Short form of material type (e.g., PP, PE, ABS). Abbreviated classification of the raw material.' },
-            { column: 'Type 2', description: 'Full form of material type (e.g., HP, ICP, RCP). Complete classification and specification of the material.' },
-            { column: 'Grade', description: 'Material grade specification (e.g., H350, M350, L350). Quality and performance classification of the material.' },
-            { column: 'Supplier', description: 'Material supplier name (e.g., Reliance, Haldia, Indian Oil). Company that supplies the raw material.' },
-            { column: 'MFI', description: 'Melt Flow Index (e.g., 2.5, 3.0, 4.0). Measure of material flow characteristics during processing.' },
-            { column: 'Density', description: 'Material density in g/cm³ (e.g., 0.91, 0.92, 0.93). Physical property indicating material weight per unit volume.' },
-            { column: 'Status', description: 'Material availability status. Active = Available for use, Inactive = Temporarily unavailable, Discontinued = No longer available.' },
+            { column: 'Category', description: 'Material category (e.g., PP, PE, ABS). Primary classification of the raw material type.' },
+            { column: 'Type', description: 'Material type specification (e.g., HP, ICP, RCP, LDPE, MB). Specific type and grade classification.' },
+            { column: 'Grade', description: 'Material grade specification (e.g., HJ333MO, 1750 MN). Quality and performance classification of the material.' },
+            { column: 'Supplier', description: 'Material supplier name (e.g., Borouge, IOCL, Basell). Company that supplies the raw material.' },
+            { column: 'MFI', description: 'Melt Flow Index (e.g., 75, 60, 70). Measure of material flow characteristics during processing.' },
+            { column: 'Density', description: 'Material density in g/cm³ (e.g., 910, 900, 903). Physical property indicating material weight per unit volume.' },
+            { column: 'TDS', description: 'Technical Data Sheet image. Click to view the TDS document for detailed material specifications.' },
             { column: 'Actions', description: 'Available actions: View details, Edit material information, Delete material from system.' }
+          ];
+        case 'packing_materials':
+          return [
+            { column: 'Category', description: 'Packing material category (e.g., Boxes, PolyBags, Bopp). Classification of the packing material type.' },
+            { column: 'Type', description: 'Packing material type (e.g., Export, Local). Specific type or variant of the packing material.' },
+            { column: 'Item Code', description: 'Unique item code for the packing material (e.g., CTN-Ro16, CTN-Ro48). Product identifier for inventory management.' },
+            { column: 'Pack Size', description: 'Quantity per pack (e.g., 150, 800). Number of items or units in one pack.' },
+            { column: 'Dimensions', description: 'Physical dimensions of the packing material (e.g., LxBxH format). Size specifications for storage and handling.' },
+            { column: 'Technical Detail', description: 'Technical specifications and requirements (e.g., material grade, strength, specifications). Detailed technical information about the packing material.' },
+            { column: 'Brand', description: 'Brand or manufacturer name (e.g., Regular, Gesa). Company that manufactures or supplies the packing material.' },
+            { column: 'Actions', description: 'Available actions: View details, Edit packing material information, Delete packing material from system.' }
           ];
         default:
           return [];
@@ -432,6 +479,7 @@ const ProductionSchedulerERP: React.FC = () => {
         case 'machines': return 'Machine Master Columns';
         case 'molds': return 'Mold Master Columns';
         case 'raw_materials': return 'Raw Materials Master Columns';
+        case 'packing_materials': return 'Packing Materials Master Columns';
         default: return 'Table Columns';
       }
     };
@@ -441,6 +489,7 @@ const ProductionSchedulerERP: React.FC = () => {
         case 'machines': return 'Understanding the machine master table columns and their meanings.';
         case 'molds': return 'Understanding the mold master table columns and their meanings.';
         case 'raw_materials': return 'Understanding the raw materials master table columns and their meanings.';
+        case 'packing_materials': return 'Understanding the packing materials master table columns and their meanings.';
         default: return 'Information about table columns.';
       }
     };
@@ -574,7 +623,7 @@ const ProductionSchedulerERP: React.FC = () => {
       if (field === 'cavities' || field === 'cycle_time' || field === 'st_wt') {
         aValue = Number(aValue) || 0;
         bValue = Number(bValue) || 0;
-      } else if (field === 'mold_id' || field === 'item_code') {
+      } else if (field === 'mold_id' || field === 'item_code' || field === 'sr_no') {
         // Special handling for mold IDs like "RP-1", "RP-10", etc.
         const extractNumber = (id: string) => {
           // Handle patterns like "RP-1", "RP-10", "MOLD-1", etc.
@@ -639,51 +688,148 @@ const ProductionSchedulerERP: React.FC = () => {
     });
   };
 
+  const sortPackingMaterials = (materials: PackingMaterial[], field: string, direction: 'asc' | 'desc'): PackingMaterial[] => {
+    return [...materials].sort((a, b) => {
+      let aValue: any = a[field as keyof PackingMaterial];
+      let bValue: any = b[field as keyof PackingMaterial];
+      
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = bValue.toLowerCase();
+      } else if (typeof aValue === 'number' && typeof bValue === 'number') {
+        aValue = Number(aValue);
+        bValue = Number(bValue);
+      }
+      
+      if (aValue < bValue) {
+        return direction === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  };
+
+  // Unit filter handler
+  const handleUnitFilterChange = (unit: string) => {
+    setSelectedUnit(unit);
+    // Save to localStorage with user-specific key
+    if (typeof window !== 'undefined') {
+      const userId = localStorage.getItem('currentUserId') || 'default';
+      localStorage.setItem(`prodSchedulerSelectedUnit_${userId}`, unit);
+    }
+  };
+
+  // Validate selected unit when units are loaded
+  useEffect(() => {
+    if (units.length > 0 && selectedUnit !== 'all') {
+      const availableUnitIds = getAvailableUnitIds();
+      if (!availableUnitIds.includes(selectedUnit)) {
+        // Selected unit no longer exists, reset to 'all'
+        console.log(`Unit ID "${selectedUnit}" no longer exists, resetting to "all"`);
+        setSelectedUnit('all');
+        if (typeof window !== 'undefined') {
+          const userId = localStorage.getItem('currentUserId') || 'default';
+          localStorage.setItem(`prodSchedulerSelectedUnit_${userId}`, 'all');
+        }
+      }
+    }
+  }, [units, selectedUnit]);
+
+  // Get available unit IDs from units table
+  const getAvailableUnitIds = (): string[] => {
+    try {
+      return units.map((unit: Unit) => unit.id).sort();
+    } catch (error) {
+      console.error('Error getting unit IDs:', error);
+      return [];
+    }
+  };
+
+  // Get available units for display (names)
+  const getAvailableUnits = (): { id: string; name: string }[] => {
+    try {
+      return units.map((unit: Unit) => ({ id: unit.id, name: unit.name })).sort((a, b) => a.name.localeCompare(b.name));
+    } catch (error) {
+      console.error('Error getting units:', error);
+      return [];
+    }
+  };
+
+  // Filter data based on selected unit
+  const getFilteredData = () => {
+    if (selectedUnit === 'all') {
+      return {
+        machines: machinesMaster,
+        molds: moldsMaster,
+        rawMaterials: rawMaterialsMaster,
+        packingMaterials: packingMaterialsMaster
+      };
+    }
+    
+    // Find the selected unit by ID to get its name
+    const selectedUnitData = units.find(unit => unit.id === selectedUnit);
+    const selectedUnitName = selectedUnitData?.name;
+    
+    if (!selectedUnitName) {
+      // If unit not found, return all data
+      return {
+        machines: machinesMaster,
+        molds: moldsMaster,
+        rawMaterials: rawMaterialsMaster,
+        packingMaterials: packingMaterialsMaster
+      };
+    }
+    
+    return {
+      machines: machinesMaster.filter((machine: Machine) => machine.unit === selectedUnitName),
+      molds: moldsMaster.filter((mold: Mold) => mold.unit === selectedUnitName),
+      rawMaterials: rawMaterialsMaster.filter((material: RawMaterial) => material.unit === selectedUnitName),
+      packingMaterials: packingMaterialsMaster.filter((material: PackingMaterial) => material.unit === selectedUnitName)
+    };
+  };
+
   // Get sorted machines
   const sortedMachines = useMemo(() => {
+    const filteredData = getFilteredData();
     // First filter by category if not 'all'
-    let filteredMachines = machinesMaster;
+    let filteredMachines = filteredData.machines;
     if (machineCategoryFilter !== 'all') {
-      filteredMachines = machinesMaster.filter(machine => machine.category === machineCategoryFilter);
+      filteredMachines = filteredData.machines.filter(machine => machine.category === machineCategoryFilter);
     }
     
     // Then sort the filtered machines
     return sortMachines(filteredMachines, machineSortField, machineSortDirection);
-  }, [machinesMaster, machineSortField, machineSortDirection, machineCategoryFilter]);
+  }, [machinesMaster, machineSortField, machineSortDirection, machineCategoryFilter, selectedUnit]);
   
   // Get sorted molds
   const sortedMolds = useMemo(() => {
-    return sortMolds(moldsMaster, moldSortField, moldSortDirection);
-  }, [moldsMaster, moldSortField, moldSortDirection]);
+    const filteredData = getFilteredData();
+    return sortMolds(filteredData.molds, moldSortField, moldSortDirection);
+  }, [moldsMaster, moldSortField, moldSortDirection, selectedUnit]);
   console.log('Sorted molds result:', sortedMolds.map(m => ({ id: m.mold_id, item_code: m.item_code })));
 
   const sortedRawMaterials = useMemo(() => {
-    return sortRawMaterials(rawMaterialsMaster, rawMaterialSortField, rawMaterialSortDirection);
-  }, [rawMaterialsMaster, rawMaterialSortField, rawMaterialSortDirection]);
+    const filteredData = getFilteredData();
+    return sortRawMaterials(filteredData.rawMaterials, rawMaterialSortField, rawMaterialSortDirection);
+  }, [rawMaterialsMaster, rawMaterialSortField, rawMaterialSortDirection, selectedUnit]);
 
-  // Handle sort change with persistence
-  const handleSortChange = (field: string) => {
-    let newDirection: 'asc' | 'desc' = 'asc';
+  const sortedPackingMaterials = useMemo(() => {
+    const filteredData = getFilteredData();
+    let filteredMaterials = filteredData.packingMaterials;
     
-    if (field === sortField) {
-      // Toggle direction if same field
-      newDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-    } else {
-      // New field, default to ascending
-      newDirection = 'asc';
+    // Apply category filter
+    if (packingMaterialCategoryFilter !== 'all') {
+      filteredMaterials = filteredData.packingMaterials.filter(material => 
+        material.category === packingMaterialCategoryFilter
+      );
     }
     
-    // Update state
-    setSortField(field);
-    setSortDirection(newDirection);
-    
-    // Save to localStorage with user-specific key
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      localStorage.setItem(`prodSchedulerSortField_${userId}`, field);
-      localStorage.setItem(`prodSchedulerSortDirection_${userId}`, newDirection);
-    }
-  };
+    return sortPackingMaterials(filteredMaterials, packingMaterialSortField, packingMaterialSortDirection);
+  }, [packingMaterialsMaster, packingMaterialCategoryFilter, packingMaterialSortField, packingMaterialSortDirection, selectedUnit]);
+
+
 
   // Handle machine sort change with persistence
   const handleMachineSortChange = (field: string) => {
@@ -751,6 +897,28 @@ const ProductionSchedulerERP: React.FC = () => {
     }
   };
 
+  const handlePackingMaterialSortChange = (field: string) => {
+    if (packingMaterialSortField === field) {
+      setPackingMaterialSortDirection(packingMaterialSortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setPackingMaterialSortField(field);
+      setPackingMaterialSortDirection('asc');
+    }
+    
+    // Save to localStorage with user-specific key
+    if (typeof window !== 'undefined') {
+      const userId = localStorage.getItem('currentUserId') || 'default';
+      localStorage.setItem(`prodSchedulerPackingMaterialSortField_${userId}`, field);
+      localStorage.setItem(`prodSchedulerPackingMaterialSortDirection_${userId}`, packingMaterialSortDirection === 'asc' ? 'desc' : 'asc');
+    }
+  };
+
+  const handlePackingMaterialCategoryFilterChange = (category: string) => {
+    const userId = localStorage.getItem('currentUserId') || 'default';
+    setPackingMaterialCategoryFilter(category);
+    localStorage.setItem(`prodSchedulerPackingMaterialCategoryFilter_${userId}`, category);
+  };
+
   const openExcelReader = (dataType: DataType) => {
     setExcelDataType(dataType);
     setShowExcelReader(true);
@@ -770,34 +938,59 @@ const ProductionSchedulerERP: React.FC = () => {
     created_by: 'Current User'
   });
 
-  const menuItems: MenuItem[] = [
-    { id: 'scheduler', label: 'Production Scheduler', icon: Calendar, description: 'Plan and schedule production jobs' },
-    { id: 'masters', label: 'Master Data', icon: Settings, description: 'Manage machines and molds' },
-    { id: 'approvals', label: 'Approvals', icon: CheckCircle, description: 'Review completed jobs' },
-    { id: 'reports', label: 'Reports', icon: BarChart3, description: 'Analytics and insights' },
-    { id: 'operators', label: 'Operator Panel', icon: Users, description: 'Mark jobs as done' }
-  ];
+  // Get menu items from module registry (excluding profile)
+  const menuItems: MenuItem[] = getAvailableModules()
+    .filter(config => config.id !== 'profile')
+    .map(config => ({
+      id: config.id,
+      label: config.label,
+      icon: config.icon,
+      description: config.description
+    }));
 
-  const handleAction = async (actionType: ActionType, item: Machine | Mold | ScheduleJob | RawMaterial, itemType: ItemType): Promise<void> => {
+  const handleAction = async (actionType: ActionType, item: Machine | Mold | ScheduleJob | RawMaterial | PackingMaterial, itemType: ItemType): Promise<void> => {
     try {
+      console.log(`Handling action: ${actionType} for ${itemType}`, item);
     switch (actionType) {
       case 'edit':
         console.log('Editing item:', item);
         console.log('Item type:', itemType);
         setEditingItem(item);
-        setModalType(itemType as ModalType);
+        if (itemType === 'packing_material') {
+          setModalType('packing_material');
+        } else if (itemType === 'raw_material') {
+          setModalType('raw_material');
+        } else {
+          setModalType(itemType as ModalType);
+        }
         setShowModal(true);
         break;
       case 'delete':
         let itemId: string | undefined;
+        let itemName: string | undefined;
+        
         if ('machine_id' in item) {
           itemId = item.machine_id;
+          itemName = item.machine_id;
         } else if ('mold_id' in item) {
           itemId = item.mold_id;
+          itemName = item.mold_name || item.mold_id;
         } else if ('schedule_id' in item && typeof (item as any).schedule_id === 'string') {
           itemId = (item as { schedule_id: string }).schedule_id;
+          itemName = itemId;
+        } else if ('id' in item && (item as any).id) {
+          // For packing materials and raw materials
+          itemId = (item as any).id;
+          if ('item_code' in item) {
+            itemName = (item as any).item_code || (item as any).id;
+          } else if ('sl_no' in item) {
+            itemName = `${(item as any).category}-${(item as any).type}` || (item as any).id;
+          } else {
+            itemName = (item as any).id;
+          }
         }
-        if (window.confirm(`Are you sure you want to delete ${itemId}?`)) {
+        
+        if (window.confirm(`Are you sure you want to delete ${itemName || itemId || 'this item'}?`)) {
             if (itemType === 'machine' && 'machine_id' in item) {
               await machineAPI.delete(item.machine_id);
               setMachinesMaster(prev => prev.filter(m => m.machine_id !== item.machine_id));
@@ -807,12 +1000,30 @@ const ProductionSchedulerERP: React.FC = () => {
             } else if (itemType === 'schedule' && 'schedule_id' in item) {
               await scheduleAPI.delete(item.schedule_id);
               setScheduleData(prev => prev.filter(s => s.schedule_id !== item.schedule_id));
+            } else if (itemType === 'packing_material' && 'id' in item && (item as any).id) {
+              console.log(`Deleting packing material with id: ${(item as any).id}`);
+              await packingMaterialAPI.delete((item as any).id);
+              setPackingMaterialsMaster(prev => prev.filter(p => p.id !== (item as any).id));
+            } else if (itemType === 'raw_material' && 'id' in item && (item as any).id) {
+              console.log(`Deleting raw material with id: ${(item as any).id}`);
+              await rawMaterialAPI.delete((item as any).id);
+              setRawMaterialsMaster(prev => prev.filter(r => r.id !== (item as any).id));
+            } else if (itemType === 'packing_material') {
+              console.log(`Cannot delete packing material - missing id:`, item);
+            } else if (itemType === 'raw_material') {
+              console.log(`Cannot delete raw material - missing id:`, item);
             }
         }
         break;
       case 'view':
         setEditingItem(item);
-        setModalType(`view_${itemType}` as ModalType);
+        if (itemType === 'packing_material') {
+          setModalType('view_packing_material');
+        } else if (itemType === 'raw_material') {
+          setModalType('view_raw_material');
+        } else {
+          setModalType(`view_${itemType}` as ModalType);
+        }
         setShowModal(true);
         break;
       case 'approve':
@@ -905,6 +1116,23 @@ const ProductionSchedulerERP: React.FC = () => {
         const userId = localStorage.getItem('currentUserId') || 'default';
         localStorage.setItem(`prodSchedulerCurrentModule_${userId}`, module);
       }
+      
+      // Refresh unit management settings when switching to masters module
+      if (module === 'masters') {
+        refreshUnitManagementSettings();
+      }
+    };
+
+    const refreshUnitManagementSettings = async () => {
+      try {
+        const enabled = await unitManagementSettingsAPI.isUnitManagementEnabled();
+        const defaultUnitSetting = await unitManagementSettingsAPI.getDefaultUnit();
+        setUnitManagementEnabled(enabled);
+        setDefaultUnit(defaultUnitSetting);
+        console.log('Unit management settings refreshed:', { enabled, defaultUnit: defaultUnitSetting });
+      } catch (error) {
+        console.error('Error refreshing unit management settings:', error);
+      }
     };
     
     const handleSignOut = async () => {
@@ -928,6 +1156,23 @@ const ProductionSchedulerERP: React.FC = () => {
             </button>
           </div>
         </div>
+        
+        {/* Unit Filter Dropdown */}
+        {sidebarOpen && (
+          <div className="p-4 border-b border-gray-700">
+            <label className="block text-sm font-medium text-gray-300 mb-2">Unit Filter</label>
+            <select
+              value={selectedUnit}
+              onChange={(e) => handleUnitFilterChange(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">All Units</option>
+              {getAvailableUnits().map(unit => (
+                <option key={unit.id} value={unit.id}>{unit.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         
         <nav className="flex-1 pt-4">
           {menuItems.map(item => {
@@ -955,7 +1200,7 @@ const ProductionSchedulerERP: React.FC = () => {
         </nav>
 
         {/* Current User Section - Bottom Left */}
-        <div className="border-t border-gray-700 p-4">
+        <div className="border-t border-gray-700 p-4 relative">
           <button
             onClick={() => handleModuleChange('profile')}
             className={`w-full text-left p-3 hover:bg-gray-700 transition-colors rounded-lg ${
@@ -991,82 +1236,7 @@ const ProductionSchedulerERP: React.FC = () => {
     );
   };
 
-  const ProductionScheduler: React.FC = () => {
-    const timeSlots = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
-
-    return (
-      <div className="flex h-full">
-        {/* Machine List */}
-        <div className="w-48 bg-gray-50 border-r border-gray-200 overflow-y-auto">
-          <div className="p-4 border-b border-gray-200">
-            <h3 className="font-semibold text-gray-800">Machines</h3>
-          </div>
-          {machinesMaster.map(machine => (
-            <div 
-              key={machine.machine_id} 
-              className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-100 ${getMachineStatusColor(machine.status)}`}
-              onClick={() => handleAction('view', machine, 'machine')}
-            >
-              <div className="font-medium text-sm">{machine.machine_id}</div>
-              <div className="text-xs text-gray-600">{machine.make} {machine.model}</div>
-              <div className="flex items-center mt-1">
-                {machine.status === 'Active' && <Play className="w-3 h-3 text-green-600 mr-1" />}
-                {machine.status === 'Maintenance' && <AlertCircle className="w-3 h-3 text-red-600 mr-1" />}
-                {machine.status === 'Idle' && <Pause className="w-3 h-3 text-yellow-600 mr-1" />}
-                <span className="text-xs capitalize">{machine.status}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Timeline Grid */}
-        <div className="flex-1 overflow-auto">
-          {/* Time Header */}
-          <div className="sticky top-0 bg-white border-b border-gray-200 z-10">
-            <div className="flex">
-              {timeSlots.map(time => (
-                <div key={time} className="flex-1 p-2 text-center text-xs font-medium border-r border-gray-100">
-                  {time}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Machine Rows */}
-          <div className="relative">
-            {machinesMaster.map(machine => (
-              <div key={machine.machine_id} className="relative h-16 border-b border-gray-100">
-                {/* Time Grid */}
-                <div className="absolute inset-0 flex">
-                  {timeSlots.map(time => (
-                    <div key={time} className="flex-1 border-r border-gray-50 hover:bg-blue-50" />
-                  ))}
-                </div>
-
-                {/* Job Cards */}
-                {getJobsByMachine(machine.machine_id).map(job => {
-                  const position = getJobPosition(job.start_time, job.end_time);
-                  return (
-                    <div
-                      key={job.schedule_id}
-                      className={`absolute top-1 bottom-1 ${getStatusColor(job)} rounded px-2 py-1 text-white text-xs cursor-pointer hover:shadow-lg transition-shadow z-20`}
-                      style={position}
-                      onClick={() => handleAction('view', job, 'schedule')}
-                    >
-                      <div className="font-medium">{job.mold_id}</div>
-                      <div className="truncate">{job.color}</div>
-                      <div>{job.expected_pieces} pcs</div>
-                      {job.is_done && <CheckCircle className="w-3 h-3 inline ml-1" />}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // ProductionScheduler component moved to modules/production-schedule/index.tsx
 
   // Nameplate Viewing Modal
   const NameplateModal: React.FC = () => {
@@ -1162,1231 +1332,26 @@ const ProductionSchedulerERP: React.FC = () => {
     );
   };
 
-  const MasterDataModule: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<string>(() => {
-      // Try to get the active tab from localStorage, default to 'molds'
-      if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('masterDataActiveTab');
-        return saved || 'molds';
-      }
-      return 'molds';
-    });
+  // MasterDataModule component moved to modules/master-data/index.tsx
+  // (Large component with 824 lines extracted into separate files for better organization)
 
-    // Save active tab to localStorage whenever it changes
-    const handleTabChange = (tab: string) => {
-      setActiveTab(tab);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('masterDataActiveTab', tab);
-      }
-    };
 
-    return (
-      <div className="h-full flex flex-col">
-        {/* Tab Navigation */}
-        <div className="border-b border-gray-200 bg-white">
-          <nav className="flex space-x-8 px-6 overflow-x-auto">
-            <button
-              onClick={() => handleTabChange('machines')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                activeTab === 'machines'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Wrench className="w-5 h-5 inline mr-2" />
-              Machine Master
-            </button>
-            <button
-              onClick={() => handleTabChange('molds')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                activeTab === 'molds'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Package className="w-5 h-5 inline mr-2" />
-              Mold Master
-            </button>
-            <button
-              onClick={() => handleTabChange('raw_materials')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                activeTab === 'raw_materials'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Package className="w-5 h-5 inline mr-2" />
-              Raw Materials Master
-            </button>
-            {/* Add more tabs here as needed */}
-            {/* <button
-              onClick={() => handleTabChange('')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                activeTab === 'materials'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Package className="w-5 h-5 inline mr-2" />
-              Material Master
-            </button>
-            <button
-              onClick={() => handleTabChange('')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                activeTab === 'products'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Package className="w-5 h-5 inline mr-2" />
-              Product Master
-            </button> */}
-          </nav>
-        </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-auto p-6">
-          {activeTab === 'machines' && (
-            <div>
-              <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center space-x-2">
-                  <h2 className="text-2xl font-bold text-gray-800">Machine Master</h2>
-                  <InfoButton type="machines" />
-                </div>
-                <div className="flex space-x-3">
-                  {/* Categories Tab */}
-                  <div className="flex bg-gray-100 rounded-lg p-1">
-                    <button
-                      onClick={() => handleMachineCategoryFilterChange('all')}
-                      className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                        machineCategoryFilter === 'all'
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                    >
-                      All
-                    </button>
-                    <button
-                      onClick={() => handleMachineCategoryFilterChange('IM')}
-                      className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                        machineCategoryFilter === 'IM'
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                    >
-                      IM
-                    </button>
-                    <button
-                      onClick={() => handleMachineCategoryFilterChange('Robot')}
-                      className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                        machineCategoryFilter === 'Robot'
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                    >
-                      Robot
-                    </button>
-                    <button
-                      onClick={() => handleMachineCategoryFilterChange('Aux')}
-                      className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                        machineCategoryFilter === 'Aux'
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                    >
-                      Aux
-                    </button>
-                    <button
-                      onClick={() => handleMachineCategoryFilterChange('Utility')}
-                      className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                        machineCategoryFilter === 'Utility'
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                    >
-                      Utility
-                    </button>
-                  </div>
-                  
-                  {/* Sorting Dropdown */}
-                  <div className="relative">
-                    <select
-                      value={`${machineSortField}-${machineSortDirection}`}
-                      onChange={(e) => {
-                        const [field, direction] = e.target.value.split('-');
-                        setMachineSortField(field);
-                        setMachineSortDirection(direction as 'asc' | 'desc');
-                      }}
-                      className="flex items-center px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                       <option value="machine_id-asc">Sort by ID (A-Z)</option>
-                       <option value="machine_id-desc">Sort by ID (Z-A)</option>
-                       <option value="category-asc">Sort by Category (A-Z)</option>
-                       <option value="category-desc">Sort by Category (Z-A)</option>
-                       <option value="make-asc">Sort by Make (A-Z)</option>
-                       <option value="make-desc">Sort by Make (Z-A)</option>
-                       <option value="size-asc">Sort by Size (Low-High)</option>
-                       <option value="size-desc">Sort by Size (High-Low)</option>
-                       <option value="model-asc">Sort by Model (A-Z)</option>
-                       <option value="model-desc">Sort by Model (Z-A)</option>
-                       <option value="capacity_tons-asc">Sort by Tons (Low-High)</option>
-                       <option value="capacity_tons-desc">Sort by Tons (High-Low)</option>
-                       <option value="status-asc">Sort by Status (A-Z)</option>
-                       <option value="status-desc">Sort by Status (Z-A)</option>
-                    </select>
-                  </div>
-                  
-                  <button 
-                    onClick={() => openExcelReader('machines')}
-                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Import Excel
-                  </button>
-                  
-                  <button 
-                    onClick={() => handleAction('edit', {} as Machine, 'machine')}
-                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    <Wrench className="w-4 h-4 mr-2" />
-                    Add Machine
-                  </button>
-                </div>
-              </div>
 
-              <div className="bg-white rounded-lg shadow overflow-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th 
-                        className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleMachineSortChange('machine_id')}
-                      >
-                        <div className="flex items-center justify-center">
-                          Sr. No.
-                          {machineSortField === 'machine_id' && (
-                            machineSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleMachineSortChange('category')}
-                      >
-                        <div className="flex items-center justify-center">
-                          Category
-                          {machineSortField === 'category' && (
-                            machineSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleMachineSortChange('make')}
-                      >
-                        <div className="flex items-center justify-center">
-                          Make
-                          {machineSortField === 'make' && (
-                            machineSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleMachineSortChange('size')}
-                      >
-                        <div className="flex items-center justify-center">
-                          Size
-                          {machineSortField === 'size' && (
-                            machineSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleMachineSortChange('model')}
-                      >
-                        <div className="flex items-center justify-center">
-                          Model
-                          {machineSortField === 'model' && (
-                            machineSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Serial No.</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Mfg Date</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Inst Date</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Dimensions</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Name Plate</th>
-                      <th 
-                        className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleMachineSortChange('status')}
-                      >
-                        <div className="flex items-center justify-center">
-                          Status
-                          {machineSortField === 'status' && (
-                            machineSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {sortedMachines.map((machine) => (
-                      <tr key={machine.machine_id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900 text-center">{machine.machine_id}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">{machine.category || '-'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <div className="text-sm text-gray-900 font-medium">{machine.make || '-'}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">{machine.size || '-'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <div className="text-sm text-gray-900">{machine.model || '-'}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-                          {machine.serial_no || (machine.clm_sr_no && machine.inj_serial_no ? `${machine.clm_sr_no}/${machine.inj_serial_no}` : '-')}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">{machine.mfg_date || '-'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">{machine.install_date || '-'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">{machine.dimensions || '-'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          {machine.nameplate_image || machine.nameplate_details ? (
-                            <button
-                              onClick={() => setViewingNameplate(JSON.stringify({
-                                image: machine.nameplate_image || '',
-                                details: machine.nameplate_details || '',
-                                machine_id: machine.machine_id,
-                                make: machine.make,
-                                model: machine.model
-                              }))}
-                              className="flex items-center justify-center text-blue-600 hover:text-blue-900"
-                              title="View Nameplate Details"
-                            >
-                              <Image className="w-4 h-4 mr-1" />
-                              <span className="text-xs">View Details</span>
-                            </button>
-                          ) : (
-                            <span className="text-xs text-gray-400">No details</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            machine.status === 'Active' ? 'bg-green-100 text-green-800' :
-                            machine.status === 'Maintenance' ? 'bg-red-100 text-red-800' :
-                            'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {machine.status || 'Unknown'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
-                          <div className="flex space-x-2 justify-center">
-                            <button 
-                              onClick={() => handleAction('view', machine, 'machine')}
-                              className="text-blue-600 hover:text-blue-900"
-                              title="View Details"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button 
-                              onClick={() => handleAction('edit', machine, 'machine')}
-                              className="text-green-600 hover:text-green-900"
-                              title="Edit Machine"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button 
-                              onClick={() => handleAction('delete', machine, 'machine')}
-                              className="text-red-600 hover:text-red-900"
-                              title="Delete Machine"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
 
-          {activeTab === 'molds' && (
-            <div>
-              <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center space-x-2">
-                  <h2 className="text-2xl font-bold text-gray-800">Mold Master</h2>
-                  <InfoButton type="molds" />
-                </div>
-                <div className="flex space-x-3">
-                  {/* Sorting Dropdown */}
-                  <div className="relative">
-                    <select
-                      value={`${moldSortField}-${moldSortDirection}`}
-                      onChange={(e) => {
-                        const [field, direction] = e.target.value.split('-');
-                        setMoldSortField(field);
-                        setMoldSortDirection(direction as 'asc' | 'desc');
-                      }}
-                      className="flex items-center px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                       <option value="mold_id-asc">Sort by ID (A-Z)</option>
-                       <option value="mold_id-desc">Sort by ID (Z-A)</option>
-                       <option value="mold_id-asc">Sort by Item Code (A-Z)</option>
-                       <option value="mold_id-desc">Sort by Item Code (Z-A)</option>
-                       <option value="item_name-asc">Sort by Item Name (A-Z)</option>
-                       <option value="item_name-desc">Sort by Item Name (Z-A)</option>
-                       <option value="cavities-asc">Sort by Cavities (Low-High)</option>
-                       <option value="cavities-desc">Sort by Cavities (High-Low)</option>
-                       <option value="cycle_time-asc">Sort by Cycle Time (Low-High)</option>
-                       <option value="cycle_time-desc">Sort by Cycle Time (High-Low)</option>
-                       <option value="st_wt-asc">Sort by Weight (Low-High)</option>
-                       <option value="st_wt-desc">Sort by Weight (High-Low)</option>
-                       <option value="hrc_zone-asc">Sort by Zone (A-Z)</option>
-                       <option value="hrc_zone-desc">Sort by Zone (Z-A)</option>
-                       <option value="make-asc">Sort by Make (A-Z)</option>
-                       <option value="make-desc">Sort by Make (Z-A)</option>
-                    </select>
-                  </div>
-                  
-                  <button 
-                    onClick={() => openExcelReader('molds')}
-                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Import Excel
-                  </button>
-                  
-                  <button 
-                    onClick={() => handleAction('edit', {} as Mold, 'mold')}
-                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Mold
-                  </button>
-                </div>
-              </div>
+  // ApprovalsModule component moved to modules/approvals/index.tsx
 
-              <div className="bg-white rounded-lg shadow overflow-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleMoldSortChange('mold_id')}
-                      >
-                        <div className="flex items-center">
-                          Item Code
-                          {moldSortField === 'mold_id' && (
-                            moldSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleMoldSortChange('item_name')}
-                      >
-                        <div className="flex items-center">
-                          Item Name
-                          {moldSortField === 'item_name' && (
-                            moldSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleMoldSortChange('type')}
-                      >
-                        <div className="flex items-center">
-                          Type
-                          {moldSortField === 'type' && (
-                            moldSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleMoldSortChange('cavities')}
-                      >
-                        <div className="flex items-center">
-                          Cavity
-                          {moldSortField === 'cavities' && (
-                            moldSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleMoldSortChange('cycle_time')}
-                      >
-                        <div className="flex items-center">
-                          Cycle Time
-                          {moldSortField === 'cycle_time' && (
-                            moldSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleMoldSortChange('st_wt')}
-                      >
-                        <div className="flex items-center">
-                          St. Wt.
-                          {moldSortField === 'st_wt' && (
-                            moldSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleMoldSortChange('hrc_zone')}
-                      >
-                        <div className="flex items-center">
-                          HRC Zone
-                          {moldSortField === 'hrc_zone' && (
-                            moldSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleMoldSortChange('make')}
-                      >
-                        <div className="flex items-center">
-                          Make
-                          {moldSortField === 'make' && (
-                            moldSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {sortedMolds.map((mold) => (
-                      <tr key={mold.mold_id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{mold.item_code || mold.mold_id}</td>
-                        <td className="px-6 py-4 text-sm text-gray-900">{mold.item_name || mold.mold_name}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{mold.type || 'Injection Mold'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{mold.cavities}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{mold.cycle_time ? `${mold.cycle_time}s` : '-'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{mold.st_wt ? `${mold.st_wt}g` : '-'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{mold.hrc_zone || '-'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{mold.make || mold.maker || '-'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex space-x-2">
-                            <button 
-                              onClick={() => handleAction('view', mold, 'mold')}
-                              className="text-blue-600 hover:text-blue-900"
-                              title="View Details"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button 
-                              onClick={() => handleAction('edit', mold, 'mold')}
-                              className="text-green-600 hover:text-green-900"
-                              title="Edit Mold"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button 
-                              onClick={() => handleAction('delete', mold, 'mold')}
-                              className="text-red-600 hover:text-red-900"
-                              title="Delete Mold"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+  // OperatorPanel component moved to modules/operator-panel/index.tsx
 
-          {activeTab === 'raw_materials' && (
-            <div>
-              <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center space-x-2">
-                  <h2 className="text-2xl font-bold text-gray-800">Raw Materials Master</h2>
-                  <InfoButton type="raw_materials" />
-                </div>
-                <div className="flex space-x-3">
-                  {/* Sorting Dropdown */}
-                  <div className="relative">
-                    <select
-                      value={`${rawMaterialSortField}-${rawMaterialSortDirection}`}
-                      onChange={(e) => {
-                        const [field, direction] = e.target.value.split('-');
-                        setRawMaterialSortField(field);
-                        setRawMaterialSortDirection(direction as 'asc' | 'desc');
-                      }}
-                      className="flex items-center px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                       <option value="sl_no-asc">Sort by SL No (A-Z)</option>
-                       <option value="sl_no-desc">Sort by SL No (Z-A)</option>
-                       <option value="type1-asc">Sort by Type 1 (A-Z)</option>
-                       <option value="type1-desc">Sort by Type 1 (Z-A)</option>
-                       <option value="type2-asc">Sort by Type 2 (A-Z)</option>
-                       <option value="type2-desc">Sort by Type 2 (Z-A)</option>
-                       <option value="grade-asc">Sort by Grade (A-Z)</option>
-                       <option value="grade-desc">Sort by Grade (Z-A)</option>
-                       <option value="supplier-asc">Sort by Supplier (A-Z)</option>
-                       <option value="supplier-desc">Sort by Supplier (Z-A)</option>
-                       <option value="mfi-asc">Sort by MFI (Low-High)</option>
-                       <option value="mfi-desc">Sort by MFI (High-Low)</option>
-                       <option value="density-asc">Sort by Density (Low-High)</option>
-                       <option value="density-desc">Sort by Density (High-Low)</option>
-                    </select>
-                  </div>
-                  
-                  <button 
-                    onClick={() => openExcelReader('raw_materials')}
-                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Import Excel
-                  </button>
-                  
-                  <button 
-                    onClick={() => handleAction('edit', {} as RawMaterial, 'raw_material')}
-                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Raw Material
-                  </button>
-                </div>
-              </div>
+  // UserProfileModule component moved to modules/profile/index.tsx
+  // (Large component with 267 lines removed from this file for better organization)
 
-              <div className="bg-white rounded-lg shadow overflow-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleRawMaterialSortChange('sl_no')}
-                      >
-                        <div className="flex items-center">
-                          Sl.
-                          {rawMaterialSortField === 'sl_no' && (
-                            rawMaterialSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleRawMaterialSortChange('type1')}
-                      >
-                        <div className="flex items-center">
-                          Type 1
-                          {rawMaterialSortField === 'type1' && (
-                            rawMaterialSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleRawMaterialSortChange('type2')}
-                      >
-                        <div className="flex items-center">
-                          Type 2
-                          {rawMaterialSortField === 'type2' && (
-                            rawMaterialSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleRawMaterialSortChange('grade')}
-                      >
-                        <div className="flex items-center">
-                          Grade
-                          {rawMaterialSortField === 'grade' && (
-                            rawMaterialSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleRawMaterialSortChange('supplier')}
-                      >
-                        <div className="flex items-center">
-                          Supplier
-                          {rawMaterialSortField === 'supplier' && (
-                            rawMaterialSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleRawMaterialSortChange('mfi')}
-                      >
-                        <div className="flex items-center">
-                          MFI
-                          {rawMaterialSortField === 'mfi' && (
-                            rawMaterialSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                        onClick={() => handleRawMaterialSortChange('density')}
-                      >
-                        <div className="flex items-center">
-                          Density
-                          {rawMaterialSortField === 'density' && (
-                            rawMaterialSortDirection === 'asc' ? 
-                            <ArrowUp className="w-3 h-3 ml-1" /> : 
-                            <ArrowDown className="w-3 h-3 ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {sortedRawMaterials.map((material) => (
-                      <tr key={material.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {material.sl_no}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {material.type1}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {material.type2}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {material.grade}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {material.supplier}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {material.mfi}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {material.density}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => handleAction('view', material, 'raw_material')}
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleAction('edit', material, 'raw_material')}
-                              className="text-green-600 hover:text-green-900"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleAction('delete', material, 'raw_material')}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {sortedRawMaterials.length === 0 && (
-                <div className="text-center py-12">
-                  <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Raw Materials</h3>
-                    <p className="text-gray-600">Add your first raw material to get started</p>
-                </div>
-                )}
-              </div>
-            </div>
-          )}
 
-          {activeTab === 'products' && (
-            <div>
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800">Product Master</h2>
-                <div className="flex space-x-3">
-                  <button 
-                    onClick={() => alert('Excel import for products is coming soon!')}
-                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Import Excel
-                  </button>
-                  <button 
-                    onClick={() => handleAction('edit', {} as any, 'product')}
-                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Product
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="text-center py-12">
-                  <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Product Master</h3>
-                  <p className="text-gray-600">Manage finished products</p>
-                  <p className="text-sm text-gray-500 mt-2">Coming soon...</p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const ApprovalsModule: React.FC = () => {
-    const pendingJobs = scheduleData.filter(job => job.is_done && job.approval_status === 'pending');
-    const approvedJobs = scheduleData.filter(job => job.approval_status === 'approved');
-
-    return (
-      <div className="p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Job Approvals</h2>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Pending Approvals */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-800">Pending Approvals ({pendingJobs.length})</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              {pendingJobs.map(job => (
-                <div key={job.schedule_id} className="border border-yellow-200 rounded-lg p-4 bg-yellow-50">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="font-medium text-gray-900">{job.machine_id} - {job.mold_id}</div>
-                      <div className="text-sm text-gray-600">Date: {job.date} | {job.shift} Shift</div>
-                      <div className="text-sm text-gray-600">Color: {job.color} | Expected: {job.expected_pieces} pcs</div>
-                      <div className="text-xs text-gray-500 mt-1">Completed: {job.done_timestamp}</div>
-                    </div>
-                    <button
-                      onClick={() => handleAction('approve', job, 'schedule')}
-                      className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
-                    >
-                      Approve
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {pendingJobs.length === 0 && (
-                <div className="text-gray-500 text-center py-8">No pending approvals</div>
-              )}
-            </div>
-          </div>
-
-          {/* Recent Approvals */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-800">Recent Approvals ({approvedJobs.length})</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              {approvedJobs.slice(0, 5).map(job => (
-                <div key={job.schedule_id} className="border border-green-200 rounded-lg p-4 bg-green-50">
-                  <div className="font-medium text-gray-900">{job.machine_id} - {job.mold_id}</div>
-                  <div className="text-sm text-gray-600">Date: {job.date} | {job.shift} Shift</div>
-                  <div className="text-sm text-gray-600">Approved by: {job.approved_by}</div>
-                  <div className="flex items-center mt-2">
-                    <CheckCircle className="w-4 h-4 text-green-600 mr-2" />
-                    <span className="text-sm text-green-600">Approved</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const OperatorPanel: React.FC = () => {
-    const todayJobs = scheduleData.filter(job => job.date === selectedDate && !job.is_done);
-
-    return (
-      <div className="p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Operator Panel - Today&apos;s Jobs</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {todayJobs.map(job => {
-            const machine = machinesMaster.find(m => m.machine_id === job.machine_id);
-            const mold = moldsMaster.find(m => m.mold_id === job.mold_id);
-            
-            return (
-              <div key={job.schedule_id} className="bg-white rounded-lg shadow border-l-4 border-blue-500 p-4">
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-900">{job.machine_id}</h3>
-                    <p className="text-sm text-gray-600">{machine?.make} {machine?.model}</p>
-                  </div>
-                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                    {job.shift}
-                  </span>
-                </div>
-                
-                <div className="space-y-2 mb-4">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Mold:</span>
-                    <span className="text-sm font-medium">{job.mold_id}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Color:</span>
-                    <span className="text-sm font-medium">{job.color}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Time:</span>
-                    <span className="text-sm font-medium">{job.start_time} - {job.end_time}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Target:</span>
-                    <span className="text-sm font-medium">{job.expected_pieces} pieces</span>
-                  </div>
-                </div>
-                
-                <button
-                  onClick={() => handleAction('mark_done', job, 'schedule')}
-                  className="w-full flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  Mark as Done
-                </button>
-              </div>
-            );
-          })}
-        </div>
-        
-        {todayJobs.length === 0 && (
-          <div className="text-center py-12">
-            <CheckCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">All jobs completed!</h3>
-            <p className="text-gray-600">No pending jobs for today.</p>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const UserProfileModule: React.FC = () => {
-    const { user, profile, signOut } = useAuth();
-    const [isEditing, setIsEditing] = useState(false);
-    const [editForm, setEditForm] = useState({
-      full_name: profile?.full_name || '',
-      email: user?.email || '',
-      department: profile?.department || '',
-      role: profile?.role || 'user'
-    });
-
-    const handleSave = async () => {
-      // Here you would typically update the user profile in Supabase
-      // For now, we'll just close the edit mode
-      setIsEditing(false);
-      // TODO: Implement profile update functionality
-    };
-
-    const handleSignOut = async () => {
-      try {
-        await signOut();
-        // The signOut function now handles the redirect
-      } catch (error) {
-        console.error('Error signing out:', error);
-        // Fallback redirect
-        window.location.href = '/auth/login';
-      }
-    };
-
-    return (
-      <div className="h-full flex flex-col">
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-blue-100 rounded-full">
-                <User className="w-8 h-8 text-blue-600" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-800">User Profile</h1>
-                <p className="text-sm text-gray-500">Manage your account settings and preferences</p>
-              </div>
-            </div>
-            <div className="flex space-x-3">
-              {!isEditing ? (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  <Edit className="w-4 h-4 mr-2" />
-                  Edit Profile
-                </button>
-              ) : (
-                <div className="flex space-x-2">
-                  <button
-                    onClick={handleSave}
-                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Changes
-                  </button>
-                  <button
-                    onClick={() => setIsEditing(false)}
-                    className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-                  >
-                    <X className="w-4 h-4 mr-2" />
-                    Cancel
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-auto p-6">
-          <div className="max-w-4xl mx-auto">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Profile Card */}
-              <div className="lg:col-span-1">
-                <div className="bg-white rounded-lg shadow p-6">
-                  <div className="text-center mb-6">
-                    <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <User className="w-12 h-12 text-blue-600" />
-                    </div>
-                    <h2 className="text-xl font-bold text-gray-800">
-                      {profile?.full_name || user?.email || 'Current User'}
-                    </h2>
-                    <p className="text-sm text-gray-500 capitalize">
-                      {profile?.role || 'User'}
-                    </p>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                      <span className="text-sm font-medium text-gray-600">Email</span>
-                      <span className="text-sm text-gray-800">{user?.email}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                      <span className="text-sm font-medium text-gray-600">Department</span>
-                      <span className="text-sm text-gray-800">{profile?.department || 'Not specified'}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                      <span className="text-sm font-medium text-gray-600">Member Since</span>
-                      <span className="text-sm text-gray-800">
-                        {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'Unknown'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center py-2">
-                      <span className="text-sm font-medium text-gray-600">Last Updated</span>
-                      <span className="text-sm text-gray-800">
-                        {profile?.updated_at ? new Date(profile.updated_at).toLocaleDateString() : 'Unknown'}
-                      </span>
-                    </div>
-                    
-                    {/* Temporary Admin Role Update Button */}
-                    {user?.email === 'yogesh@polypacks.in' && profile?.role !== 'admin' && (
-                      <div className="mt-4 pt-4 border-t border-gray-200">
-                        <button
-                          onClick={async () => {
-                            try {
-                              if (!user?.email) {
-                                alert('User email not found');
-                                return;
-                              }
-                              
-                              console.log('Attempting to update role to admin for:', user.email);
-                              
-                              // Try the direct SQL method first
-                              const { error: directError } = await userProfileAPI.updateUserRoleDirect(user.email, 'admin');
-                              
-                              if (directError) {
-                                console.log('Direct method failed, trying regular method:', directError);
-                                
-                                // Fallback to regular method
-                                const { error: regularError } = await userProfileAPI.updateUserRole(user.id, 'admin');
-                                
-                                if (regularError) {
-                                  console.error('Both methods failed:', regularError);
-                                  alert('Failed to update role: ' + regularError.message);
-                                  return;
-                                }
-                              }
-                              
-                              console.log('Role updated to admin successfully');
-                              alert('Role updated to admin! Please refresh the page.');
-                              
-                              // Force refresh the profile
-                              window.location.reload();
-                              
-                            } catch (err) {
-                              console.error('Exception updating role:', err);
-                              alert('Failed to update role: ' + (err instanceof Error ? err.message : 'Unknown error'));
-                            }
-                          }}
-                          className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium"
-                        >
-                          🔧 Make Admin (Temporary)
-                        </button>
-                        <p className="text-xs text-gray-500 mt-1 text-center">
-                          Click to update role to admin
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Edit Form */}
-              <div className="lg:col-span-2">
-                <div className="bg-white rounded-lg shadow p-6">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                    {isEditing ? 'Edit Profile Information' : 'Profile Information'}
-                  </h3>
-                  
-                  {isEditing ? (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                        <input
-                          type="text"
-                          value={editForm.full_name}
-                          onChange={(e) => setEditForm({...editForm, full_name: e.target.value})}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                        <input
-                          type="email"
-                          value={editForm.email}
-                          disabled
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                        <input
-                          type="text"
-                          value={editForm.department}
-                          onChange={(e) => setEditForm({...editForm, department: e.target.value})}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                        <select
-                          value={editForm.role}
-                          onChange={(e) => setEditForm({...editForm, role: e.target.value as 'user' | 'admin' | 'operator'})}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="user">User</option>
-                          <option value="admin">Admin</option>
-                          <option value="operator">Operator</option>
-                        </select>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                        <div className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50">
-                          {profile?.full_name || 'Not specified'}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                        <div className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50">
-                          {user?.email}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                        <div className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50">
-                          {profile?.department || 'Not specified'}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                        <div className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 capitalize">
-                          {profile?.role || 'User'}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Account Actions */}
-                <div className="bg-white rounded-lg shadow p-6 mt-6">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Account Actions</h3>
-                  <div className="space-y-3">
-                    <button
-                      onClick={handleSignOut}
-                      className="w-full flex items-center justify-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                    >
-                      <LogOut className="w-4 h-4 mr-2" />
-                      Sign Out
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   const NewJobModal: React.FC = () => {
+    const filteredData = getFilteredData();
     const compatibleMolds = jobForm.machine_id 
-      ? moldsMaster.filter(mold => mold.compatible_machines.includes(jobForm.machine_id)) 
+      ? filteredData.molds.filter(mold => mold.compatible_machines.includes(jobForm.machine_id)) 
       : [];
 
     return (
@@ -2429,7 +1394,7 @@ const ProductionSchedulerERP: React.FC = () => {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2"
               >
                 <option value="">Select Machine</option>
-                {machinesMaster.filter(m => m.status === 'Active').map(machine => (
+                {filteredData.machines.filter(m => m.status === 'Active').map(machine => (
                   <option key={machine.machine_id} value={machine.machine_id}>
                     {machine.machine_id} - {machine.make} {machine.model}
                   </option>
@@ -2543,8 +1508,28 @@ const ProductionSchedulerERP: React.FC = () => {
   };
 
   const renderModule = (): JSX.Element => {
-    switch (currentModule) {
-      case 'scheduler':
+    const module = getModule(currentModule);
+    
+    if (!module) {
+      // Fallback to scheduler if module not found
+      const schedulerModule = getModule('scheduler');
+      if (schedulerModule) {
+        const SchedulerComponent = schedulerModule.component;
+        return <SchedulerComponent 
+          scheduleData={scheduleData}
+          selectedDate={selectedDate}
+          machinesMaster={machinesMaster}
+          handleAction={handleAction}
+        />;
+      }
+      return <div>Module not found</div>;
+    }
+
+    const ModuleComponent = module.component;
+
+    // Special handling for scheduler module with header
+    if (currentModule === 'scheduler') {
+        const filteredData = getFilteredData();
         return (
           <div className="flex flex-col h-full">
             <div className="bg-white border-b border-gray-200 p-4">
@@ -2584,20 +1569,98 @@ const ProductionSchedulerERP: React.FC = () => {
                 </div>
               </div>
             </div>
-            <ProductionScheduler />
+          <ModuleComponent 
+            scheduleData={scheduleData}
+            selectedDate={selectedDate}
+            machinesMaster={filteredData.machines}
+            handleAction={handleAction}
+          />
           </div>
         );
-      case 'masters':
-        return <MasterDataModule />;
-      case 'approvals':
-        return <ApprovalsModule />;
-      case 'operators':
-        return <OperatorPanel />;
-      case 'profile':
-        return <UserProfileModule />;
-      default:
-        return <ProductionScheduler />;
     }
+
+    // Render other modules with appropriate props
+    const getModuleProps = () => {
+      switch (currentModule) {
+      case 'approvals':
+          return {
+            scheduleData,
+            handleAction
+          };
+      case 'operators':
+          const operatorsFilteredData = getFilteredData();
+          return {
+            scheduleData,
+            selectedDate,
+            handleAction,
+            machinesMaster: operatorsFilteredData.machines,
+            moldsMaster: operatorsFilteredData.molds
+          };
+        case 'masters':
+          const mastersFilteredData = getFilteredData();
+          return {
+            machinesMaster: mastersFilteredData.machines,
+            moldsMaster: mastersFilteredData.molds,
+            rawMaterials: mastersFilteredData.rawMaterials,
+            packingMaterials: mastersFilteredData.packingMaterials,
+            
+            // Machine state and handlers
+            machineCategoryFilter,
+            handleMachineCategoryFilterChange,
+            machineSortField,
+            machineSortDirection,
+            setMachineSortField,
+            setMachineSortDirection,
+            handleMachineSortChange,
+            sortedMachines,
+            
+            // Mold state and handlers
+            moldSortField,
+            moldSortDirection,
+            setMoldSortField,
+            setMoldSortDirection,
+            handleMoldSortChange,
+            sortedMolds,
+            
+            // Raw Materials state and handlers
+            rawMaterialSortField,
+            rawMaterialSortDirection,
+            setRawMaterialSortField,
+            setRawMaterialSortDirection,
+            handleRawMaterialSortChange,
+            sortedRawMaterials,
+            
+            // Packing Materials state and handlers
+            packingMaterialCategoryFilter,
+            handlePackingMaterialCategoryFilterChange,
+            packingMaterialSortField,
+            packingMaterialSortDirection,
+            setPackingMaterialSortField,
+            setPackingMaterialSortDirection,
+            handlePackingMaterialSortChange,
+            sortedPackingMaterials,
+            
+            // Unit management settings
+            unitManagementEnabled,
+            defaultUnit,
+            units,
+            
+            // Common handlers
+            openExcelReader,
+            handleAction,
+            setViewingNameplate,
+            InfoButton
+          };
+        case 'reports':
+          return {};
+      case 'profile':
+          return {};
+      default:
+          return {};
+    }
+    };
+
+    return <ModuleComponent {...getModuleProps()} />;
   };
 
   return (
@@ -2643,25 +1706,26 @@ const ProductionSchedulerERP: React.FC = () => {
               const formData = new FormData(e.currentTarget);
               const machineData = {
                 machine_id: formData.get('machine_id') as string,
-                category: formData.get('category') as string || 'IM',
                 make: formData.get('make') as string,
                 model: formData.get('model') as string,
                 size: parseInt(formData.get('size') as string) || 0,
-                status: (formData.get('status') as string) as 'Active' | 'Maintenance' | 'Idle',
                 capacity_tons: parseInt(formData.get('size') as string) || 0,
                 type: 'Injection Molding Machine',
+                category: formData.get('category') as string || 'IM',
                 zone: formData.get('zone') as string || 'Line A',
                 purchase_date: (formData.get('mfg_date') as string) || '',
                 install_date: formData.get('install_date') as string || new Date().toISOString().split('T')[0],
                 grinding_available: formData.get('grinding_available') === 'true',
                 remarks: formData.get('remarks') as string || '',
                 nameplate_image: undefined,
-                nameplate_details: undefined,
+                status: (formData.get('status') as string) as 'Active' | 'Maintenance' | 'Idle' || 'Active',
                 clm_sr_no: formData.get('clm_sr_no') as string || '',
                 inj_serial_no: formData.get('inj_serial_no') as string || '',
+                serial_no: formData.get('serial_no') as string || '',
                 mfg_date: formData.get('mfg_date') as string || undefined,
                 dimensions: formData.get('dimensions') as string || '',
-                serial_no: formData.get('serial_no') as string || ''
+                nameplate_details: undefined,
+                unit: unitManagementEnabled ? (formData.get('unit') as string) || defaultUnit : undefined
               };
               
               try {
@@ -2899,6 +1963,27 @@ const ProductionSchedulerERP: React.FC = () => {
                         <option value="true">Yes</option>
                       </select>
                     </div>
+                    {unitManagementEnabled && units.length > 0 && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Unit
+                        </label>
+                        <select 
+                          name="unit" 
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-gray-500"
+                          defaultValue={editingItem && 'unit' in editingItem ? editingItem.unit || defaultUnit : defaultUnit}
+                        >
+                          {units
+                            .filter(unit => unit.status === 'Active')
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map(unit => (
+                              <option key={unit.id} value={unit.name}>
+                                {unit.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2995,7 +2080,8 @@ const ProductionSchedulerERP: React.FC = () => {
                 cycle_time: parseFloat(formData.get('cycle_time') as string) || 0,
                 st_wt: parseFloat(formData.get('st_wt') as string) || 0,
                 hrc_zone: formData.get('hrc_zone') as string,
-                make: formData.get('make') as string
+                make: formData.get('make') as string,
+                unit: unitManagementEnabled ? (formData.get('unit') as string) || defaultUnit : undefined
               };
               
               try {
@@ -3154,6 +2240,27 @@ const ProductionSchedulerERP: React.FC = () => {
                         <option value="12 ZONE">12 ZONE</option>
                       </select>
                     </div>
+                    {unitManagementEnabled && units.length > 0 && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Unit
+                        </label>
+                        <select 
+                          name="unit" 
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-500"
+                          defaultValue={editingItem && 'unit' in editingItem ? editingItem.unit || defaultUnit : defaultUnit}
+                        >
+                          {units
+                            .filter(unit => unit.status === 'Active')
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map(unit => (
+                              <option key={unit.id} value={unit.name}>
+                                {unit.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -3209,25 +2316,572 @@ const ProductionSchedulerERP: React.FC = () => {
           </div>
         </div>
       )}
-      {showModal && (modalType === 'view_machine' || modalType === 'view_mold') && (
+      {showModal && modalType === 'packing_material' && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <div className="flex items-center space-x-3">
-                <div className={`p-2 rounded-lg ${modalType === 'view_machine' ? 'bg-blue-100' : 'bg-purple-100'}`}>
+                <div className="p-2 bg-orange-100 rounded-lg">
+                  <Package className="w-6 h-6 text-orange-600" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {editingItem && 'id' in editingItem && editingItem.id ? 'Edit Packing Material' : 'Add New Packing Material'}
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {editingItem && 'id' in editingItem && editingItem.id 
+                      ? 'Update packing material information' 
+                      : 'Enter packing material details to add to the system'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const packingMaterialData = {
+                category: formData.get('category') as string,
+                type: formData.get('type') as string,
+                item_code: formData.get('item_code') as string,
+                pack_size: formData.get('pack_size') as string,
+                dimensions: formData.get('dimensions') as string,
+                technical_detail: formData.get('technical_detail') as string,
+                brand: formData.get('brand') as string,
+                cbm: formData.get('cbm') ? parseFloat(formData.get('cbm') as string) : undefined,
+                artwork: formData.get('artwork') as string || undefined,
+                unit: unitManagementEnabled ? (formData.get('unit') as string) || defaultUnit : undefined
+              };
+              
+              try {
+                if (editingItem && 'id' in editingItem && editingItem.id) {
+                  // Update existing packing material
+                  await packingMaterialAPI.update(editingItem.id, packingMaterialData);
+                  setPackingMaterialsMaster(prev => prev.map(p => 
+                    p.id === editingItem.id ? { ...p, ...packingMaterialData } : p
+                  ));
+                } else {
+                  // Create new packing material
+                  const newPackingMaterial = await packingMaterialAPI.create(packingMaterialData);
+                  if (newPackingMaterial) {
+                    setPackingMaterialsMaster(prev => [...prev, newPackingMaterial]);
+                  }
+                }
+                setShowModal(false);
+                setEditingItem(null);
+              } catch (error) {
+                console.error('Error saving packing material:', error);
+                alert('Error saving packing material. Please try again.');
+              }
+            }}>
+              <div className="p-6 space-y-6">
+                {/* Basic Information */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <div className="w-1 h-5 bg-orange-600 rounded-full mr-3"></div>
+                    Basic Information
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Category <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="category"
+                        required
+                        defaultValue={editingItem && 'category' in editingItem ? (editingItem as PackingMaterial).category : ''}
+                        className="w-full px-3 py-2 border border-gray-300  text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      >
+                        <option value="">Select Category</option>
+                        <option value="Boxes">Boxes</option>
+                        <option value="Polybags">Polybags</option>
+                        <option value="BOPP">BOPP</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Type <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="type"
+                        required
+                        defaultValue={editingItem && 'type' in editingItem ? (editingItem as PackingMaterial).type : ''}
+                        className="w-full px-3 py-2 border border-gray-300  text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        placeholder="e.g., Export, Local"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Item Code <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="item_code"
+                        required
+                        defaultValue={editingItem && 'item_code' in editingItem ? (editingItem as PackingMaterial).item_code : ''}
+                        className="w-full px-3 py-2 border border-gray-300  text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        placeholder="e.g., CTN-Ro16"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Brand
+                      </label>
+                      <input
+                        type="text"
+                        name="brand"
+                        defaultValue={editingItem && 'brand' in editingItem ? (editingItem as PackingMaterial).brand || '' : ''}
+                        className="w-full px-3 py-2 border border-gray-300  text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        placeholder="e.g., Regular, Gesa"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Specifications */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <div className="w-1 h-5 bg-blue-600 rounded-full mr-3"></div>
+                    Specifications
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Pack Size
+                      </label>
+                      <input
+                        type="text"
+                        name="pack_size"
+                        defaultValue={editingItem && 'pack_size' in editingItem ? (editingItem as PackingMaterial).pack_size || '' : ''}
+                        className="w-full px-3 py-2 border border-gray-300  text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        placeholder="e.g., 150, 800"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Dimensions
+                      </label>
+                      <input
+                        type="text"
+                        name="dimensions"
+                        defaultValue={editingItem && 'dimensions' in editingItem ? (editingItem as PackingMaterial).dimensions || '' : ''}
+                        className="w-full px-3 py-2 border border-gray-300  text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        placeholder="e.g., LxBxH format"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Technical Detail
+                      </label>
+                      <textarea
+                        name="technical_detail"
+                        rows={3}
+                        defaultValue={editingItem && 'technical_detail' in editingItem ? (editingItem as PackingMaterial).technical_detail || '' : ''}
+                        className="w-full px-3 py-2 border border-gray-300  text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        placeholder="Technical specifications and requirements"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Information */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <div className="w-1 h-5 bg-purple-600 rounded-full mr-3"></div>
+                    Additional Information
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        CBM (m³)
+                      </label>
+                      <input
+                        type="number"
+                        name="cbm"
+                        step="0.0001"
+                        min="0"
+                        defaultValue={editingItem && 'cbm' in editingItem ? (editingItem as PackingMaterial).cbm || '' : ''}
+                        className="w-full px-3 py-2 border border-gray-300  text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        placeholder="e.g., 0.1234"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Artwork URL
+                      </label>
+                      <input
+                        type="url"
+                        name="artwork"
+                        defaultValue={editingItem && 'artwork' in editingItem ? (editingItem as PackingMaterial).artwork || '' : ''}
+                        className="w-full px-3 py-2 border border-gray-300  text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        placeholder="e.g., https://example.com/artwork.jpg"
+                      />
+                    </div>
+                    {unitManagementEnabled && units.length > 0 && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Unit
+                        </label>
+                        <select 
+                          name="unit" 
+                          className="w-full px-3 py-2 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                          defaultValue={editingItem && 'unit' in editingItem ? editingItem.unit || defaultUnit : defaultUnit}
+                        >
+                          {units
+                            .filter(unit => unit.status === 'Active')
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map(unit => (
+                              <option key={unit.id} value={unit.name}>
+                                {unit.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end p-6 border-t border-gray-200 bg-gray-50">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium mr-3"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium flex items-center"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {editingItem && 'id' in editingItem && editingItem.id ? 'Update Packing Material' : 'Add Packing Material'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {showModal && modalType === 'raw_material' && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <Package className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {editingItem && 'id' in editingItem && editingItem.id ? 'Edit Raw Material' : 'Add New Raw Material'}
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {editingItem && 'id' in editingItem && editingItem.id 
+                      ? 'Update raw material information' 
+                      : 'Enter raw material details to add to the system'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const rawMaterialData = {
+                sl_no: parseInt(formData.get('sl_no') as string) || 0,
+                category: formData.get('category') as string,
+                type: formData.get('type') as string,
+                grade: formData.get('grade') as string,
+                supplier: formData.get('supplier') as string,
+                mfi: formData.get('mfi') ? parseFloat(formData.get('mfi') as string) : null,
+                density: formData.get('density') ? parseFloat(formData.get('density') as string) : null,
+                tds_image: formData.get('tds_image') as string || undefined,
+                remark: formData.get('remark') as string || undefined,
+                unit: unitManagementEnabled ? (formData.get('unit') as string) || defaultUnit : undefined
+              };
+              
+              try {
+                if (editingItem && 'id' in editingItem && editingItem.id) {
+                  // Update existing raw material
+                  await rawMaterialAPI.update(editingItem.id, rawMaterialData);
+                  setRawMaterialsMaster(prev => prev.map(r => 
+                    r.id === editingItem.id ? { ...r, ...rawMaterialData } : r
+                  ));
+                } else {
+                  // Create new raw material
+                  const newRawMaterial = await rawMaterialAPI.create(rawMaterialData);
+                  if (newRawMaterial) {
+                    setRawMaterialsMaster(prev => [...prev, newRawMaterial]);
+                  }
+                }
+                setShowModal(false);
+                setEditingItem(null);
+              } catch (error) {
+                console.error('Error saving raw material:', error);
+                alert('Error saving raw material. Please try again.');
+              }
+            }}>
+              <div className="p-6 space-y-6">
+                {/* Basic Information */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <div className="w-1 h-5 bg-green-600 rounded-full mr-3"></div>
+                    Basic Information
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Sl. No. <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="sl_no"
+                        required
+                        min="1"
+                        placeholder="e.g., 1"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
+                        defaultValue={editingItem && 'sl_no' in editingItem ? editingItem.sl_no : ''}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Category <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="category"
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
+                        defaultValue={editingItem && 'category' in editingItem ? editingItem.category : 'PP'}
+                      >
+                        <option value="PP">PP</option>
+                        <option value="PE">PE</option>
+                        <option value="ABS">ABS</option>
+                        <option value="PVC">PVC</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Type <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="type"
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
+                        defaultValue={editingItem && 'type' in editingItem ? editingItem.type : 'HP'}
+                      >
+                        <option value="HP">HP</option>
+                        <option value="ICP">ICP</option>
+                        <option value="RCP">RCP</option>
+                        <option value="LDPE">LDPE</option>
+                        <option value="MB">MB</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Grade <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="grade"
+                        required
+                        placeholder="e.g., HJ333MO, 1750 MN"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
+                        defaultValue={editingItem && 'grade' in editingItem ? editingItem.grade : ''}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Supplier <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="supplier"
+                        required
+                        placeholder="e.g., Borouge, IOCL, Basell"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
+                        defaultValue={editingItem && 'supplier' in editingItem ? editingItem.supplier : ''}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Technical Specifications */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <div className="w-1 h-5 bg-blue-600 rounded-full mr-3"></div>
+                    Technical Specifications
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        MFI
+                      </label>
+                      <input
+                        type="number"
+                        name="mfi"
+                        step="0.01"
+                        min="0"
+                        placeholder="e.g., 75"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
+                        defaultValue={editingItem && 'mfi' in editingItem ? editingItem.mfi || '' : ''}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Density
+                      </label>
+                      <input
+                        type="number"
+                        name="density"
+                        step="0.001"
+                        min="0"
+                        placeholder="e.g., 910"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
+                        defaultValue={editingItem && 'density' in editingItem ? editingItem.density || '' : ''}
+                      />
+                    </div>
+                    {unitManagementEnabled && units.length > 0 && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Unit
+                        </label>
+                        <select 
+                          name="unit" 
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
+                          defaultValue={editingItem && 'unit' in editingItem ? editingItem.unit || defaultUnit : defaultUnit}
+                        >
+                          {units
+                            .filter(unit => unit.status === 'Active')
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map(unit => (
+                              <option key={unit.id} value={unit.name}>
+                                {unit.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* TDS Image */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <div className="w-1 h-5 bg-purple-600 rounded-full mr-3"></div>
+                    Technical Data Sheet
+                  </h3>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      TDS Image URL
+                    </label>
+                    <input
+                      type="url"
+                      name="tds_image"
+                      placeholder="Enter TDS image URL or leave blank"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
+                      defaultValue={editingItem && 'tds_image' in editingItem ? editingItem.tds_image || '' : ''}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Enter a URL to the TDS image or leave blank if not available</p>
+                  </div>
+                </div>
+
+                {/* Additional Information */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <div className="w-1 h-5 bg-orange-600 rounded-full mr-3"></div>
+                    Additional Information
+                  </h3>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Remarks
+                    </label>
+                    <textarea
+                      name="remark"
+                      rows={3}
+                      placeholder="Enter any additional notes or remarks..."
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors resize-none text-gray-500"
+                      defaultValue={editingItem && 'remark' in editingItem ? editingItem.remark || '' : ''}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+                <div className="text-sm text-gray-500">
+                  <span className="text-red-500">*</span> Required fields
+                </div>
+                <div className="flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowModal(false)}
+                    className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {editingItem && 'id' in editingItem && editingItem.id ? 'Update Raw Material' : 'Add Raw Material'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {showModal && (modalType === 'view_machine' || modalType === 'view_mold' || modalType === 'view_packing_material' || modalType === 'view_raw_material') && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className={`p-2 rounded-lg ${
+                  modalType === 'view_machine' ? 'bg-blue-100' : 
+                  modalType === 'view_mold' ? 'bg-purple-100' : 
+                  'bg-orange-100'
+                }`}>
                   {modalType === 'view_machine' ? (
                     <Wrench className="w-6 h-6 text-blue-600" />
-                  ) : (
+                  ) : modalType === 'view_mold' ? (
                     <Package className="w-6 h-6 text-purple-600" />
+                  ) : (
+                    <Package className="w-6 h-6 text-orange-600" />
                   )}
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">
-                    {modalType === 'view_machine' ? 'Machine Details' : 'Mold Details'}
+                    {modalType === 'view_machine' ? 'Machine Details' : 
+                     modalType === 'view_mold' ? 'Mold Details' : 
+                     'Packing Material Details'}
                   </h2>
                   <p className="text-sm text-gray-500 mt-1">
-                    {modalType === 'view_machine' ? 'View machine information' : 'View mold information'}
+                    {modalType === 'view_machine' ? 'View machine information' : 
+                     modalType === 'view_mold' ? 'View mold information' : 
+                     'View packing material information'}
                   </p>
                 </div>
               </div>
@@ -3403,6 +3057,148 @@ const ProductionSchedulerERP: React.FC = () => {
                           </div>
                         </div>
                       </div>
+                    </>
+                  )}
+
+                  {modalType === 'view_packing_material' && editingItem && (
+                    <>
+                      {/* Basic Information */}
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                          <div className="w-1 h-5 bg-orange-600 rounded-full mr-3"></div>
+                          Basic Information
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm font-medium text-gray-600 mb-1">Category</div>
+                            <div className="text-lg font-semibold text-gray-900">{(editingItem as PackingMaterial).category || '-'}</div>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm font-medium text-gray-600 mb-1">Type</div>
+                            <div className="text-lg font-semibold text-gray-900">{(editingItem as PackingMaterial).type || '-'}</div>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm font-medium text-gray-600 mb-1">Item Code</div>
+                            <div className="text-lg font-semibold text-gray-900">{(editingItem as PackingMaterial).item_code || '-'}</div>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm font-medium text-gray-600 mb-1">Brand</div>
+                            <div className="text-lg font-semibold text-gray-900">{(editingItem as PackingMaterial).brand || '-'}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Specifications */}
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                          <div className="w-1 h-5 bg-blue-600 rounded-full mr-3"></div>
+                          Specifications
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm font-medium text-gray-600 mb-1">Pack Size</div>
+                            <div className="text-lg font-semibold text-gray-900">{(editingItem as PackingMaterial).pack_size || '-'}</div>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm font-medium text-gray-600 mb-1">Dimensions</div>
+                            <div className="text-lg font-semibold text-gray-900">{(editingItem as PackingMaterial).dimensions || '-'}</div>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-4 col-span-2">
+                            <div className="text-sm font-medium text-gray-600 mb-1">Technical Detail</div>
+                            <div className="text-lg font-semibold text-gray-900">{(editingItem as PackingMaterial).technical_detail || '-'}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {modalType === 'view_raw_material' && editingItem && (
+                    <>
+                      {/* Basic Information */}
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                          <div className="w-1 h-5 bg-green-600 rounded-full mr-3"></div>
+                          Basic Information
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm font-medium text-gray-600 mb-1">Sl. No.</div>
+                            <div className="text-lg font-semibold text-gray-900">{(editingItem as RawMaterial).sl_no}</div>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm font-medium text-gray-600 mb-1">Category</div>
+                            <div className="text-lg font-semibold text-gray-900">{(editingItem as RawMaterial).category}</div>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm font-medium text-gray-600 mb-1">Type</div>
+                            <div className="text-lg font-semibold text-gray-900">{(editingItem as RawMaterial).type}</div>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm font-medium text-gray-600 mb-1">Grade</div>
+                            <div className="text-lg font-semibold text-gray-900">{(editingItem as RawMaterial).grade}</div>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm font-medium text-gray-600 mb-1">Supplier</div>
+                            <div className="text-lg font-semibold text-gray-900">{(editingItem as RawMaterial).supplier}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Technical Specifications */}
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                          <div className="w-1 h-5 bg-blue-600 rounded-full mr-3"></div>
+                          Technical Specifications
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm font-medium text-gray-600 mb-1">MFI</div>
+                            <div className="text-lg font-semibold text-gray-900">{(editingItem as RawMaterial).mfi || 'Not specified'}</div>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm font-medium text-gray-600 mb-1">Density</div>
+                            <div className="text-lg font-semibold text-gray-900">{(editingItem as RawMaterial).density || 'Not specified'}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* TDS Image */}
+                      {(editingItem as RawMaterial).tds_image && (
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                            <div className="w-1 h-5 bg-purple-600 rounded-full mr-3"></div>
+                            Technical Data Sheet
+                          </h3>
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="flex justify-center">
+                              <img 
+                                src={(editingItem as RawMaterial).tds_image} 
+                                alt="TDS" 
+                                className="max-w-full max-h-96 object-contain border border-gray-200 rounded-lg shadow-sm"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.style.display = 'none';
+                                  target.parentElement!.innerHTML = '<div class="text-gray-500 p-8 border border-gray-200 rounded-lg">Failed to load TDS image</div>';
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Remarks */}
+                      {(editingItem as RawMaterial).remark && (
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                            <div className="w-1 h-5 bg-orange-600 rounded-full mr-3"></div>
+                            Additional Information
+                          </h3>
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm font-medium text-gray-600 mb-2">Remarks</div>
+                            <div className="text-gray-900">{(editingItem as RawMaterial).remark}</div>
+                          </div>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

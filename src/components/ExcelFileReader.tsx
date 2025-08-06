@@ -8,18 +8,20 @@ import {
   X, Loader2, Table, Eye, Trash2, Plus, FileDown, Info,
   ChevronUp, ChevronDown
 } from 'lucide-react';
-import { machineAPI, moldAPI, scheduleAPI, rawMaterialAPI, Machine, Mold, ScheduleJob } from '../lib/supabase';
+import { machineAPI, moldAPI, scheduleAPI, rawMaterialAPI, packingMaterialAPI, Machine, Mold, ScheduleJob, PackingMaterial } from '../lib/supabase';
 
 // Raw Material interface
 interface RawMaterial {
   id?: string; // Optional since database auto-generates UUID
   sl_no: number;
-  type1: string; // Short form like "PP"
-  type2: string; // Full form like "HP", "ICP", "RCP" - treated as primary key
-  grade: string;
-  supplier: string;
-  mfi: number;
-  density: number;
+  category: string; // PP, PE, etc.
+  type: string; // HP, ICP, RCP, LDPE, MB, etc.
+  grade: string; // HJ333MO, 1750 MN, etc.
+  supplier: string; // Borouge, IOCL, Basell, etc.
+  mfi: number | null; // Melt Flow Index
+  density: number | null; // Density in g/cm³
+  tds_image?: string; // Base64 encoded TDS image or URL
+  remark?: string; // Additional remarks
   created_at?: string;
   updated_at?: string;
 }
@@ -28,13 +30,14 @@ interface ExcelRow {
   [key: string]: any;
 }
 
-type DataType = 'machines' | 'molds' | 'schedules' | 'raw_materials';
+type DataType = 'machines' | 'molds' | 'schedules' | 'raw_materials' | 'packing_materials';
 
 interface ImportData {
   machines: Machine[];
   molds: Mold[];
   schedules: ScheduleJob[];
   raw_materials: RawMaterial[];
+  packing_materials: PackingMaterial[];
 }
 
 interface ExcelFileReaderProps {
@@ -50,7 +53,7 @@ const ExcelFileReader: React.FC<ExcelFileReaderProps> = ({ onDataImported, onClo
   const [preview, setPreview] = useState<ExcelRow[]>([]);
   const [dataType, setDataType] = useState<DataType>(defaultDataType);
   const [headers, setHeaders] = useState<string[]>([]);
-  const [mappedData, setMappedData] = useState<ImportData>({ machines: [], molds: [], schedules: [], raw_materials: [] });
+  const [mappedData, setMappedData] = useState<ImportData>({ machines: [], molds: [], schedules: [], raw_materials: [], packing_materials: [] });
   const [showPreview, setShowPreview] = useState(false);
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | '', message: string }>({ type: '', message: '' });
   const [sortField, setSortField] = useState<string>('');
@@ -121,22 +124,38 @@ const ExcelFileReader: React.FC<ExcelFileReaderProps> = ({ onDataImported, onClo
       'Status': 'status',
       'Zone': 'zone',
       'Purchase Date': 'purchase_date',
-      'Remarks': 'remarks'
+      'Remarks': 'remarks',
+      'Unit': 'unit'
     },
     molds: {
+      // Excel headers from the actual file
+      'Sr.no.': 'sr_no',
+      'Sr. no.': 'sr_no', // Alternative spelling
+      'Mold name': 'mold_name',
+      'Mold Name': 'mold_name', // Alternative capitalization
+      'Type': 'type',
+      'Cavity': 'cavities', // Map to cavities (plural) for database
+      'Cavities': 'cavities', // Alternative mapping
+      'Cycle Time': 'cycle_time',
+      'Dwg Wt': 'dwg_wt',
+      'Dwg Wt.': 'dwg_wt', // With period
+      'Std. Wt.': 'std_wt',
+      'RP wt.': 'rp_wt',
+      'RP Wt.': 'rp_wt', // Alternative capitalization
+      'Dimensions': 'dimensions',
+      'Mold Wt.': 'mold_wt',
+      'Mold Wt': 'mold_wt', // Without period
+      'HRC Make': 'hrc_make',
+      'HRC Zone': 'hrc_zone',
+      'Make': 'make',
+      'Start Date': 'start_date',
+      'Unit': 'unit',
+      // Legacy mappings for backward compatibility
       'Item Code': 'mold_id',
       'Item Name': 'mold_name',
-      'Type': 'type',
-      'Cavity': 'cavities',
-      'Cycle Time': 'cycle_time',
       'St. Wt.': 'st_wt',
-      'HRC Zone': 'hrc_zone',
-      'Make': 'maker',
-      // Legacy fields for backward compatibility
       'Mold ID': 'mold_id',
-      'Mold Name': 'mold_name',
       'Maker': 'maker',
-      'Cavities': 'cavities',
       'Purchase Date': 'purchase_date',
       'Compatible Machines': 'compatible_machines'
     },
@@ -157,12 +176,33 @@ const ExcelFileReader: React.FC<ExcelFileReaderProps> = ({ onDataImported, onClo
       'Approval Status': 'approval_status'
     },
     raw_materials: {
-      'SL No.': 'sl_no',
+      'Sl.': 'sl_no',
+      'SL': 'sl_no',
+      'SL.': 'sl_no',
+      'Category': 'category',
       'Type': 'type',
       'Grade': 'grade',
       'Supplier': 'supplier',
       'MFI': 'mfi',
-      'Density': 'density'
+      'Density': 'density',
+      'TDS Attached': 'tds_image',
+      'Remark': 'remark',
+      'Unit': 'unit'
+    },
+    packing_materials: {
+      'Category': 'category',
+      'Type': 'type',
+      'Item Code': 'item_code',
+      'Item code': 'item_code',
+      'item_code': 'item_code',
+      'ItemCode': 'item_code',
+      'Pack Size': 'pack_size',
+      'PackSize': 'pack_size',
+      'Dimensions': 'dimensions',
+      'Technical Detail': 'technical_detail',
+      'TechnicalDetail': 'technical_detail',
+      'Brand': 'brand',
+      'Unit': 'unit'
     }
   };
 
@@ -256,6 +296,11 @@ const ExcelFileReader: React.FC<ExcelFileReaderProps> = ({ onDataImported, onClo
       return mapRawMaterialsData(data, availableColumns);
     }
     
+    // Special handling for packing materials
+    if (type === 'packing_materials') {
+      return mapPackingMaterialsData(data, availableColumns);
+    }
+    
     // Create a flexible mapping that handles column name variations
     const flexibleMapping: { [key: string]: string } = {};
     
@@ -319,7 +364,63 @@ const ExcelFileReader: React.FC<ExcelFileReaderProps> = ({ onDataImported, onClo
         }
         
         if (type === 'molds') {
-          if (dbColumn === 'cavities') value = parseInt(value) || 0;
+          // Handle numeric fields - convert empty strings to null
+          if (['cavity', 'cycle_time', 'dwg_wt', 'std_wt', 'rp_wt', 'mold_wt', 'st_wt'].includes(dbColumn)) {
+            if (value === '' || value === null || value === undefined) {
+              value = null;
+            } else {
+              value = parseFloat(value) || null;
+            }
+          }
+          
+          // Handle sr_no as string (not numeric)
+          if (dbColumn === 'sr_no') {
+            if (value === '' || value === null || value === undefined) {
+              value = null;
+            } else {
+              // Keep sr_no as string, don't convert to number
+              value = value.toString();
+            }
+          }
+          
+          // Handle integer fields
+          if (dbColumn === 'cavities') {
+            if (value === '' || value === null || value === undefined) {
+              value = 1; // Default to 1 cavity since it's NOT NULL
+            } else {
+              value = parseInt(value) || 1;
+            }
+          }
+          
+          // Handle date fields - convert empty strings to null
+          if (['purchase_date', 'start_date'].includes(dbColumn)) {
+            if (value === '' || value === null || value === undefined) {
+              value = null;
+            } else if (typeof value === 'number') {
+              // Convert Excel date number to ISO date string
+              try {
+                const date = XLSX.SSF.parse_date_code(value);
+                value = `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
+              } catch (error) {
+                console.warn(`Failed to parse Excel date ${value} for field ${dbColumn}:`, error);
+                value = null;
+              }
+            } else if (typeof value === 'string') {
+              // If it's already a string, try to parse it as a date
+              try {
+                const date = new Date(value);
+                if (!isNaN(date.getTime())) {
+                  value = date.toISOString().split('T')[0];
+                } else {
+                  value = null;
+                }
+              } catch (error) {
+                console.warn(`Failed to parse date string ${value} for field ${dbColumn}:`, error);
+                value = null;
+              }
+            }
+          }
+          
           if (dbColumn === 'compatible_machines') {
             value = typeof value === 'string' ? value.split(',').map(s => s.trim()) : [];
           }
@@ -389,6 +490,9 @@ const ExcelFileReader: React.FC<ExcelFileReaderProps> = ({ onDataImported, onClo
           // Set purchase_date to install_date if available, otherwise use current date
           mapped.purchase_date = mapped.install_date || new Date().toISOString().split('T')[0];
           
+          // Set default unit
+          mapped.unit = mapped.unit || 'Unit 1';
+          
           // Debug logging for date processing
           if (type === 'machines') {
             console.log(`Machine ${mapped.machine_id}: mfg_date=${mapped.mfg_date}, purchase_date=${mapped.purchase_date}, install_date=${mapped.install_date}, category=${mapped.category}, type=${mapped.type}`);
@@ -398,21 +502,63 @@ const ExcelFileReader: React.FC<ExcelFileReaderProps> = ({ onDataImported, onClo
       
       // Set default values for molds
       if (type === 'molds') {
+        // Generate mold_id from sr_no if available, otherwise use mold_name
+        if (mapped.sr_no && !mapped.mold_id) {
+          mapped.mold_id = `MOLD-${mapped.sr_no}`;
+        } else if (mapped.mold_name && !mapped.mold_id) {
+          mapped.mold_id = mapped.mold_name.replace(/\s+/g, '-').toUpperCase();
+        }
+        
+
+        
         mapped.purchase_date = mapped.purchase_date || new Date().toISOString().split('T')[0];
         mapped.compatible_machines = mapped.compatible_machines || [];
         mapped.maker = mapped.maker || mapped.make || 'Unknown';
+        
+        // Set default unit
+        mapped.unit = mapped.unit || 'Unit 1';
+      }
+      
+      // Set default values for all types
+      if ((type as DataType) === 'raw_materials' || (type as DataType) === 'packing_materials' || (type as DataType) === 'machines' || (type as DataType) === 'molds') {
+        mapped.unit = mapped.unit || 'Unit 1';
       }
       
       return mapped;
     }).filter(item => {
       // Filter out empty rows - be more lenient with validation
-      const requiredField = type === 'machines' ? 'machine_id' : 
-                          type === 'molds' ? 'mold_id' : 'schedule_id';
-      const hasRequiredField = item[requiredField] && item[requiredField].toString().trim() !== '';
+      let requiredField: string;
+      let hasRequiredField: boolean;
+      
+      switch (type as DataType) {
+        case 'machines':
+          requiredField = 'machine_id';
+          hasRequiredField = item[requiredField] && item[requiredField].toString().trim() !== '';
+          break;
+        case 'molds':
+          // For molds, check for either sr_no (new format) or mold_id (legacy format)
+          requiredField = 'sr_no';
+          hasRequiredField = (item[requiredField] && item[requiredField].toString().trim() !== '') ||
+                            (item['mold_id'] && item['mold_id'].toString().trim() !== '') ||
+                            (item['mold_name'] && item['mold_name'].toString().trim() !== '');
+          break;
+        case 'raw_materials':
+          requiredField = 'sl_no';
+          hasRequiredField = item[requiredField] && item[requiredField].toString().trim() !== '';
+          break;
+        case 'packing_materials':
+          requiredField = 'item_code';
+          hasRequiredField = item[requiredField] && item[requiredField].toString().trim() !== '';
+          break;
+        default:
+          requiredField = 'schedule_id';
+          hasRequiredField = item[requiredField] && item[requiredField].toString().trim() !== '';
+          break;
+      }
       
       // Debug logging
       if (!hasRequiredField) {
-        console.log('Filtered out item:', item, 'Missing field:', requiredField);
+        console.log('Filtered out item:', item, 'Missing required field for type:', type);
       }
       
       return hasRequiredField;
@@ -431,16 +577,18 @@ const ExcelFileReader: React.FC<ExcelFileReaderProps> = ({ onDataImported, onClo
     console.log('Processing raw materials data with category detection...');
     
     const mappedItems: RawMaterial[] = [];
-    let currentCategory = '';
-    let slNoCounter = 1;
+    let currentCategory = 'PP'; // Default category
     
     data.forEach((row, index) => {
       const slValue = row['Sl.'] || row['Sl'] || row['SL'] || row['SL.'] || '';
+      const categoryValue = row['Category'] || currentCategory;
       const typeValue = row['Type'] || '';
       const gradeValue = row['Grade'] || '';
       const supplierValue = row['Supplier'] || '';
       const mfiValue = row['MFI'] || '';
       const densityValue = row['Density'] || '';
+      const tdsValue = row['TDS Attached'] || '';
+      const remarkValue = row['Remark'] || '';
       
       // Check if this is a category header (contains parentheses and no numeric SL)
       const isCategoryHeader = typeValue && 
@@ -459,40 +607,22 @@ const ExcelFileReader: React.FC<ExcelFileReaderProps> = ({ onDataImported, onClo
       const hasValidType = typeValue && typeValue.trim() !== '';
       
       if (hasValidSl && hasValidType) {
-        // Parse type into type1 and type2
-        let type1 = '';
-        let type2 = '';
-        
-        if (typeValue.includes('-')) {
-          // Handle format like "PP-HP", "PP-ICP"
-          const parts = typeValue.split('-');
-          type1 = parts[0].trim();
-          type2 = parts[1].trim();
-        } else {
-          // Handle format like "PP" (use current category for type2)
-          type1 = typeValue.trim();
-          // Extract type2 from current category if available
-          if (currentCategory && currentCategory.includes('(')) {
-            type2 = currentCategory.split('(')[1].replace(')', '').trim();
-          } else {
-            type2 = typeValue.trim(); // Fallback
-          }
-        }
-        
         const mapped: RawMaterial = {
           sl_no: Number(slValue),
-          type1: type1,
-          type2: type2,
+          category: categoryValue,
+          type: typeValue.trim(),
           grade: gradeValue,
           supplier: supplierValue,
-          mfi: Number(mfiValue) || 0,
-          density: Number(densityValue) || 0,
+          mfi: mfiValue ? Number(mfiValue) : null,
+          density: densityValue ? Number(densityValue) : null,
+          tds_image: tdsValue || undefined,
+          remark: remarkValue || undefined,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
         
         mappedItems.push(mapped);
-        console.log(`Mapped raw material: ${mapped.type1}-${mapped.type2} - ${mapped.grade}`);
+        console.log(`Mapped raw material: ${mapped.category}-${mapped.type} - ${mapped.grade}`);
       } else {
         console.log(`Skipping invalid row:`, row);
       }
@@ -503,6 +633,82 @@ const ExcelFileReader: React.FC<ExcelFileReaderProps> = ({ onDataImported, onClo
     setMappedData(prev => ({
       ...prev,
       raw_materials: mappedItems
+    }));
+  };
+
+  // Special function to handle packing materials
+  const mapPackingMaterialsData = (data: ExcelRow[], availableColumns: string[]) => {
+    console.log('Processing packing materials data...');
+    console.log('Available columns:', availableColumns);
+    
+    const mappedItems: PackingMaterial[] = [];
+    
+    data.forEach((row, index) => {
+      console.log(`Processing row ${index}:`, row);
+      
+      const categoryValue = row['Category'] || '';
+      const typeValue = row['Type'] || '';
+      const itemCodeValue = row['Item Code'] || row['ItemCode'] || row['Item code'] || row['item_code'] || row['Item Code.'] || '';
+      const packSizeValue = row['Pack Size'] || row['PackSize'] || '';
+      const dimensionsValue = row['Dimensions'] || '';
+      const technicalDetailValue = row['Technical Detail'] || row['TechnicalDetail'] || '';
+      const brandValue = row['Brand'] || '';
+      
+      console.log(`Row ${index} values:`, {
+        category: categoryValue,
+        type: typeValue,
+        itemCode: itemCodeValue,
+        packSize: packSizeValue,
+        dimensions: dimensionsValue,
+        technicalDetail: technicalDetailValue,
+        brand: brandValue
+      });
+      console.log(`Row ${index} raw data:`, row);
+      
+      // Check if row has any meaningful data (not just "-" or empty)
+      const hasAnyValue = [categoryValue, typeValue, itemCodeValue, packSizeValue, brandValue].some(
+        value => value && value.trim() !== '' && value.trim() !== '-'
+      );
+      
+      // Accept any row that has at least one meaningful value
+      if (hasAnyValue) {
+        // Generate a meaningful item code if none provided
+        let finalItemCode = itemCodeValue.trim();
+        if (!finalItemCode) {
+          // Try to create a meaningful code from category and type
+          const categoryPrefix = categoryValue.trim().substring(0, 3).toUpperCase();
+          const typePrefix = typeValue.trim().substring(0, 2).toUpperCase();
+          if (categoryPrefix && typePrefix) {
+            finalItemCode = `${categoryPrefix}-${typePrefix}-${index + 1}`;
+          } else {
+            finalItemCode = `ITEM-${index + 1}`;
+          }
+        }
+        
+        const mapped: PackingMaterial = {
+          category: categoryValue.trim() || 'Unknown',
+          type: typeValue.trim() || 'Unknown',
+          item_code: finalItemCode,
+          pack_size: packSizeValue || '-',
+          dimensions: dimensionsValue || '-',
+          technical_detail: technicalDetailValue || '-',
+          brand: brandValue || '-',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        mappedItems.push(mapped);
+        console.log(`✅ Mapped packing material: ${mapped.category}-${mapped.type} - ${mapped.item_code}`);
+      } else {
+        console.log(`❌ Skipping empty row ${index}:`, row);
+      }
+    });
+    
+    console.log(`Mapped ${mappedItems.length} packing materials items:`, mappedItems);
+    
+    setMappedData(prev => ({
+      ...prev,
+      packing_materials: mappedItems
     }));
   };
 
@@ -579,6 +785,7 @@ const ExcelFileReader: React.FC<ExcelFileReaderProps> = ({ onDataImported, onClo
           });
           
           if (newRecords.length > 0) {
+            console.log('About to send mold data to database:', newRecords);
             result = await moldAPI.bulkCreate(newRecords);
           } else {
             result = [];
@@ -611,14 +818,14 @@ const ExcelFileReader: React.FC<ExcelFileReaderProps> = ({ onDataImported, onClo
         case 'raw_materials':
           const existingRawMaterials = await rawMaterialAPI.getAll();
           const existingRawMaterialCombos = existingRawMaterials.map((rm: RawMaterial) => 
-            `${rm.type2}-${rm.grade}-${rm.supplier}` // Use type2-grade-supplier combo for uniqueness
+            `${rm.type}-${rm.grade}-${rm.supplier}` // Use type-grade-supplier combo for uniqueness
           );
           
           newRecords = mappedData.raw_materials.filter(rawMaterial => {
-            const combo = `${rawMaterial.type2}-${rawMaterial.grade}-${rawMaterial.supplier}`;
+            const combo = `${rawMaterial.type}-${rawMaterial.grade}-${rawMaterial.supplier}`;
             if (existingRawMaterialCombos.includes(combo)) {
               duplicateCount++;
-              console.log(`Skipping duplicate raw material: ${rawMaterial.type2} - ${rawMaterial.grade} - ${rawMaterial.supplier}`);
+              console.log(`Skipping duplicate raw material: ${rawMaterial.type} - ${rawMaterial.grade} - ${rawMaterial.supplier}`);
               return false;
             }
             return true;
@@ -639,13 +846,34 @@ const ExcelFileReader: React.FC<ExcelFileReaderProps> = ({ onDataImported, onClo
                     successfulImports.push(created);
                   }
                 } catch (createError) {
-                  console.log(`Failed to import: ${record.type2} - ${record.grade} - ${record.supplier}`, createError);
+                  console.log(`Failed to import: ${record.type} - ${record.grade} - ${record.supplier}`, createError);
                   duplicateCount++;
                 }
               }
               result = successfulImports;
               console.log(`Imported ${successfulImports.length} out of ${newRecords.length} raw materials`);
             }
+          } else {
+            result = [];
+          }
+          break;
+
+        case 'packing_materials':
+          const existingPackingMaterials = await packingMaterialAPI.getAll();
+          const existingPackingMaterialItemCodes = existingPackingMaterials.map(p => p.item_code);
+          
+          newRecords = mappedData.packing_materials.filter(packingMaterial => {
+            if (existingPackingMaterialItemCodes.includes(packingMaterial.item_code)) {
+              duplicateCount++;
+              console.log(`Skipping duplicate packing material: ${packingMaterial.item_code}`);
+              return false;
+            }
+            console.log(`Will import packing material: ${packingMaterial.item_code}`);
+            return true;
+          });
+          
+          if (newRecords.length > 0) {
+            result = await packingMaterialAPI.bulkCreate(newRecords);
           } else {
             result = [];
           }
@@ -682,7 +910,7 @@ const ExcelFileReader: React.FC<ExcelFileReaderProps> = ({ onDataImported, onClo
       setTimeout(() => {
         setFile(null);
         setPreview([]);
-        setMappedData({ machines: [], molds: [], schedules: [], raw_materials: [] });
+        setMappedData({ machines: [], molds: [], schedules: [], raw_materials: [], packing_materials: [] });
         setHeaders([]);
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
@@ -747,6 +975,12 @@ const ExcelFileReader: React.FC<ExcelFileReaderProps> = ({ onDataImported, onClo
         ['1', 'Resin', 'ABS', 'Supplier A', 100, 1.05],
         ['2', 'Hardener', 'Epoxy', 'Supplier B', 50, 1.20]
       ];
+    } else if (dataType === 'packing_materials') {
+      sampleRows = [
+        ['Boxes', 'Export', 'CTN-Ro16', '150', '6555 x 1764 x 2060', 'Technical specifications for export boxes', 'Regular'],
+        ['Boxes', 'Local', 'CTN-Ro16', '800', '7383 x 1955 x 2157', 'Technical specifications for local boxes', 'Gesa'],
+        ['PolyBags', 'Standard', 'PB-500ml', '1000', '200 x 300 x 0.05', 'Food grade polyethylene bags', 'Premium']
+      ];
     }
     
     const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleRows]);
@@ -780,7 +1014,7 @@ const ExcelFileReader: React.FC<ExcelFileReaderProps> = ({ onDataImported, onClo
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">Select Data Type</label>
             <div className="flex space-x-4">
-              {(['machines', 'molds', 'schedules', 'raw_materials'] as DataType[]).map(type => (
+              {(['machines', 'molds', 'schedules', 'raw_materials', 'packing_materials'] as DataType[]).map(type => (
                 <button
                   key={type}
                   onClick={() => {
@@ -857,7 +1091,7 @@ const ExcelFileReader: React.FC<ExcelFileReaderProps> = ({ onDataImported, onClo
                       onClick={() => {
                         setFile(null);
                         setPreview([]);
-                        setMappedData({ machines: [], molds: [], schedules: [], raw_materials: [] });
+                        setMappedData({ machines: [], molds: [], schedules: [], raw_materials: [], packing_materials: [] });
                         if (fileInputRef.current) fileInputRef.current.value = '';
                       }}
                       className="text-red-600 hover:text-red-800"
