@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from './AuthProvider';
-import { validateEmail, validatePassword, authAPI } from '../../lib/auth';
+import { validateEmail, validatePassword, validatePhoneNumber, authAPI } from '../../lib/auth';
 
 interface LoginFormProps {
   onSuccess?: () => void;
@@ -12,7 +12,7 @@ interface LoginFormProps {
 export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, redirectTo = '/' }) => {
   const { signIn, loading } = useAuth();
   const [formData, setFormData] = useState({
-    email: '',
+    phoneNumber: '',
     password: '',
     passwordFilled: false
   });
@@ -20,13 +20,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, redirectTo = '/
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Check for pre-filled email from localStorage
+  // Check for pre-filled phone number from localStorage
   React.useEffect(() => {
-    // Try to pre-fill email from localStorage if available
+    // Try to pre-fill phone number from localStorage if available
     if (typeof window !== 'undefined') {
-      const storedEmail = localStorage.getItem('lastUserEmail');
-      if (storedEmail && validateEmail(storedEmail).valid) {
-        setFormData(prev => ({ ...prev, email: storedEmail }));
+      const storedPhone = localStorage.getItem('lastUserPhone');
+      if (storedPhone) {
+        setFormData(prev => ({ ...prev, phoneNumber: storedPhone }));
       }
     }
   }, []);
@@ -113,13 +113,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, redirectTo = '/
   const validateForm = (): boolean => {
     const newErrors: { [key: string]: string } = {};
 
-    // Email validation
-    if (!formData.email) {
-      newErrors.email = 'Email is required';
+    // Phone number validation
+    if (!formData.phoneNumber) {
+      newErrors.phoneNumber = 'Phone number is required';
     } else {
-      const emailValidation = validateEmail(formData.email);
-      if (!emailValidation.valid) {
-        newErrors.email = emailValidation.error || 'Invalid email';
+      const phoneValidation = validatePhoneNumber(formData.phoneNumber);
+      if (!phoneValidation.valid) {
+        newErrors.phoneNumber = phoneValidation.error || 'Invalid phone number';
       }
     }
 
@@ -158,8 +158,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, redirectTo = '/
     setErrors({});
 
     try {
-      console.log('Attempting login for:', formData.email);
-      const { error } = await signIn(formData.email, password);
+      console.log('Attempting login for:', formData.phoneNumber);
+      const { error } = await signIn(formData.phoneNumber, password);
       
       if (error) {
         console.error('Login error:', error);
@@ -196,7 +196,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, redirectTo = '/
     }
   };
 
-  const isFormValid = formData.email && formData.passwordFilled && Object.keys(errors).length === 0;
+  const isFormValid = formData.phoneNumber && formData.passwordFilled && Object.keys(errors).length === 0;
 
   return (
     <div className="w-full max-w-md mx-auto">
@@ -242,26 +242,26 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, redirectTo = '/
         )}
         
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Email Field */}
+          {/* Phone Number Field */}
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Email Address
+            <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-2">
+              Phone Number
             </label>
             <input
-              type="email"
-              id="email"
-              name="email"
-              value={formData.email}
+              type="tel"
+              id="phoneNumber"
+              name="phoneNumber"
+              value={formData.phoneNumber}
               onChange={handleInputChange}
               className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 ${
-                errors.email ? 'border-red-500' : 'border-gray-300'
+                errors.phoneNumber ? 'border-red-500' : 'border-gray-300'
               }`}
-              placeholder="your.name@polypacks.in"
+              placeholder="+919876543210"
               disabled={isSubmitting || loading}
-              autoComplete="email"
+              autoComplete="tel"
             />
-            {errors.email && (
-              <p className="mt-1 text-sm text-red-600">{errors.email}</p>
+            {errors.phoneNumber && (
+              <p className="mt-1 text-sm text-red-600">{errors.phoneNumber}</p>
             )}
           </div>
 
@@ -359,10 +359,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, redirectTo = '/
               Forgot your password?
             </a>
             <div className="text-sm text-gray-600">
-              Don't have an account?{' '}
-              <a href="/auth/signup" className="text-blue-600 hover:text-blue-500 font-medium">
-                Sign up
-              </a>
+              Need an account?{' '}
+              <span className="text-gray-500">
+                Contact your administrator
+              </span>
             </div>
           </div>
         </form>

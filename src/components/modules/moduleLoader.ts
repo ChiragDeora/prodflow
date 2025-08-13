@@ -42,6 +42,8 @@ export const getAvailableModules = async (): Promise<ModuleConfig[]> => {
     'approvals',
     'reports',
     'operator-panel',
+    'maintenance-management',
+    'quality-control',
     'profile'
   ];
 

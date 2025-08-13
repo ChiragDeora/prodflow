@@ -9,7 +9,7 @@ interface AuthContextType {
   profile: UserProfile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error?: any }>;
-  signUp: (email: string, password: string, fullName: string, department?: string) => Promise<{ error?: any }>;
+  signUp: (email: string, password: string, fullName: string, phoneNumber: string, department?: string) => Promise<{ error?: any }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error?: any }>;
   updatePassword: (newPassword: string) => Promise<{ error?: any }>;
@@ -83,7 +83,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setTimeout(() => reject(new Error('Sign in timeout')), 15000)
       );
       
-      const signInPromise = authAPI.signIn({ email, password });
+      const signInPromise = authAPI.signIn({ phoneNumber: email, password });
       const { user: authUser, session, error } = await Promise.race([signInPromise, signInTimeout]) as any;
       
       if (error) {
@@ -131,13 +131,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const signUp = async (email: string, password: string, fullName: string, department?: string): Promise<{ error?: any }> => {
+  const signUp = async (email: string, password: string, fullName: string, phoneNumber: string, department?: string): Promise<{ error?: any }> => {
     try {
       setLoading(true);
       const { user: authUser, error } = await authAPI.signUp({
         email,
         password,
         fullName,
+        phoneNumber,
         department
       });
       
@@ -247,15 +248,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             }
           }
           
-          // Fetch profile (but don't block on it)
-          userProfileAPI.getProfile(session.user.id).then(({ profile: userProfile }) => {
-            if (mounted && userProfile) {
-              console.log('Profile loaded:', userProfile?.full_name);
-              setProfile(userProfile);
+          // Fetch profile with enhanced fallback logic
+          userProfileAPI.getProfile(session.user.id).then(({ profile: userProfile, error: profileError }) => {
+            if (mounted) {
+              if (profileError) {
+                console.error('Error fetching profile during initialization:', profileError);
+                console.log('User ID:', session.user.id);
+                console.log('User email:', session.user.email);
+                
+                                  // Try to link existing profile by email
+                  return userProfileAPI.linkUserProfile(session.user.email || '').then(({ profile: linkedProfile, error: linkError }) => {
+                    if (linkedProfile && mounted) {
+                      console.log('Linked existing profile during initialization:', linkedProfile);
+                      setProfile(linkedProfile);
+                    } else {
+                      console.log('No profile to link, user may need admin to create profile first');
+                      console.error('Profile linking failed:', linkError);
+                    }
+                  });
+              } else if (userProfile) {
+                console.log('Profile loaded during initialization:', userProfile);
+                setProfile(userProfile);
+              } else {
+                console.log('No profile found during initialization for user:', session.user.id);
+              }
             }
           }).catch(profileError => {
-            console.error('Error fetching profile:', profileError);
-            console.log('Continuing without profile data');
+            console.error('Exception fetching profile during initialization:', profileError);
           });
         } else {
           console.log('No valid session found');
@@ -317,12 +336,32 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             }
             
             // Fetch profile (but don't block)
-            userProfileAPI.getProfile(session.user.id).then(({ profile: userProfile }) => {
-              if (mounted && userProfile) {
-                setProfile(userProfile);
+            userProfileAPI.getProfile(session.user.id).then(({ profile: userProfile, error: profileError }) => {
+              if (mounted) {
+                if (profileError) {
+                  console.error('Error fetching profile on auth change:', profileError);
+                  console.log('User ID:', session.user.id);
+                  console.log('User email:', session.user.email);
+                  
+                  // Try to link existing profile by email
+                  return userProfileAPI.linkUserProfile(session.user.email || '').then(({ profile: linkedProfile, error: linkError }) => {
+                    if (linkedProfile && mounted) {
+                      console.log('Linked existing profile on auth change:', linkedProfile);
+                      setProfile(linkedProfile);
+                    } else {
+                      console.log('No profile to link on auth change');
+                      console.error('Profile linking failed on auth change:', linkError);
+                    }
+                  });
+                } else if (userProfile) {
+                  console.log('Profile loaded successfully:', userProfile);
+                  setProfile(userProfile);
+                } else {
+                  console.log('No profile found for user:', session.user.id);
+                }
               }
             }).catch(profileError => {
-              console.error('Error fetching profile on auth change:', profileError);
+              console.error('Exception fetching profile on auth change:', profileError);
             });
           }
         } else if (event === 'SIGNED_OUT') {

@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
-import { CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, CheckCircle, Clock, AlertCircle, Play, Pause } from 'lucide-react';
+
 import { 
   Machine as SupabaseMachine, 
   Mold as SupabaseMold, 
@@ -29,6 +30,7 @@ const OperatorPanel: React.FC<OperatorPanelProps> = ({
   machinesMaster, 
   moldsMaster 
 }) => {
+
   const todayJobs = scheduleData.filter(job => job.date === selectedDate && !job.is_done);
 
   return (
@@ -73,7 +75,7 @@ const OperatorPanel: React.FC<OperatorPanelProps> = ({
               
               <button
                 onClick={() => handleAction('mark_done', job, 'schedule')}
-                className="w-full flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                className="w-full flex items-center justify-center px-4 py-2 rounded-lg transition-colors bg-green-600 text-white hover:bg-green-700"
               >
                 <CheckCircle className="w-4 h-4 mr-2" />
                 Mark as Done

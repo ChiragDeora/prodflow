@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
-import { CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { CheckCircle, XCircle, Eye, Clock } from 'lucide-react';
+
 import { ScheduleJob as SupabaseScheduleJob } from '../../../lib/supabase';
 
 type ScheduleJob = SupabaseScheduleJob;
@@ -17,6 +18,7 @@ const ApprovalsModule: React.FC<ApprovalsModuleProps> = ({
   scheduleData, 
   handleAction 
 }) => {
+
   const pendingJobs = scheduleData.filter(job => job.is_done && job.approval_status === 'pending');
   const approvedJobs = scheduleData.filter(job => job.approval_status === 'approved');
 
@@ -42,7 +44,7 @@ const ApprovalsModule: React.FC<ApprovalsModuleProps> = ({
                   </div>
                   <button
                     onClick={() => handleAction('approve', job, 'schedule')}
-                    className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                    className="px-3 py-1 rounded text-sm transition-colors bg-green-600 text-white hover:bg-green-700"
                   >
                     Approve
                   </button>

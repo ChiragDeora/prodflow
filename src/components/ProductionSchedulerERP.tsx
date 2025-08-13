@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  HelpCircle, Info, Menu, Package, Plus, Save, Upload, User, Wrench, X
+  HelpCircle, Info, Link, Menu, Package, Plus, Save, Upload, User, Wrench, X
 } from 'lucide-react';
 import { useAuth } from './auth/AuthProvider';
 import ExcelFileReader from './ExcelFileReader';
@@ -13,6 +13,7 @@ import {
   scheduleAPI, 
   rawMaterialAPI, 
   packingMaterialAPI,
+
   unitAPI,
   unitManagementSettingsAPI,
   Machine as SupabaseMachine, 
@@ -20,14 +21,17 @@ import {
   ScheduleJob as SupabaseScheduleJob,
   RawMaterial as SupabaseRawMaterial,
   PackingMaterial as SupabasePackingMaterial,
+
   Unit
 } from '../lib/supabase';
 import { authAPI, userProfileAPI } from '../lib/auth';
 import { moduleRegistry, getAvailableModules, getModule } from './modules/moduleRegistry';
 
+
 // Type definitions (using Supabase types)
 type Machine = SupabaseMachine;
 type Mold = SupabaseMold;
+
 type ScheduleJob = SupabaseScheduleJob;
 type RawMaterial = SupabaseRawMaterial;
 type PackingMaterial = SupabasePackingMaterial;
@@ -53,7 +57,7 @@ interface MenuItem {
   description: string;
 }
 
-type ModuleType = 'scheduler' | 'masters' | 'approvals' | 'reports' | 'operators' | 'profile';
+type ModuleType = 'scheduler' | 'masters' | 'approvals' | 'reports' | 'operators' | 'maintenance' | 'quality' | 'profile' | 'user-management';
 type ModalType = 'job' | 'machine' | 'mold' | 'packing_material' | 'raw_material' | 'view_machine' | 'view_mold' | 'view_schedule' | 'view_packing_material' | 'view_raw_material' | '';
 type ActionType = 'edit' | 'delete' | 'view' | 'approve' | 'mark_done';
 type ItemType = 'machine' | 'mold' | 'schedule' | 'material' | 'product' | 'raw_material' | 'packing_material';
@@ -198,10 +202,13 @@ const ProductionSchedulerERP: React.FC = () => {
     }
     return 'all';
   });
+
+
   
   // Data from Supabase
   const [machinesMaster, setMachinesMaster] = useState<Machine[]>([]);
   const [moldsMaster, setMoldsMaster] = useState<Mold[]>([]);
+
   const [rawMaterialsMaster, setRawMaterialsMaster] = useState<RawMaterial[]>([]);
   const [packingMaterialsMaster, setPackingMaterialsMaster] = useState<PackingMaterial[]>([]);
   const [scheduleData, setScheduleData] = useState<ScheduleJob[]>([]);
@@ -665,6 +672,8 @@ const ProductionSchedulerERP: React.FC = () => {
     });
   };
 
+
+
   const sortRawMaterials = (materials: RawMaterial[], field: string, direction: 'asc' | 'desc'): RawMaterial[] => {
     return [...materials].sort((a, b) => {
       let aValue: any = a[field as keyof RawMaterial];
@@ -763,6 +772,7 @@ const ProductionSchedulerERP: React.FC = () => {
       return {
         machines: machinesMaster,
         molds: moldsMaster,
+
         rawMaterials: rawMaterialsMaster,
         packingMaterials: packingMaterialsMaster
       };
@@ -777,6 +787,7 @@ const ProductionSchedulerERP: React.FC = () => {
       return {
         machines: machinesMaster,
         molds: moldsMaster,
+
         rawMaterials: rawMaterialsMaster,
         packingMaterials: packingMaterialsMaster
       };
@@ -785,6 +796,7 @@ const ProductionSchedulerERP: React.FC = () => {
     return {
       machines: machinesMaster.filter((machine: Machine) => machine.unit === selectedUnitName),
       molds: moldsMaster.filter((mold: Mold) => mold.unit === selectedUnitName),
+
       rawMaterials: rawMaterialsMaster.filter((material: RawMaterial) => material.unit === selectedUnitName),
       packingMaterials: packingMaterialsMaster.filter((material: PackingMaterial) => material.unit === selectedUnitName)
     };
@@ -809,6 +821,8 @@ const ProductionSchedulerERP: React.FC = () => {
     return sortMolds(filteredData.molds, moldSortField, moldSortDirection);
   }, [moldsMaster, moldSortField, moldSortDirection, selectedUnit]);
   console.log('Sorted molds result:', sortedMolds.map(m => ({ id: m.mold_id, item_code: m.item_code })));
+
+
 
   const sortedRawMaterials = useMemo(() => {
     const filteredData = getFilteredData();
@@ -880,6 +894,8 @@ const ProductionSchedulerERP: React.FC = () => {
       localStorage.setItem(`prodSchedulerMoldSortDirection_${userId}`, moldSortDirection === 'asc' ? 'desc' : 'asc');
     }
   };
+
+
 
   const handleRawMaterialSortChange = (field: string) => {
     if (rawMaterialSortField === field) {
@@ -969,12 +985,13 @@ const ProductionSchedulerERP: React.FC = () => {
         let itemId: string | undefined;
         let itemName: string | undefined;
         
-        if ('machine_id' in item) {
+        if ('machine_id' in item && typeof item.machine_id === 'string') {
           itemId = item.machine_id;
           itemName = item.machine_id;
-        } else if ('mold_id' in item) {
+        } else if ('mold_id' in item && typeof item.mold_id === 'string') {
           itemId = item.mold_id;
-          itemName = item.mold_name || item.mold_id;
+          itemName = (item as any).mold_name || item.mold_id;
+
         } else if ('schedule_id' in item && typeof (item as any).schedule_id === 'string') {
           itemId = (item as { schedule_id: string }).schedule_id;
           itemName = itemId;
@@ -991,12 +1008,13 @@ const ProductionSchedulerERP: React.FC = () => {
         }
         
         if (window.confirm(`Are you sure you want to delete ${itemName || itemId || 'this item'}?`)) {
-            if (itemType === 'machine' && 'machine_id' in item) {
+            if (itemType === 'machine' && 'machine_id' in item && typeof item.machine_id === 'string') {
               await machineAPI.delete(item.machine_id);
               setMachinesMaster(prev => prev.filter(m => m.machine_id !== item.machine_id));
-            } else if (itemType === 'mold' && 'mold_id' in item) {
+            } else if (itemType === 'mold' && 'mold_id' in item && typeof item.mold_id === 'string') {
               await moldAPI.delete(item.mold_id);
               setMoldsMaster(prev => prev.filter(m => m.mold_id !== item.mold_id));
+
             } else if (itemType === 'schedule' && 'schedule_id' in item) {
               await scheduleAPI.delete(item.schedule_id);
               setScheduleData(prev => prev.filter(s => s.schedule_id !== item.schedule_id));
@@ -1021,6 +1039,7 @@ const ProductionSchedulerERP: React.FC = () => {
           setModalType('view_packing_material');
         } else if (itemType === 'raw_material') {
           setModalType('view_raw_material');
+
         } else {
           setModalType(`view_${itemType}` as ModalType);
         }
@@ -1147,24 +1166,23 @@ const ProductionSchedulerERP: React.FC = () => {
     };
 
     return (
-      <div className={`${sidebarOpen ? 'w-64' : 'w-16'} bg-gray-900 text-white transition-all duration-300 flex flex-col`}>
-        <div className="p-4 border-b border-gray-700">
-          <div className="flex items-center justify-between">
-            {sidebarOpen && <h2 className="text-xl font-bold">ProdFlow</h2>}
+      <div className={`${sidebarOpen ? 'w-64' : 'w-16'} bg-gray-900 text-white transition-all duration-300 flex flex-col h-screen`}>
+        <div className="p-3 border-b border-gray-700">
+          <div className={`flex items-center ${sidebarOpen ? 'justify-between' : 'justify-center'}`}>
+            {sidebarOpen && <h2 className="text-lg font-semibold">ProdFlow</h2>}
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-gray-400 hover:text-white">
-              <Menu className="w-6 h-6" />
+              <Menu className="w-5 h-5" />
             </button>
           </div>
         </div>
         
         {/* Unit Filter Dropdown */}
         {sidebarOpen && (
-          <div className="p-4 border-b border-gray-700">
-            <label className="block text-sm font-medium text-gray-300 mb-2">Unit Filter</label>
+          <div className="p-3 border-b border-gray-700">
             <select
               value={selectedUnit}
               onChange={(e) => handleUnitFilterChange(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-2 py-1.5 bg-gray-800 border border-gray-600 rounded text-white text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="all">All Units</option>
               {getAvailableUnits().map(unit => (
@@ -1174,23 +1192,23 @@ const ProductionSchedulerERP: React.FC = () => {
           </div>
         )}
         
-        <nav className="flex-1 pt-4">
+        <nav className="flex-1 pt-2 overflow-y-auto">
           {menuItems.map(item => {
             const IconComponent = item.icon;
             return (
-                          <button
-              key={item.id}
-              onClick={() => handleModuleChange(item.id as ModuleType)}
-              className={`w-full text-left p-4 hover:bg-gray-700 transition-colors ${
-                currentModule === item.id ? 'bg-gray-700 border-r-4 border-blue-500' : ''
-              }`}
-            >
-                <div className="flex items-center">
-                  <IconComponent className="w-6 h-6" />
+              <button
+                key={item.id}
+                onClick={() => handleModuleChange(item.id as ModuleType)}
+                className={`w-full p-3 hover:bg-gray-700 transition-colors ${
+                  currentModule === item.id ? 'bg-gray-700 border-r-2 border-blue-400' : ''
+                } ${sidebarOpen ? 'text-left' : 'flex justify-center'}`}
+              >
+                <div className={`flex items-center ${sidebarOpen ? '' : 'justify-center'}`}>
+                  <IconComponent className="w-5 h-5" />
                   {sidebarOpen && (
                     <div className="ml-3">
-                      <div className="font-medium">{item.label}</div>
-                      <div className="text-sm text-gray-400">{item.description}</div>
+                      <div className="font-medium text-sm">{item.label}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{item.description}</div>
                     </div>
                   )}
                 </div>
@@ -1200,19 +1218,19 @@ const ProductionSchedulerERP: React.FC = () => {
         </nav>
 
         {/* Current User Section - Bottom Left */}
-        <div className="border-t border-gray-700 p-4 relative">
+        <div className="border-t border-gray-700 p-3 relative flex-shrink-0">
           <button
             onClick={() => handleModuleChange('profile')}
-            className={`w-full text-left p-3 hover:bg-gray-700 transition-colors rounded-lg ${
+            className={`w-full text-left p-2 hover:bg-gray-700 transition-colors rounded ${
               sidebarOpen ? 'flex items-center' : 'flex justify-center'
             }`}
           >
-            <div className="flex items-center justify-center w-12 h-12 rounded-full">
-              <User className="w-4 h-4 text-white" />
+            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-600">
+              <User className="w-3 h-3 text-white" />
             </div>
             {sidebarOpen && (
-              <div className="ml-3 flex-1">
-                <div className="font-medium text-sm truncate">
+              <div className="ml-2 flex-1">
+                <div className="font-medium text-xs truncate">
                   {profile?.full_name || user?.email || 'Current User'}
                 </div>
                 <div className="text-xs text-gray-400 capitalize">
@@ -1226,7 +1244,7 @@ const ProductionSchedulerERP: React.FC = () => {
           {sidebarOpen && (
             <button
               onClick={handleSignOut}
-              className="w-full mt-2 text-left p-2 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors rounded text-sm"
+              className="w-full mt-1 text-left p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors rounded text-xs"
             >
               Sign Out
             </button>
@@ -1601,6 +1619,7 @@ const ProductionSchedulerERP: React.FC = () => {
           return {
             machinesMaster: mastersFilteredData.machines,
             moldsMaster: mastersFilteredData.molds,
+
             rawMaterials: mastersFilteredData.rawMaterials,
             packingMaterials: mastersFilteredData.packingMaterials,
             
@@ -1630,6 +1649,9 @@ const ProductionSchedulerERP: React.FC = () => {
             handleRawMaterialSortChange,
             sortedRawMaterials,
             
+
+
+            
             // Packing Materials state and handlers
             packingMaterialCategoryFilter,
             handlePackingMaterialCategoryFilterChange,
@@ -1653,6 +1675,13 @@ const ProductionSchedulerERP: React.FC = () => {
           };
         case 'reports':
           return {};
+        case 'maintenance':
+          return {
+
+            machinesMaster: sortedMachines,
+          };
+        case 'quality':
+          return {};
       case 'profile':
           return {};
       default:
@@ -1672,6 +1701,7 @@ const ProductionSchedulerERP: React.FC = () => {
       
       {/* Modals */}
       {showModal && modalType === 'job' && <NewJobModal />}
+
       {showModal && modalType === 'machine' && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -1712,7 +1742,7 @@ const ProductionSchedulerERP: React.FC = () => {
                 capacity_tons: parseInt(formData.get('size') as string) || 0,
                 type: 'Injection Molding Machine',
                 category: formData.get('category') as string || 'IM',
-                zone: formData.get('zone') as string || 'Line A',
+                zone: formData.get('zone') as string || 'Production Area A',
                 purchase_date: (formData.get('mfg_date') as string) || '',
                 install_date: formData.get('install_date') as string || new Date().toISOString().split('T')[0],
                 grinding_available: formData.get('grinding_available') === 'true',
@@ -1729,7 +1759,7 @@ const ProductionSchedulerERP: React.FC = () => {
               };
               
               try {
-                if (editingItem && 'machine_id' in editingItem && editingItem.machine_id) {
+                if (editingItem && 'machine_id' in editingItem && typeof editingItem.machine_id === 'string' && editingItem.machine_id) {
                   // Update existing machine
                   await machineAPI.update(editingItem.machine_id, machineData);
                   setMachinesMaster(prev => prev.map(m => 
@@ -1770,7 +1800,7 @@ const ProductionSchedulerERP: React.FC = () => {
                         required
                         placeholder="e.g., JSW-1, HAIT-1, WITT-1"
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-gray-500"
-                        defaultValue={editingItem && 'machine_id' in editingItem ? editingItem.machine_id : ''}
+                        defaultValue={editingItem && 'machine_id' in editingItem && typeof editingItem.machine_id === 'string' ? editingItem.machine_id : ''}
                       />
                     </div>
                     <div>
@@ -1943,11 +1973,11 @@ const ProductionSchedulerERP: React.FC = () => {
                       <select 
                         name="zone" 
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-gray-500"
-                        defaultValue={editingItem && 'zone' in editingItem ? editingItem.zone : 'Line A'}
+                        defaultValue={editingItem && 'zone' in editingItem ? editingItem.zone : 'Production Area A'}
                       >
-                        <option value="Line A">Line A</option>
-                        <option value="Line B">Line B</option>
-                        <option value="Line C">Line C</option>
+                        <option value="Production Area A">Production Area A</option>
+                        <option value="Production Area B">Production Area B</option>
+                        <option value="Production Area C">Production Area C</option>
                       </select>
                     </div>
                     <div>
@@ -2868,6 +2898,7 @@ const ProductionSchedulerERP: React.FC = () => {
                     <Wrench className="w-6 h-6 text-blue-600" />
                   ) : modalType === 'view_mold' ? (
                     <Package className="w-6 h-6 text-purple-600" />
+
                   ) : (
                     <Package className="w-6 h-6 text-orange-600" />
                   )}
@@ -2897,6 +2928,8 @@ const ProductionSchedulerERP: React.FC = () => {
             <div className="p-6">
               {editingItem && (
                 <div className="space-y-6">
+
+
                   {modalType === 'view_machine' && 'machine_id' in editingItem && editingItem && (
                     <>
                       {/* Basic Information */}

@@ -2,9 +2,10 @@
 
 import React from 'react';
 import { 
-  Wrench, Upload, ArrowUp, ArrowDown, Eye, Edit, Trash2, Image 
+  Wrench, Upload, Plus, ArrowUp, ArrowDown, Eye, Trash2, Pencil, Info 
 } from 'lucide-react';
 import { Machine as SupabaseMachine, Unit } from '../../../lib/supabase';
+import { useAccessControl } from '../../../lib/useAccessControl';
 
 type Machine = SupabaseMachine;
 type ActionType = 'edit' | 'delete' | 'view' | 'approve' | 'mark_done';
@@ -44,6 +45,12 @@ const MachineMaster: React.FC<MachineMasterProps> = ({
   setViewingNameplate,
   InfoButton
 }) => {
+  // Temporarily disable permission checks - will be re-enabled later
+  const canCreateMachines = true;
+  const canEditMachines = true;
+  const canDeleteMachines = true;
+  const canViewMachines = true;
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -108,21 +115,25 @@ const MachineMaster: React.FC<MachineMasterProps> = ({
           
 
           
-          <button 
-            onClick={() => openExcelReader('machines')}
-            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            Import Excel
-          </button>
+          {canCreateMachines && (
+            <button 
+              onClick={() => openExcelReader('machines')}
+              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Import Excel
+            </button>
+          )}
           
-          <button 
-            onClick={() => handleAction('edit', {} as Machine, 'machine')}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <Wrench className="w-4 h-4 mr-2" />
-            Add Machine
-          </button>
+          {canCreateMachines && (
+            <button 
+              onClick={() => handleAction('edit', {} as Machine, 'machine')}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              <Wrench className="w-4 h-4 mr-2" />
+              Add Machine
+            </button>
+          )}
         </div>
       </div>
 
@@ -258,7 +269,7 @@ const MachineMaster: React.FC<MachineMasterProps> = ({
                       className="flex items-center justify-center text-blue-600 hover:text-blue-900"
                       title="View Nameplate Details"
                     >
-                      <Image className="w-4 h-4 mr-1" />
+                      <Info className="w-4 h-4 mr-1" />
                       <span className="text-xs">View Details</span>
                     </button>
                   ) : (
@@ -289,7 +300,7 @@ const MachineMaster: React.FC<MachineMasterProps> = ({
                       className="text-green-600 hover:text-green-900"
                       title="Edit Machine"
                     >
-                      <Edit className="w-4 h-4" />
+                      <Pencil className="w-4 h-4" />
                     </button>
                     <button 
                       onClick={() => handleAction('delete', machine, 'machine')}

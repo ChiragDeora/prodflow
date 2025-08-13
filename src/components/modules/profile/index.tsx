@@ -1,15 +1,16 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { User, Edit, Save, X, LogOut, Plus, Trash2, Building, Settings, Shield } from 'lucide-react';
+import { User, Edit, Save, X, LogOut, Plus, Trash2, Building, Settings, Shield, Users } from 'lucide-react';
 import { useAuth } from '../../auth/AuthProvider';
 import { userProfileAPI } from '../../../lib/auth';
 import { unitAPI, unitManagementSettingsAPI, Unit } from '../../../lib/supabase';
+import UserManagement from '../../admin/UserManagement';
 
-type TabType = 'profile' | 'unit-management' | 'account-actions';
+type TabType = 'profile' | 'unit-management' | 'account-actions' | 'user-management';
 
 const UserProfileModule: React.FC = () => {
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, refreshProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -33,6 +34,23 @@ const UserProfileModule: React.FC = () => {
   // Unit management settings state
   const [unitManagementEnabled, setUnitManagementEnabled] = useState(false);
   const [defaultUnit, setDefaultUnit] = useState('Unit 1');
+
+  // Debug logging
+  useEffect(() => {
+    console.log('Profile debug:', {
+      user: user?.email,
+      profile: profile ? {
+        id: profile.id,
+        full_name: profile.full_name,
+        email: profile.email,
+        role: profile.role,
+        department: profile.department,
+        phone_number: profile.phone_number,
+        is_active: profile.is_active
+      } : null,
+      isAdmin: profile?.role === 'admin'
+    });
+  }, [user, profile]);
 
   // Load units and settings on component mount
   useEffect(() => {
@@ -144,6 +162,13 @@ const UserProfileModule: React.FC = () => {
       adminOnly: true
     },
     {
+      id: 'user-management' as TabType,
+      label: 'User Management',
+      icon: Users,
+      description: 'Manage users and permissions',
+      adminOnly: true
+    },
+    {
       id: 'account-actions' as TabType,
       label: 'Account Actions',
       icon: Settings,
@@ -192,6 +217,36 @@ const UserProfileModule: React.FC = () => {
                   </span>
                 </div>
                 
+
+                
+                {/* Profile Fix Button for Yogesh */}
+                {user?.email === 'yogesh@polypacks.in' && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <button
+                      onClick={async () => {
+                        try {
+                          const { authAPI } = await import('../../../lib/auth');
+                          const result = await authAPI.fixYogeshProfile();
+                          alert(`Profile fix: ${result.message}`);
+                          if (result.success) {
+                            await refreshProfile();
+                            window.location.reload(); // Force page reload
+                          }
+                        } catch (err) {
+                          console.error('Profile fix error:', err);
+                          alert('Failed to fix profile');
+                        }
+                      }}
+                      className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
+                    >
+                      🔧 Fix Profile Connection
+                    </button>
+                    <p className="text-xs text-gray-500 mt-1 text-center">
+                      Click to fix profile connection issues
+                    </p>
+                  </div>
+                )}
+
                 {/* Temporary Admin Role Update Button */}
                 {user?.email === 'yogesh@polypacks.in' && profile?.role !== 'admin' && (
                   <div className="mt-4 pt-4 border-t border-gray-200">
@@ -225,7 +280,7 @@ const UserProfileModule: React.FC = () => {
                           alert('Role updated to admin! Please refresh the page.');
                           
                           // Force refresh the profile
-                          window.location.reload();
+                          await refreshProfile();
                           
                         } catch (err) {
                           console.error('Exception updating role:', err);
@@ -501,6 +556,16 @@ const UserProfileModule: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        );
+
+      case 'user-management':
+        return (
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">User Management</h3>
+              <UserManagement />
             </div>
           </div>
         );

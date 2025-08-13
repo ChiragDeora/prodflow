@@ -1,9 +1,11 @@
 'use client';
 
-import React from 'react';
-import { BarChart3, TrendingUp, Users, Clock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { BarChart3, Download, Eye, TrendingUp, Users, Clock } from 'lucide-react';
+
 
 const ReportsModule: React.FC = () => {
+
   return (
     <div className="p-6">
       <h2 className="text-2xl font-bold text-gray-800 mb-6">Reports & Analytics</h2>

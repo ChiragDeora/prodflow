@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
-import { Play, Pause, AlertCircle, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Plus, Edit, Trash2, CheckCircle, Clock, AlertCircle, Play, Pause } from 'lucide-react';
+
 import { 
   Machine as SupabaseMachine, 
   ScheduleJob as SupabaseScheduleJob 
@@ -25,6 +26,7 @@ const ProductionScheduler: React.FC<ProductionSchedulerProps> = ({
   machinesMaster, 
   handleAction 
 }) => {
+
   const timeSlots = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
 
   const getJobsByMachine = (machineId: string): ScheduleJob[] => 

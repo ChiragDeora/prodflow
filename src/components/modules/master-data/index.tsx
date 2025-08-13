@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Wrench, Package } from 'lucide-react';
+import { Wrench, Package, Link } from 'lucide-react';
 import Image from 'next/image';
 import MachineMaster from './MachineMaster';
 import MoldMaster from './MoldMaster';
@@ -14,6 +14,7 @@ import {
   PackingMaterial as SupabasePackingMaterial,
   Unit
 } from '../../../lib/supabase';
+
 
 type Machine = SupabaseMachine;
 type Mold = SupabaseMold;
@@ -55,6 +56,8 @@ interface MasterDataModuleProps {
   setRawMaterialSortDirection: (direction: 'asc' | 'desc') => void;
   handleRawMaterialSortChange: (field: string) => void;
   sortedRawMaterials: RawMaterial[];
+  
+
   
   // Packing Materials state and handlers
   packingMaterialCategoryFilter: string;
@@ -119,14 +122,7 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
   defaultUnit,
   units
 }) => {
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    // Try to get the active tab from localStorage, default to 'molds'
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('masterDataActiveTab');
-      return saved || 'molds';
-    }
-    return 'molds';
-  });
+  const [activeTab, setActiveTab] = useState('machines');
 
   // Save active tab to localStorage whenever it changes
   const handleTabChange = (tab: string) => {
@@ -185,7 +181,7 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
             <Image src="/packing_material_vector.png" alt="Packing Materials" width={20} height={20} className="inline mr-2 w-8 h-8" />
             Packing Materials Master
           </button>
-          {/* Add more tabs here as needed */}
+          {/* Line Master tab intentionally removed */}
         </nav>
       </div>
 
@@ -229,6 +225,8 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
             units={units}
           />
         )}
+
+        {/* Line Master content intentionally removed */}
 
         {activeTab === 'raw_materials' && (
           <RawMaterialsMaster
