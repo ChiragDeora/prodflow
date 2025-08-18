@@ -7,11 +7,13 @@ import MachineMaster from './MachineMaster';
 import MoldMaster from './MoldMaster';
 import RawMaterialsMaster from './RawMaterialsMaster';
 import PackingMaterialsMaster from './PackingMaterialsMaster';
+import LineMaster from './LineMaster';
 import { 
   Machine as SupabaseMachine, 
   Mold as SupabaseMold,
   RawMaterial as SupabaseRawMaterial,
   PackingMaterial as SupabasePackingMaterial,
+  Line as SupabaseLine,
   Unit
 } from '../../../lib/supabase';
 
@@ -24,12 +26,14 @@ type ItemType = 'machine' | 'mold' | 'schedule' | 'material' | 'product' | 'raw_
 // Use Supabase types
 type RawMaterial = SupabaseRawMaterial;
 type PackingMaterial = SupabasePackingMaterial;
+type Line = SupabaseLine;
 
 interface MasterDataModuleProps {
   machinesMaster: Machine[];
   moldsMaster: Mold[];
   rawMaterials: RawMaterial[];
   packingMaterials: PackingMaterial[];
+  linesMaster: Line[];
   
   // Machine state and handlers
   machineCategoryFilter: string;
@@ -69,6 +73,14 @@ interface MasterDataModuleProps {
   handlePackingMaterialSortChange: (field: string) => void;
   sortedPackingMaterials: PackingMaterial[];
   
+  // Line state and handlers
+  lineSortField: string;
+  lineSortDirection: 'asc' | 'desc';
+  setLineSortField: (field: string) => void;
+  setLineSortDirection: (direction: 'asc' | 'desc') => void;
+  handleLineSortChange: (field: string) => void;
+  sortedLines: Line[];
+  
   // Unit management settings
   unitManagementEnabled: boolean;
   defaultUnit: string;
@@ -76,7 +88,7 @@ interface MasterDataModuleProps {
   
   // Common handlers
   openExcelReader: (type: string) => void;
-  handleAction: (actionType: ActionType, item: any, itemType: ItemType) => Promise<void>;
+  handleAction: (actionType: ActionType, item: any, itemType: ItemType | 'line') => Promise<void>;
   setViewingNameplate: (nameplate: string | null) => void;
   InfoButton: React.ComponentType<{ type: string }>;
 }
@@ -86,6 +98,7 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
   moldsMaster,
   rawMaterials,
   packingMaterials,
+  linesMaster,
   machineCategoryFilter,
   handleMachineCategoryFilterChange,
   machineSortField,
@@ -114,6 +127,12 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
   setPackingMaterialSortDirection,
   handlePackingMaterialSortChange,
   sortedPackingMaterials,
+  lineSortField,
+  lineSortDirection,
+  setLineSortField,
+  setLineSortDirection,
+  handleLineSortChange,
+  sortedLines,
   openExcelReader,
   handleAction,
   setViewingNameplate,
@@ -181,7 +200,17 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
             <Image src="/packing_material_vector.png" alt="Packing Materials" width={20} height={20} className="inline mr-2 w-8 h-8" />
             Packing Materials Master
           </button>
-          {/* Line Master tab intentionally removed */}
+          <button
+            onClick={() => handleTabChange('lines')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+              activeTab === 'lines'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Link className="w-5 h-5 inline mr-2" />
+            Line Master
+          </button>
         </nav>
       </div>
 
@@ -257,6 +286,25 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
             setPackingMaterialSortDirection={setPackingMaterialSortDirection}
             handlePackingMaterialSortChange={handlePackingMaterialSortChange}
             sortedPackingMaterials={sortedPackingMaterials}
+            openExcelReader={openExcelReader}
+            handleAction={handleAction}
+            InfoButton={InfoButton}
+            unitManagementEnabled={unitManagementEnabled}
+            defaultUnit={defaultUnit}
+            units={units}
+          />
+        )}
+
+        {activeTab === 'lines' && (
+          <LineMaster
+            linesMaster={linesMaster}
+            machinesMaster={machinesMaster}
+            lineSortField={lineSortField}
+            lineSortDirection={lineSortDirection}
+            setLineSortField={setLineSortField}
+            setLineSortDirection={setLineSortDirection}
+            handleLineSortChange={handleLineSortChange}
+            sortedLines={sortedLines}
             openExcelReader={openExcelReader}
             handleAction={handleAction}
             InfoButton={InfoButton}

@@ -226,6 +226,19 @@ const MachineMaster: React.FC<MachineMasterProps> = ({
               </th>
               <th 
                 className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                onClick={() => handleMachineSortChange('line')}
+              >
+                <div className="flex items-center justify-center">
+                  Line
+                  {machineSortField === 'line' && (
+                    machineSortDirection === 'asc' ? 
+                    <ArrowUp className="w-3 h-3 ml-1" /> : 
+                    <ArrowDown className="w-3 h-3 ml-1" />
+                  )}
+                </div>
+              </th>
+              <th 
+                className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
                 onClick={() => handleMachineSortChange('unit')}
               >
                 <div className="flex items-center justify-center">
@@ -284,6 +297,15 @@ const MachineMaster: React.FC<MachineMasterProps> = ({
                   }`}>
                     {machine.status || 'Unknown'}
                   </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                  {machine.line ? (
+                    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                      {machine.line}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">Not specified</span>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">{machine.unit || 'Unit 1'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">

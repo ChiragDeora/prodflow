@@ -11,8 +11,8 @@ import {
   X, Loader2, Eye, Trash2, FileDown, Info, ChevronUp, ChevronDown
 } from 'lucide-react';
 import {
-  machineAPI, moldAPI, scheduleAPI, rawMaterialAPI, packingMaterialAPI,
-  Machine, Mold, ScheduleJob, PackingMaterial
+  machineAPI, moldAPI, scheduleAPI, rawMaterialAPI, packingMaterialAPI, lineAPI,
+  Machine, Mold, ScheduleJob, PackingMaterial, Line
 } from '../lib/supabase';
 
 // ============================================================================
@@ -38,7 +38,7 @@ interface ExcelRow {
   [key: string]: any;
 }
 
-type DataType = 'machines' | 'molds' | 'schedules' | 'raw_materials' | 'packing_materials';
+type DataType = 'machines' | 'molds' | 'schedules' | 'raw_materials' | 'packing_materials' | 'lines';
 
 interface ImportData {
   machines: Machine[];
@@ -46,6 +46,7 @@ interface ImportData {
   schedules: ScheduleJob[];
   raw_materials: RawMaterial[];
   packing_materials: PackingMaterial[];
+  lines: Line[];
 }
 
 interface ExcelFileReaderProps {
@@ -76,6 +77,9 @@ const CANONICAL_HEADERS: Record<DataType, string[]> = {
   ],
   packing_materials: [
     'Category', 'Type', 'Item Code', 'Pack Size', 'Dimensions', 'Technical Detail', 'Brand', 'Unit'
+  ],
+  lines: [
+    'Line no.', 'Line ID','Description', 'IM', 'Robot', 'Hoist', 'Conveyor', 'Status', 'Unit'
   ]
 };
 
@@ -186,6 +190,31 @@ const TEMPLATE_MAPPINGS = {
     'TechnicalDetail': 'technical_detail',
     'Brand': 'brand',
     'Unit': 'unit'
+  },
+  lines: {
+    'Line ID': 'line_id',
+    'Line ID.': 'line_id',
+    'Line no.': 'line_id',
+    'Line no': 'line_id',
+    'Line': 'line_id',
+
+    'Description': 'description',
+    'Desc': 'description',
+    'IM Machine ID': 'im_machine_id',
+    'IM': 'im_machine_id',
+    'IM Machine': 'im_machine_id',
+    'Injection Machine': 'im_machine_id',
+    'Robot Machine ID': 'robot_machine_id',
+    'Robot': 'robot_machine_id',
+    'Robot Machine': 'robot_machine_id',
+    'Conveyor Machine ID': 'conveyor_machine_id',
+    'Conveyor': 'conveyor_machine_id',
+    'Conveyor Machine': 'conveyor_machine_id',
+    'Hoist Machine ID': 'hoist_machine_id',
+    'Hoist': 'hoist_machine_id',
+    'Hoist Machine': 'hoist_machine_id',
+    'Status': 'status',
+    'Unit': 'unit'
   }
 } as const;
 
@@ -218,7 +247,8 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
     molds: [],
     schedules: [],
     raw_materials: [],
-    packing_materials: []
+    packing_materials: [],
+    lines: []
   });
 
   // UI/UX
@@ -513,8 +543,15 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
         mapped.unit = mapped.unit || 'Unit 1';
       }
 
+      if (type === 'lines') {
+        // Set defaults
+        mapped.status = mapped.status || 'Active';
+        mapped.unit = mapped.unit || 'Unit 1';
+        mapped.description = mapped.description || `Production ${mapped.line_id}`;
+      }
+
       // Common: unit default for these types
-      if (['raw_materials', 'packing_materials', 'machines', 'molds'].includes(type)) {
+      if (['raw_materials', 'packing_materials', 'machines', 'molds', 'lines'].includes(type)) {
         mapped.unit = mapped.unit || 'Unit 1';
       }
 
@@ -537,6 +574,9 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
       
         case 'packing_materials':
           return !!(item.item_code && String(item.item_code).trim());
+      
+        case 'lines':
+          return !!(item.line_id && String(item.line_id).trim());
       
         case 'schedules':
         default:
@@ -651,6 +691,105 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           result = toCreate.length ? await packingMaterialAPI.bulkCreate(toCreate) : [];
           break;
         }
+        case 'lines': {
+          const existing = await lineAPI.getAll();
+          const existingIds = new Set(existing.map(l => l.line_id));
+          
+          // Get all existing machines to validate references and categories
+          const existingMachines = await machineAPI.getAll();
+          const existingMachineIds = new Set(existingMachines.map(m => m.machine_id));
+          
+          // Create a map of machine_id to category for validation
+          const machineCategories = new Map();
+          existingMachines.forEach(machine => {
+            machineCategories.set(machine.machine_id, machine.category);
+          });
+          
+          const toCreate = mappedData.lines.filter(l => {
+            if (existingIds.has(l.line_id)) { duplicateCount++; return false; }
+            return true;
+          }).map(line => {
+            // Validate and set machine references
+            const validatedLine = { ...line };
+            
+            // Keep line_id as provided in Excel (no forced formatting)
+            // Set description if not provided
+            if (!validatedLine.description && validatedLine.line_id) {
+              validatedLine.description = validatedLine.line_id;
+            }
+            
+            // Validate machine assignments - accept any valid machine ID
+            const machineFields = ['im_machine_id', 'robot_machine_id', 'conveyor_machine_id', 'hoist_machine_id'];
+            
+            machineFields.forEach(field => {
+              const machineId = (validatedLine as any)[field];
+              if (machineId && machineId !== 'EMPTY' && machineId.trim() !== '') {
+                // Only check if machine exists, don't enforce category restrictions
+                if (!existingMachineIds.has(machineId)) {
+                  console.warn(`Machine ${machineId} not found in database for field ${field}`);
+                  (validatedLine as any)[field] = undefined;
+                }
+              }
+            });
+            
+            return validatedLine;
+          });
+          
+          // Import lines
+          result = toCreate.length ? await lineAPI.bulkCreate(toCreate) : [];
+          
+          // Update machine line assignments dynamically
+          if (result.length > 0) {
+            const machineUpdates: Array<{machine_id: string, line: string}> = [];
+            
+            for (const line of result) {
+              // Use the actual line_id from the line master
+              const lineAssignment = line.line_id;
+              
+              // Update all machines assigned to this line (any type)
+              const machineFields = [
+                'im_machine_id',
+                'robot_machine_id', 
+                'conveyor_machine_id',
+                'hoist_machine_id'
+              ];
+              
+              machineFields.forEach(field => {
+                const machineId = (line as any)[field];
+                if (machineId && machineId !== 'EMPTY' && machineId.trim() !== '') {
+                  machineUpdates.push({
+                    machine_id: machineId,
+                    line: lineAssignment
+                  });
+                  console.log(`Assigning machine ${machineId} to line ${lineAssignment} via ${field}`);
+                }
+              });
+            }
+            
+            // Bulk update machines with line assignments
+            if (machineUpdates.length > 0) {
+              console.log(`Attempting to update ${machineUpdates.length} machines with line assignments...`);
+              
+              for (const update of machineUpdates) {
+                try {
+                  // First check if the machine exists
+                  const existingMachine = await machineAPI.getById(update.machine_id);
+                  if (!existingMachine) {
+                    console.warn(`Machine ${update.machine_id} not found in database, skipping line assignment`);
+                    continue;
+                  }
+                  
+                  await machineAPI.update(update.machine_id, { line: update.line });
+                  console.log(`✅ Successfully updated machine ${update.machine_id} with line ${update.line}`);
+                } catch (error) {
+                  console.warn(`Failed to update machine ${update.machine_id} with line ${update.line}:`, error);
+                }
+              }
+            }
+          }
+          
+          break;
+        }
       }
 
       const newRecords = result?.length || 0;
@@ -668,7 +807,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
         setFile(null);
         setPreview([]);
         setFullRows([]);
-        setMappedData({ machines: [], molds: [], schedules: [], raw_materials: [], packing_materials: [] });
+        setMappedData({ machines: [], molds: [], schedules: [], raw_materials: [], packing_materials: [], lines: [] });
         setHeaders([]);
         fileInputRef.current && (fileInputRef.current.value = '');
       }, 1000);
@@ -714,6 +853,11 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           return [
             ['Boxes', 'Export', 'CTN-RO16', '150', '6555 x 1764 x 2060', '5-ply corrugated', 'Regular', 'Unit 1'],
             ['PolyBags', 'Standard', 'PB-500ML', '1000', '200 x 300 x 0.05', 'Food grade PE', 'Premium', 'Unit 1']
+          ];  
+        case 'lines':
+          return [
+            ['1', 'TOYO-1', 'WITT-1', 'Hoist-1', 'CONY-1', 'Active', 'Unit 1'],
+            ['2', 'JSW-1', 'WITT-2', 'Hoist-2', 'CONY-2', 'Active', 'Unit 1']
           ];
       }
     })();
@@ -753,7 +897,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             item.capacity_tons ?? '',
             item.grinding_available ? 'Yes' : 'No',
             item.status ?? '',
-            item.zone ?? '',
+            item.line ?? '',
             item.purchase_date ?? '',
             item.remarks ?? '',
             item.unit ?? ''
@@ -882,7 +1026,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">Select Data Type</label>
             <div className="flex flex-wrap gap-3">
-              {(['machines', 'molds', 'schedules', 'raw_materials', 'packing_materials'] as DataType[]).map(type => (
+              {(['machines', 'molds', 'schedules', 'raw_materials', 'packing_materials', 'lines'] as DataType[]).map(type => (
                 <button
                   key={type}
                   onClick={async () => {
@@ -988,7 +1132,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
                         setFile(null);
                         setPreview([]);
                         setFullRows([]);
-                        setMappedData({ machines: [], molds: [], schedules: [], raw_materials: [], packing_materials: [] });
+                        setMappedData({ machines: [], molds: [], schedules: [], raw_materials: [], packing_materials: [], lines: [] });
                         fileInputRef.current && (fileInputRef.current.value = '');
                         setHeaders([]);
                         setImportStatus({ type: '', message: '' });

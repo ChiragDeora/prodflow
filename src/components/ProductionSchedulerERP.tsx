@@ -13,7 +13,7 @@ import {
   scheduleAPI, 
   rawMaterialAPI, 
   packingMaterialAPI,
-
+  lineAPI,
   unitAPI,
   unitManagementSettingsAPI,
   Machine as SupabaseMachine, 
@@ -21,7 +21,7 @@ import {
   ScheduleJob as SupabaseScheduleJob,
   RawMaterial as SupabaseRawMaterial,
   PackingMaterial as SupabasePackingMaterial,
-
+  Line as SupabaseLine,
   Unit
 } from '../lib/supabase';
 import { authAPI, userProfileAPI } from '../lib/auth';
@@ -35,6 +35,7 @@ type Mold = SupabaseMold;
 type ScheduleJob = SupabaseScheduleJob;
 type RawMaterial = SupabaseRawMaterial;
 type PackingMaterial = SupabasePackingMaterial;
+type Line = SupabaseLine;
 
 interface JobForm {
   date: string;
@@ -58,10 +59,10 @@ interface MenuItem {
 }
 
 type ModuleType = 'scheduler' | 'masters' | 'approvals' | 'reports' | 'operators' | 'maintenance' | 'quality' | 'profile' | 'user-management';
-type ModalType = 'job' | 'machine' | 'mold' | 'packing_material' | 'raw_material' | 'view_machine' | 'view_mold' | 'view_schedule' | 'view_packing_material' | 'view_raw_material' | '';
+type ModalType = 'job' | 'machine' | 'mold' | 'packing_material' | 'raw_material' | 'line' | 'view_machine' | 'view_mold' | 'view_schedule' | 'view_packing_material' | 'view_raw_material' | 'view_line' | 'edit_line' | '';
 type ActionType = 'edit' | 'delete' | 'view' | 'approve' | 'mark_done';
-type ItemType = 'machine' | 'mold' | 'schedule' | 'material' | 'product' | 'raw_material' | 'packing_material';
-type DataType = 'machines' | 'molds' | 'raw_materials' | 'packing_materials';
+type ItemType = 'machine' | 'mold' | 'schedule' | 'material' | 'product' | 'raw_material' | 'packing_material' | 'line';
+type DataType = 'machines' | 'molds' | 'raw_materials' | 'packing_materials' | 'lines';
 
 const ProductionSchedulerERP: React.FC = () => {
   const [currentModule, setCurrentModule] = useState<ModuleType>(() => {
@@ -99,7 +100,7 @@ const ProductionSchedulerERP: React.FC = () => {
 
   const [showModal, setShowModal] = useState<boolean>(false);
   const [modalType, setModalType] = useState<ModalType>('');
-  const [editingItem, setEditingItem] = useState<Machine | Mold | ScheduleJob | RawMaterial | PackingMaterial | null>(null);
+  const [editingItem, setEditingItem] = useState<Machine | Mold | ScheduleJob | RawMaterial | PackingMaterial | Line | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [viewingNameplate, setViewingNameplate] = useState<string | null>(null);
   const [showExcelReader, setShowExcelReader] = useState<boolean>(false);
@@ -193,6 +194,25 @@ const ProductionSchedulerERP: React.FC = () => {
     return 'asc';
   });
 
+  // Line sorting state
+  const [lineSortField, setLineSortField] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const userId = localStorage.getItem('currentUserId') || 'default';
+      const saved = localStorage.getItem(`prodSchedulerLineSortField_${userId}`);
+              return saved || 'line_id';
+      }
+      return 'line_id';
+  });
+
+  const [lineSortDirection, setLineSortDirection] = useState<'asc' | 'desc'>(() => {
+    if (typeof window !== 'undefined') {
+      const userId = localStorage.getItem('currentUserId') || 'default';
+      const saved = localStorage.getItem(`prodSchedulerLineSortDirection_${userId}`);
+      return (saved as 'asc' | 'desc') || 'asc';
+    }
+    return 'asc';
+  });
+
   // Packing Materials category filter state with user-specific persistence
   const [packingMaterialCategoryFilter, setPackingMaterialCategoryFilter] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -211,6 +231,8 @@ const ProductionSchedulerERP: React.FC = () => {
 
   const [rawMaterialsMaster, setRawMaterialsMaster] = useState<RawMaterial[]>([]);
   const [packingMaterialsMaster, setPackingMaterialsMaster] = useState<PackingMaterial[]>([]);
+  const [linesMaster, setLinesMaster] = useState<Line[]>([]);
+  const [lineDetails, setLineDetails] = useState<Map<string, Line>>(new Map());
   const [scheduleData, setScheduleData] = useState<ScheduleJob[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [unitManagementEnabled, setUnitManagementEnabled] = useState(false);
@@ -317,29 +339,32 @@ const ProductionSchedulerERP: React.FC = () => {
         return;
       }
       
-      const [machines, molds, schedules, rawMaterials, packingMaterials, unitsData] = await Promise.all([
-        machineAPI.getAll(),
-        moldAPI.getAll(),
-        scheduleAPI.getAll(),
-        rawMaterialAPI.getAll(),
-        packingMaterialAPI.getAll(),
-        unitAPI.getAll()
-      ]);
+          const [machines, molds, schedules, rawMaterials, packingMaterials, lines, unitsData] = await Promise.all([
+      machineAPI.getAll(),
+      moldAPI.getAll(),
+      scheduleAPI.getAll(),
+      rawMaterialAPI.getAll(),
+      packingMaterialAPI.getAll(),
+      lineAPI.getAll(),
+      unitAPI.getAll()
+    ]);
       
-      console.log('Data loaded successfully:', { 
-        machines: machines.length, 
-        molds: molds.length, 
-        schedules: schedules.length,
-        raw_materials: rawMaterials.length,
-        packing_materials: packingMaterials.length,
-        units: unitsData.length
-      });
+              console.log('Data loaded successfully:', { 
+          machines: machines.length,
+          molds: molds.length,
+          schedules: schedules.length,
+          raw_materials: rawMaterials.length,
+          packing_materials: packingMaterials.length,
+          lines: lines.length,
+          units: unitsData.length
+        });
       
-      setMachinesMaster(machines);
-      setMoldsMaster(molds);
-      setScheduleData(schedules);
-      setRawMaterialsMaster(rawMaterials);
-      setPackingMaterialsMaster(packingMaterials);
+              setMachinesMaster(machines);
+        setMoldsMaster(molds);
+        setScheduleData(schedules);
+        setRawMaterialsMaster(rawMaterials);
+        setPackingMaterialsMaster(packingMaterials);
+        setLinesMaster(lines);
       setUnits(unitsData);
       
         // Load unit management settings
@@ -399,10 +424,11 @@ const ProductionSchedulerERP: React.FC = () => {
       // which are already persisted in localStorage
       
       // Force a re-render to ensure the sorted data is displayed
-      setMachinesMaster(prev => [...prev]);
-      setMoldsMaster(prev => [...prev]);
-      setRawMaterialsMaster(prev => [...prev]);
-      setPackingMaterialsMaster(prev => [...prev]);
+              setMachinesMaster(prev => [...prev]);
+        setMoldsMaster(prev => [...prev]);
+        setRawMaterialsMaster(prev => [...prev]);
+        setPackingMaterialsMaster(prev => [...prev]);
+        setLinesMaster(prev => [...prev]);
     });
     setShowExcelReader(false);
   };
@@ -720,6 +746,29 @@ const ProductionSchedulerERP: React.FC = () => {
     });
   };
 
+  const sortLines = (lines: Line[], field: string, direction: 'asc' | 'desc'): Line[] => {
+    return [...lines].sort((a, b) => {
+      let aValue: any = a[field as keyof Line];
+      let bValue: any = b[field as keyof Line];
+      
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = bValue.toLowerCase();
+      } else if (typeof aValue === 'number' && typeof bValue === 'number') {
+        aValue = Number(aValue);
+        bValue = Number(bValue);
+      }
+      
+      if (aValue < bValue) {
+        return direction === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  };
+
   // Unit filter handler
   const handleUnitFilterChange = (unit: string) => {
     setSelectedUnit(unit);
@@ -772,7 +821,7 @@ const ProductionSchedulerERP: React.FC = () => {
       return {
         machines: machinesMaster,
         molds: moldsMaster,
-
+        lines: linesMaster,
         rawMaterials: rawMaterialsMaster,
         packingMaterials: packingMaterialsMaster
       };
@@ -787,7 +836,7 @@ const ProductionSchedulerERP: React.FC = () => {
       return {
         machines: machinesMaster,
         molds: moldsMaster,
-
+        lines: linesMaster,
         rawMaterials: rawMaterialsMaster,
         packingMaterials: packingMaterialsMaster
       };
@@ -796,7 +845,7 @@ const ProductionSchedulerERP: React.FC = () => {
     return {
       machines: machinesMaster.filter((machine: Machine) => machine.unit === selectedUnitName),
       molds: moldsMaster.filter((mold: Mold) => mold.unit === selectedUnitName),
-
+      lines: linesMaster.filter((line: Line) => line.unit === selectedUnitName),
       rawMaterials: rawMaterialsMaster.filter((material: RawMaterial) => material.unit === selectedUnitName),
       packingMaterials: packingMaterialsMaster.filter((material: PackingMaterial) => material.unit === selectedUnitName)
     };
@@ -842,6 +891,11 @@ const ProductionSchedulerERP: React.FC = () => {
     
     return sortPackingMaterials(filteredMaterials, packingMaterialSortField, packingMaterialSortDirection);
   }, [packingMaterialsMaster, packingMaterialCategoryFilter, packingMaterialSortField, packingMaterialSortDirection, selectedUnit]);
+
+  const sortedLines = useMemo(() => {
+    const filteredData = getFilteredData();
+    return sortLines(filteredData.lines, lineSortField, lineSortDirection);
+  }, [linesMaster, lineSortField, lineSortDirection, selectedUnit]);
 
 
 
@@ -929,6 +983,22 @@ const ProductionSchedulerERP: React.FC = () => {
     }
   };
 
+  const handleLineSortChange = (field: string) => {
+    if (lineSortField === field) {
+      setLineSortDirection(lineSortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setLineSortField(field);
+      setLineSortDirection('asc');
+    }
+    
+    // Save to localStorage with user-specific key
+    if (typeof window !== 'undefined') {
+      const userId = localStorage.getItem('currentUserId') || 'default';
+      localStorage.setItem(`prodSchedulerLineSortField_${userId}`, field);
+      localStorage.setItem(`prodSchedulerLineSortDirection_${userId}`, lineSortDirection === 'asc' ? 'desc' : 'asc');
+    }
+  };
+
   const handlePackingMaterialCategoryFilterChange = (category: string) => {
     const userId = localStorage.getItem('currentUserId') || 'default';
     setPackingMaterialCategoryFilter(category);
@@ -964,7 +1034,7 @@ const ProductionSchedulerERP: React.FC = () => {
       description: config.description
     }));
 
-  const handleAction = async (actionType: ActionType, item: Machine | Mold | ScheduleJob | RawMaterial | PackingMaterial, itemType: ItemType): Promise<void> => {
+  const handleAction = async (actionType: ActionType, item: Machine | Mold | ScheduleJob | RawMaterial | PackingMaterial | Line, itemType: ItemType): Promise<void> => {
     try {
       console.log(`Handling action: ${actionType} for ${itemType}`, item);
     switch (actionType) {
@@ -976,6 +1046,8 @@ const ProductionSchedulerERP: React.FC = () => {
           setModalType('packing_material');
         } else if (itemType === 'raw_material') {
           setModalType('raw_material');
+        } else if (itemType === 'line') {
+          setModalType('edit_line');
         } else {
           setModalType(itemType as ModalType);
         }
@@ -1005,6 +1077,10 @@ const ProductionSchedulerERP: React.FC = () => {
           } else {
             itemName = (item as any).id;
           }
+        } else if ('line_id' in item && typeof item.line_id === 'string') {
+          // For lines
+          itemId = item.line_id;
+          itemName = item.line_id;
         }
         
         if (window.confirm(`Are you sure you want to delete ${itemName || itemId || 'this item'}?`)) {
@@ -1026,24 +1102,50 @@ const ProductionSchedulerERP: React.FC = () => {
               console.log(`Deleting raw material with id: ${(item as any).id}`);
               await rawMaterialAPI.delete((item as any).id);
               setRawMaterialsMaster(prev => prev.filter(r => r.id !== (item as any).id));
+            } else if (itemType === 'line' && 'line_id' in item && typeof item.line_id === 'string') {
+              console.log(`Deleting line with id: ${item.line_id}`);
+              await lineAPI.delete(item.line_id);
+              setLinesMaster(prev => prev.filter(l => l.line_id !== item.line_id));
             } else if (itemType === 'packing_material') {
               console.log(`Cannot delete packing material - missing id:`, item);
             } else if (itemType === 'raw_material') {
               console.log(`Cannot delete raw material - missing id:`, item);
+            } else if (itemType === 'line') {
+              console.log(`Cannot delete line - missing line_id:`, item);
             }
         }
         break;
       case 'view':
-        setEditingItem(item);
+        // For lines, get the current data from linesMaster to ensure we have the latest data
+        if (itemType === 'line' && 'line_id' in item) {
+          const currentLine = linesMaster.find(line => line.line_id === item.line_id);
+          setEditingItem(currentLine || item);
+        } else {
+          setEditingItem(item);
+        }
+        
         if (itemType === 'packing_material') {
           setModalType('view_packing_material');
         } else if (itemType === 'raw_material') {
           setModalType('view_raw_material');
-
+        } else if (itemType === 'line') {
+          setModalType('view_line');
         } else {
           setModalType(`view_${itemType}` as ModalType);
         }
         setShowModal(true);
+        
+        // Fetch line details if viewing a machine with a line
+        if (itemType === 'machine' && 'line' in item && item.line && typeof item.line === 'string') {
+          try {
+            const lineDetail = await lineAPI.getById(item.line as string);
+            if (lineDetail) {
+              setLineDetails(prev => new Map(prev).set(item.line as string, lineDetail));
+            }
+          } catch (error) {
+            console.error('Error fetching line details:', error);
+          }
+        }
         break;
       case 'approve':
         if ('schedule_id' in item) {
@@ -1619,7 +1721,7 @@ const ProductionSchedulerERP: React.FC = () => {
           return {
             machinesMaster: mastersFilteredData.machines,
             moldsMaster: mastersFilteredData.molds,
-
+            linesMaster: mastersFilteredData.lines,
             rawMaterials: mastersFilteredData.rawMaterials,
             packingMaterials: mastersFilteredData.packingMaterials,
             
@@ -1661,6 +1763,14 @@ const ProductionSchedulerERP: React.FC = () => {
             setPackingMaterialSortDirection,
             handlePackingMaterialSortChange,
             sortedPackingMaterials,
+            
+            // Line state and handlers
+            lineSortField,
+            lineSortDirection,
+            setLineSortField,
+            setLineSortDirection,
+            handleLineSortChange,
+            sortedLines,
             
             // Unit management settings
             unitManagementEnabled,
@@ -1973,7 +2083,7 @@ const ProductionSchedulerERP: React.FC = () => {
                       <select 
                         name="zone" 
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-gray-500"
-                        defaultValue={editingItem && 'zone' in editingItem ? editingItem.zone : 'Production Area A'}
+                        defaultValue={editingItem && 'line' in editingItem ? editingItem.line : ''}
                       >
                         <option value="Production Area A">Production Area A</option>
                         <option value="Production Area B">Production Area B</option>
@@ -2883,7 +2993,7 @@ const ProductionSchedulerERP: React.FC = () => {
           </div>
         </div>
       )}
-      {showModal && (modalType === 'view_machine' || modalType === 'view_mold' || modalType === 'view_packing_material' || modalType === 'view_raw_material') && (
+      {showModal && (modalType === 'view_machine' || modalType === 'view_mold' || modalType === 'view_packing_material' || modalType === 'view_raw_material' || modalType === 'view_line' || modalType === 'edit_line') && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             {/* Header */}
@@ -2892,13 +3002,15 @@ const ProductionSchedulerERP: React.FC = () => {
                 <div className={`p-2 rounded-lg ${
                   modalType === 'view_machine' ? 'bg-blue-100' : 
                   modalType === 'view_mold' ? 'bg-purple-100' : 
+                  modalType === 'view_line' || modalType === 'edit_line' ? 'bg-purple-100' :
                   'bg-orange-100'
                 }`}>
                   {modalType === 'view_machine' ? (
                     <Wrench className="w-6 h-6 text-blue-600" />
                   ) : modalType === 'view_mold' ? (
                     <Package className="w-6 h-6 text-purple-600" />
-
+                  ) : modalType === 'view_line' || modalType === 'edit_line' ? (
+                    <Link className="w-6 h-6 text-purple-600" />
                   ) : (
                     <Package className="w-6 h-6 text-orange-600" />
                   )}
@@ -2907,11 +3019,15 @@ const ProductionSchedulerERP: React.FC = () => {
                   <h2 className="text-2xl font-bold text-gray-900">
                     {modalType === 'view_machine' ? 'Machine Details' : 
                      modalType === 'view_mold' ? 'Mold Details' : 
+                     modalType === 'view_line' ? 'Line Details' :
+                     modalType === 'edit_line' ? 'Edit Line' :
                      'Packing Material Details'}
                   </h2>
                   <p className="text-sm text-gray-500 mt-1">
                     {modalType === 'view_machine' ? 'View machine information' : 
                      modalType === 'view_mold' ? 'View mold information' : 
+                     modalType === 'view_line' ? 'View line information' :
+                     modalType === 'edit_line' ? 'Edit line information' :
                      'View packing material information'}
                   </p>
                 </div>
@@ -3007,8 +3123,23 @@ const ProductionSchedulerERP: React.FC = () => {
                             </div>
                           </div>
                           <div className="bg-gray-50 rounded-lg p-4">
-                            <div className="text-sm font-medium text-gray-600 mb-1">Zone</div>
-                            <div className="text-lg font-semibold text-gray-900">{(editingItem as Machine).zone || 'Not specified'}</div>
+                            <div className="text-sm font-medium text-gray-600 mb-1">Line</div>
+                            <div className="text-lg font-semibold text-gray-900">
+                              {(editingItem as Machine).line ? (
+                                <div>
+                                  <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                                    {(editingItem as Machine).line}
+                                  </span>
+                                  {(editingItem as Machine).line && typeof (editingItem as Machine).line === 'string' && lineDetails.get((editingItem as Machine).line as string) && (
+                                    <div className="mt-2 text-sm text-gray-600">
+                                      {lineDetails.get((editingItem as Machine).line as string)?.description}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-gray-500">Not specified</span>
+                              )}
+                            </div>
                           </div>
                           <div className="bg-gray-50 rounded-lg p-4">
                             <div className="text-sm font-medium text-gray-600 mb-1">Type</div>
@@ -3234,19 +3365,355 @@ const ProductionSchedulerERP: React.FC = () => {
                       )}
                     </>
                   )}
+
+                  {modalType === 'view_line' && 'line_id' in editingItem && editingItem && (() => {
+                    // Get the current line data from linesMaster to ensure we have the latest data
+                    const currentLine = linesMaster.find(line => line.line_id === (editingItem as Line).line_id) || editingItem as Line;
+                    
+                    return (
+                      <>
+                        {/* Basic Information */}
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                            <div className="w-1 h-5 bg-purple-600 rounded-full mr-3"></div>
+                            Basic Information
+                          </h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-gray-50 rounded-lg p-4">
+                              <div className="text-sm font-medium text-gray-600 mb-1">Line ID</div>
+                              <div className="text-lg font-semibold text-gray-900">{currentLine.line_id}</div>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-4">
+                              <div className="text-sm font-medium text-gray-600 mb-1">Description</div>
+                              <div className="text-lg font-semibold text-gray-900">{currentLine.description || 'Not specified'}</div>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-4">
+                              <div className="text-sm font-medium text-gray-600 mb-1">Status</div>
+                              <div className="text-lg font-semibold text-gray-900">{currentLine.status}</div>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-4">
+                              <div className="text-sm font-medium text-gray-600 mb-1">Unit</div>
+                              <div className="text-lg font-semibold text-gray-900">{currentLine.unit || 'Unit 1'}</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Machine Assignments */}
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                            <div className="w-1 h-5 bg-blue-600 rounded-full mr-3"></div>
+                            Machine Assignments
+                          </h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-gray-50 rounded-lg p-4">
+                              <div className="text-sm font-medium text-gray-600 mb-1">IM Machine</div>
+                              <div className="text-lg font-semibold text-gray-900">{currentLine.im_machine_id || 'Not assigned'}</div>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-4">
+                              <div className="text-sm font-medium text-gray-600 mb-1">Robot</div>
+                              <div className="text-lg font-semibold text-gray-900">{currentLine.robot_machine_id || 'Not assigned'}</div>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-4">
+                              <div className="text-sm font-medium text-gray-600 mb-1">Conveyor</div>
+                              <div className="text-lg font-semibold text-gray-900">{currentLine.conveyor_machine_id || 'Not assigned'}</div>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-4">
+                              <div className="text-sm font-medium text-gray-600 mb-1">Hoist</div>
+                              <div className="text-lg font-semibold text-gray-900">{currentLine.hoist_machine_id || 'Not assigned'}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+
+                  {modalType === 'edit_line' && 'line_id' in editingItem && editingItem && (
+                    <>
+                      <div className="p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
+                          <div className="w-1 h-5 bg-purple-600 rounded-full mr-3"></div>
+                          Edit Line Information
+                        </h3>
+                        
+                        <form onSubmit={async (e) => {
+                          e.preventDefault();
+                          const formData = new FormData(e.currentTarget);
+                          const updates = {
+                            description: formData.get('description') as string,
+                            im_machine_id: formData.get('im_machine_id') as string || undefined,
+                            robot_machine_id: formData.get('robot_machine_id') as string || undefined,
+                            conveyor_machine_id: formData.get('conveyor_machine_id') as string || undefined,
+                            hoist_machine_id: formData.get('hoist_machine_id') as string || undefined,
+                            status: formData.get('status') as 'Active' | 'Inactive' | 'Maintenance',
+                            unit: formData.get('unit') as string || 'Unit 1'
+                          };
+                          
+                          try {
+                            await lineAPI.update((editingItem as Line).line_id, updates);
+                            setLinesMaster(prev => prev.map(line => 
+                              line.line_id === (editingItem as Line).line_id 
+                                ? { ...line, ...updates }
+                                : line
+                            ));
+                            setShowModal(false);
+                            setEditingItem(null);
+                          } catch (error) {
+                            console.error('Error updating line:', error);
+                            alert('Failed to update line. Please try again.');
+                          }
+                        }}>
+                          
+                          {/* Basic Information */}
+                          <div className="mb-6">
+                            <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                              <div className="w-1 h-5 bg-blue-600 rounded-full mr-3"></div>
+                              Basic Information
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Line ID
+                                </label>
+                                <input
+                                  type="text"
+                                  name="line_id"
+                                  value={(editingItem as Line).line_id}
+                                  disabled
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                                />
+                              </div>
+                              
+                              <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Description
+                                </label>
+                                <textarea
+                                  name="description"
+                                  defaultValue={(editingItem as Line).description || ''}
+                                  rows={3}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                  placeholder="Description of the production line"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Machine Assignments */}
+                          <div className="mb-6">
+                            <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                              <div className="w-1 h-5 bg-green-600 rounded-full mr-3"></div>
+                              Machine Assignments
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  IM Machine
+                                </label>
+                                <select
+                                  name="im_machine_id"
+                                  defaultValue={(editingItem as Line).im_machine_id || ''}
+                                  className="w-full px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                >
+                                  <option value="">Select IM Machine</option>
+                                  {(() => {
+                                    const availableIMMachines = machinesMaster.filter(machine => 
+                                      machine.category === 'IM' && 
+                                      (machine.machine_id === (editingItem as Line).im_machine_id || 
+                                       !linesMaster.some(line => 
+                                         line.line_id !== (editingItem as Line).line_id && 
+                                         line.im_machine_id === machine.machine_id
+                                       ))
+                                    );
+                                    
+                                    if (availableIMMachines.length === 0) {
+                                      return <option value="" disabled>No available IM machines</option>;
+                                    }
+                                    
+                                    return availableIMMachines.map(machine => (
+                                      <option key={machine.machine_id} value={machine.machine_id}>
+                                        {machine.machine_id} - {machine.make} {machine.model}
+                                      </option>
+                                    ));
+                                  })()}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Robot
+                                </label>
+                                <select
+                                  name="robot_machine_id"
+                                  defaultValue={(editingItem as Line).robot_machine_id || ''}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 text-gray-900 focus:ring-purple-500 focus:border-purple-500"
+                                >
+                                  <option value="">Select Robot</option>
+                                  {(() => {
+                                    const availableRobotMachines = machinesMaster.filter(machine => 
+                                      machine.category === 'Robot' && 
+                                      (machine.machine_id === (editingItem as Line).robot_machine_id || 
+                                       !linesMaster.some(line => 
+                                         line.line_id !== (editingItem as Line).line_id && 
+                                         line.robot_machine_id === machine.machine_id
+                                       ))
+                                    );
+                                    
+                                    if (availableRobotMachines.length === 0) {
+                                      return <option value="" disabled>No available robots</option>;
+                                    }
+                                    
+                                    return availableRobotMachines.map(machine => (
+                                      <option key={machine.machine_id} value={machine.machine_id}>
+                                        {machine.machine_id} - {machine.make} {machine.model}
+                                      </option>
+                                    ));
+                                  })()}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Conveyor
+                                </label>
+                                <select
+                                  name="conveyor_machine_id"
+                                  defaultValue={(editingItem as Line).conveyor_machine_id || ''}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 text-gray-900 focus:ring-purple-500 focus:border-purple-500"
+                                >
+                                  <option value="">Select Conveyor</option>
+                                  {(() => {
+                                    const availableConveyorMachines = machinesMaster.filter(machine => 
+                                      machine.machine_id.startsWith('CONY') && 
+                                      (machine.machine_id === (editingItem as Line).conveyor_machine_id || 
+                                       !linesMaster.some(line => 
+                                         line.line_id !== (editingItem as Line).line_id && 
+                                         line.conveyor_machine_id === machine.machine_id
+                                       ))
+                                    );
+                                    
+                                    if (availableConveyorMachines.length === 0) {
+                                      return <option value="" disabled>No available conveyors</option>;
+                                    }
+                                    
+                                    return availableConveyorMachines.map(machine => (
+                                      <option key={machine.machine_id} value={machine.machine_id}>
+                                        {machine.machine_id} - {machine.make} {machine.model}
+                                      </option>
+                                    ));
+                                  })()}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Hoist
+                                </label>
+                                <select
+                                  name="hoist_machine_id"
+                                  defaultValue={(editingItem as Line).hoist_machine_id || ''}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 text-gray-900 focus:ring-purple-500 focus:border-purple-500"
+                                >
+                                  <option value="">Select Hoist</option>
+                                  {(() => {
+                                    const availableHoistMachines = machinesMaster.filter(machine => 
+                                      machine.machine_id.startsWith('Hoist') && 
+                                      (machine.machine_id === (editingItem as Line).hoist_machine_id || 
+                                       !linesMaster.some(line => 
+                                         line.line_id !== (editingItem as Line).line_id && 
+                                         line.hoist_machine_id === machine.machine_id
+                                       ))
+                                    );
+                                    
+                                    if (availableHoistMachines.length === 0) {
+                                      return <option value="" disabled>No available hoists</option>;
+                                    }
+                                    
+                                    return availableHoistMachines.map(machine => (
+                                      <option key={machine.machine_id} value={machine.machine_id}>
+                                        {machine.machine_id} - {machine.make} {machine.model}
+                                      </option>
+                                    ));
+                                  })()}
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Status and Unit */}
+                          <div className="mb-6">
+                            <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                              <div className="w-1 h-5 bg-orange-600 rounded-full mr-3"></div>
+                              Status & Unit
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Status
+                                </label>
+                                <select
+                                  name="status"
+                                  defaultValue={(editingItem as Line).status}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 text-gray-900 focus:ring-purple-500 focus:border-purple-500"
+                                >
+                                  <option value="Active">Active</option>
+                                  <option value="Inactive">Inactive</option>
+                                  <option value="Maintenance">Maintenance</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Unit
+                                </label>
+                                <select
+                                  name="unit"
+                                  defaultValue={(editingItem as Line).unit || 'Unit 1'}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 text-gray-900 focus:ring-purple-500 focus:border-purple-500"
+                                >
+                                  {units.map(unit => (
+                                    <option key={unit.id} value={unit.name}>
+                                      {unit.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Form Actions */}
+                          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowModal(false);
+                                setEditingItem(null);
+                              }}
+                              className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+                            >
+                              Update Line
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Footer */}
-            <div className="flex items-center justify-end p-6 border-t border-gray-200 bg-gray-50">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
-              >
-                Close
-              </button>
-            </div>
+            {/* Footer - Only show for non-edit modals */}
+            {modalType !== 'edit_line' && (
+              <div className="flex items-center justify-end p-6 border-t border-gray-200 bg-gray-50">
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
+                >
+                  Close
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
