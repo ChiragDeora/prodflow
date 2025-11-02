@@ -11,9 +11,10 @@ import {
   X, Loader2, Eye, Trash2, FileDown, Info, ChevronUp, ChevronDown
 } from 'lucide-react';
 import {
-  machineAPI, moldAPI, scheduleAPI, rawMaterialAPI, packingMaterialAPI, lineAPI,
-  Machine, Mold, ScheduleJob, PackingMaterial, Line
+  machineAPI, moldAPI, scheduleAPI, rawMaterialAPI, packingMaterialAPI, lineAPI, maintenanceChecklistAPI, bomMasterAPI,
+  Machine, Mold, ScheduleJob, PackingMaterial, Line, MaintenanceChecklist, BOMMaster
 } from '../lib/supabase';
+import { useAuth } from './auth/AuthProvider';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -38,7 +39,44 @@ interface ExcelRow {
   [key: string]: any;
 }
 
-type DataType = 'machines' | 'molds' | 'schedules' | 'raw_materials' | 'packing_materials' | 'lines';
+// ============================================================================
+// MULTI-SHEET SUPPORT - Sheet Configuration for Precise Data Extraction
+// ============================================================================
+interface SheetFieldMapping {
+  // Sheet identification
+  sheetName?: string | RegExp; // Exact name or regex pattern to match sheet
+  sheetIndex?: number; // Optional: sheet index (0-based)
+  
+  // Data location - supports multiple methods
+  headerRow?: number; // Row index (0-based) containing headers
+  dataStartRow?: number; // Row index where data starts (after headers)
+  
+  // Field extraction - can be by header name OR by cell position
+  fields: Array<{
+    targetField: string; // Field name in output object
+    headerName?: string | RegExp; // Header name pattern to match
+    columnIndex?: number; // Alternative: exact column index (0-based)
+    rowIndex?: number; // For fixed-position fields (e.g., metadata in specific cells)
+    cellRef?: string; // Excel cell reference (e.g., "A1", "B5")
+    transform?: (value: any, row: any[], sheet: XLSX.WorkSheet) => any; // Custom transformation
+    required?: boolean; // Is this field required?
+  }>;
+  
+  // Sheet-level data extraction
+  extractMetadata?: (sheet: XLSX.WorkSheet, workbook: XLSX.WorkBook) => Record<string, any>;
+  
+  // Row validation
+  validateRow?: (row: any[], rowIndex: number, allRows?: any[][]) => boolean; // Skip invalid rows
+}
+
+interface MultiSheetConfig {
+  dataType: DataType;
+  sheetMappings: SheetFieldMapping[];
+  combineResults?: (extractedData: Map<string, any[]>, metadata: Map<string, any>) => any[];
+  validateImport?: (combinedData: any[]) => { valid: boolean; errors: string[] };
+}
+
+type DataType = 'machines' | 'molds' | 'schedules' | 'raw_materials' | 'packing_materials' | 'lines' | 'maintenance_checklists' | 'bom_masters' | 'sfg_bom' | 'fg_bom' | 'local_bom' | 'dpr';
 
 interface ImportData {
   machines: Machine[];
@@ -47,6 +85,12 @@ interface ImportData {
   raw_materials: RawMaterial[];
   packing_materials: PackingMaterial[];
   lines: Line[];
+  maintenance_checklists: MaintenanceChecklist[];
+  bom_masters: BOMMaster[];
+  sfg_bom: any[];
+  fg_bom: any[];
+  local_bom: any[];
+  dpr?: any; // DPR data structure (will be defined based on your headers)
 }
 
 interface ExcelFileReaderProps {
@@ -80,7 +124,24 @@ const CANONICAL_HEADERS: Record<DataType, string[]> = {
   ],
   lines: [
     'Line no.', 'Line ID','Description', 'IM', 'Robot', 'Hoist', 'Conveyor', 'Status', 'Unit'
-  ]
+  ],
+  maintenance_checklists: [
+    'Line ID', 'Machine ID', 'Checklist Name', 'Checklist Type', 'Item ID', 'Task Description', 
+    'Frequency', 'Estimated Duration (min)', 'Priority', 'Category', 'Unit'
+  ],
+  bom_masters: [
+    'Sl', 'Item Name', 'SFG-Code', 'Pcs', 'Part Wt (gm/pcs)', 'Colour', 'HP %', 'ICP %', 'RCP %', 'LDPE %', 'GPPS %', 'MB %'
+  ],
+  sfg_bom: [
+    'Sl', 'Item Name', 'SFG-Code', 'Pcs', 'Part Wt (gm/pcs)', 'Colour', 'HP %', 'ICP %', 'RCP %', 'LDPE %', 'GPPS %', 'MB %'
+  ],
+  fg_bom: [
+    'Sl', 'Item Code', 'Party Name', 'Pack Size', 'SFG-1', 'SFG-1 Qty', 'SFG-2', 'SFG-2 Qty', 'CNT Code', 'CNT QTY', 'Polybag Code', 'Poly Qty', 'BOPP 1', 'Qty/Meter', 'BOPP 2', 'Qty/Meter 2'
+  ],
+        local_bom: [
+          'Sl', 'Item Code', 'Pack Size', 'SFG-1', 'SFG-1 Qty', 'SFG-2', 'SFG-2 Qty', 'CNT Code', 'CNT QTY', 'Polybag Code', 'Poly Qty', 'BOPP 1', 'Qty/Meter', 'BOPP 2', 'Qty/Meter 2'
+        ],
+  dpr: [] // DPR will be configured with multi-sheet structure - headers defined in sheet mappings
 };
 
 // ============================================================================
@@ -215,16 +276,192 @@ const TEMPLATE_MAPPINGS = {
     'Hoist Machine': 'hoist_machine_id',
     'Status': 'status',
     'Unit': 'unit'
+  },
+  maintenance_checklists: {
+    'Line ID': 'line_id',
+    'Line ID.': 'line_id',
+    'Machine ID': 'machine_id',
+    'Machine ID.': 'machine_id',
+    'Checklist Name': 'name',
+    'Checklist Name.': 'name',
+    'Checklist Type': 'checklist_type',
+    'Checklist Type.': 'checklist_type',
+    'Item ID': 'item_id',
+    'Item ID.': 'item_id',
+    'Task Description': 'task_description',
+    'Task Description.': 'task_description',
+    'Frequency': 'frequency',
+    'Estimated Duration (min)': 'estimated_duration_minutes',
+    'Estimated Duration (min).': 'estimated_duration_minutes',
+    'Priority': 'priority',
+    'Category': 'category',
+    'Unit': 'unit'
+  },
+  bom_masters: {
+    'Sl': 'sl_no',
+    'Item Name': 'item_name',
+    'SFG-Code': 'sfg_code',
+    'Pcs': 'pcs',
+    'Part Wt (gm/pcs)': 'part_weight_gm_pcs',
+    'Colour': 'colour',
+    'HP %': 'hp_percentage',
+    'ICP %': 'icp_percentage',
+    'RCP %': 'rcp_percentage',
+    'LDPE %': 'ldpe_percentage',
+    'GPPS %': 'gpps_percentage',
+    'MB %': 'mb_percentage'
+  },
+  sfg_bom: {
+    'Sl': 'sl_no',
+    'Item Name': 'item_name',
+    'SFG-Code': 'sfg_code',
+    'Pcs': 'pcs',
+    'Part Wt (gm/pcs)': 'part_weight_gm_pcs',
+    'Colour': 'colour',
+    'HP %': 'hp_percentage',
+    'ICP %': 'icp_percentage',
+    'RCP %': 'rcp_percentage',
+    'LDPE %': 'ldpe_percentage',
+    'GPPS %': 'gpps_percentage',
+        'MB %': 'mb_percentage'
+  },
+  fg_bom: {
+    'Sl': 'sl_no',
+    'Item Code': 'item_code',
+    'Party Name': 'party_name',
+    'Pack Size': 'pack_size',
+    'SFG-1': 'sfg_1',
+    'SFG-1 Qty': 'sfg_1_qty',
+    'SFG-2': 'sfg_2',
+    'SFG-2 Qty': 'sfg_2_qty',
+    'CNT Code': 'cnt_code',
+    'CNT QTY': 'cnt_qty',
+    'Polybag Code': 'polybag_code',
+    'Poly Qty': 'poly_qty',
+    'BOPP 1': 'bopp_1',
+    'Qty/Meter': 'qty_meter',
+    'QTY/METER': 'qty_meter',
+    'BOPP 2': 'bopp_2',
+    'Qty/Meter 2': 'qty_meter_2',
+    'QTY/METER 2': 'qty_meter_2'
+  },
+
+    local_bom: {
+    'Sl': 'sl_no',
+    'Sl.': 'sl_no',
+    'SL': 'sl_no',
+    'SL.': 'sl_no',
+    'Item Code': 'item_code',
+    'ITEM CODE': 'item_code',
+    'ItemCode': 'item_code',
+    'Pack Size': 'pack_size',
+    'PACK SIZE': 'pack_size',
+    'PackSize': 'pack_size',
+    'SFG-1': 'sfg_1',
+    'SFG-1 Qty': 'sfg_1_qty',
+    'SFG-1 QTY': 'sfg_1_qty',
+    'SFG-1 Qty.': 'sfg_1_qty',
+    'SFG-2': 'sfg_2',
+    'SFG-2 Qty': 'sfg_2_qty',
+    'SFG-2 QTY': 'sfg_2_qty',
+    'SFG-2 Qty.': 'sfg_2_qty',
+    'CNT Code': 'cnt_code',
+    'CNT CODE': 'cnt_code',
+    'CNT QTY': 'cnt_qty',
+    'CNT Qty': 'cnt_qty',
+    'CNT Qty.': 'cnt_qty',
+    'Polybag Code': 'polybag_code',
+    'POLYBAG CODE': 'polybag_code',
+    'PolybagCode': 'polybag_code',
+    'Poly Qty': 'poly_qty',
+    'POLY QTY': 'poly_qty',
+    'Poly Qty.': 'poly_qty',
+    'BOPP 1': 'bopp_1',
+    'BOPP1': 'bopp_1',
+    'Bopp 1': 'bopp_1',
+    'Qty/Meter': 'qty_meter',
+    'QTY/METER': 'qty_meter',
+    'Qty/Meter.': 'qty_meter',
+    'Qty Meter': 'qty_meter',
+    'QTY METER': 'qty_meter',
+    'Quantity/Meter': 'qty_meter',
+    'Quantity per Meter': 'qty_meter',
+    'BOPP 2': 'bopp_2',
+    'BOPP2': 'bopp_2',
+    'Bopp 2': 'bopp_2',
+    'Qty/Meter 2': 'qty_meter_2',
+    'QTY/METER 2': 'qty_meter_2',
+    'Qty/Meter 2.': 'qty_meter_2',
+    'Qty Meter 2': 'qty_meter_2',
+    'QTY METER 2': 'qty_meter_2',
+    'Quantity/Meter 2': 'qty_meter_2',
+    'Quantity per Meter 2': 'qty_meter_2'
   }
 } as const;
 
 // score header overlap to guess type
 const scoreHeaders = (headers: string[]): DataType => {
-  const scores = (Object.keys(CANONICAL_HEADERS) as DataType[]).map(t => ({
-    type: t,
-    score: CANONICAL_HEADERS[t].reduce((acc, h) => acc + (headers.some(x => x.toLowerCase().trim() === h.toLowerCase().trim()) ? 1 : 0), 0)
-  }));
+  console.log('🔍 Scoring headers:', headers);
+  
+  // Special handling for BOM types to avoid confusion
+  const bomTypes = ['fg_bom', 'local_bom', 'sfg_bom'];
+  
+  const scores = (Object.keys(CANONICAL_HEADERS) as DataType[]).map(t => {
+    let typeScore = CANONICAL_HEADERS[t].reduce((acc, h) => {
+      const hasMatch = headers.some(x => x.toLowerCase().trim() === h.toLowerCase().trim());
+      if (hasMatch) {
+        console.log(`🔍 Match found for ${t}: "${h}" matches "${headers.find(x => x.toLowerCase().trim() === h.toLowerCase().trim())}"`);
+      }
+      return acc + (hasMatch ? 1 : 0);
+    }, 0);
+    
+    // Boost score for BOM types if they have unique identifiers
+    if (bomTypes.includes(t)) {
+      if (t === 'local_bom') {
+        // Check for local-specific patterns
+        const hasLocalPatterns = headers.some(h => 
+          h.toLowerCase().includes('local') || 
+          h.toLowerCase().includes('sfg-1') && h.toLowerCase().includes('sfg-2') ||
+          h.toLowerCase().includes('cnt code') && h.toLowerCase().includes('cnt qty')
+        );
+        if (hasLocalPatterns) {
+          typeScore += 10; // Strong boost for local-specific headers
+          console.log(`🔍 Boosting ${t} score for local-specific patterns`);
+        }
+      }
+      if (t === 'fg_bom') {
+        // Check for fg-specific patterns
+        const hasFgPatterns = headers.some(h => 
+          h.toLowerCase().includes('party') || 
+          h.toLowerCase().includes('party name')
+        );
+        if (hasFgPatterns) {
+          typeScore += 10; // Strong boost for fg-specific headers
+          console.log(`🔍 Boosting ${t} score for fg-specific patterns`);
+        }
+      }
+      if (t === 'sfg_bom') {
+        // Check for sfg-specific patterns
+        const hasSfgPatterns = headers.some(h => 
+          h.toLowerCase().includes('sfg-code') || 
+          h.toLowerCase().includes('part wt') ||
+          h.toLowerCase().includes('hp %')
+        );
+        if (hasSfgPatterns) {
+          typeScore += 10; // Strong boost for sfg-specific headers
+          console.log(`🔍 Boosting ${t} score for sfg-specific patterns`);
+        }
+      }
+    }
+    
+    console.log(`🔍 Type ${t} score: ${typeScore}`);
+    return { type: t, score: typeScore };
+  });
+  
   scores.sort((a, b) => b.score - a.score);
+  console.log('🔍 Final scores:', scores);
+  console.log('🔍 Selected type:', scores[0].type);
+  
   return scores[0].type;
 };
 
@@ -232,9 +469,17 @@ const scoreHeaders = (headers: string[]): DataType => {
 // MAIN COMPONENT
 // ============================================================================
 const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines' }: ExcelFileReaderProps) => {
+  // Auth context
+  const { user } = useAuth();
+  
   // Files
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sheet selection state
+  const [availableSheets, setAvailableSheets] = useState<string[]>([]);
+  const [selectedSheets, setSelectedSheets] = useState<Set<string>>(new Set());
+  const [selectAllSheets, setSelectAllSheets] = useState(false);
 
   // Data state
   const [dataType, setDataType] = useState<DataType>(defaultDataType);
@@ -248,7 +493,12 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
     schedules: [],
     raw_materials: [],
     packing_materials: [],
-    lines: []
+    lines: [],
+    maintenance_checklists: [],
+    bom_masters: [],
+    sfg_bom: [],
+    fg_bom: [],
+    local_bom: []
   });
 
   // UI/UX
@@ -261,8 +511,21 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
   const [sortField, setSortField] = useState<string>('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
-  // Infer best data type from current headers
-  const inferredType = useMemo(() => headers.length ? scoreHeaders(headers) : dataType, [headers, dataType]);
+  // Infer best data type from current headers, but respect manual selection
+  const inferredType = useMemo(() => {
+    // If user has manually selected a type (not default 'machines'), use that
+    if (dataType !== 'machines') {
+      console.log(`🔍 Using manual selection for inferredType: ${dataType}`);
+      return dataType;
+    }
+    // Otherwise, auto-detect from headers
+    if (headers.length) {
+      const detected = scoreHeaders(headers);
+      console.log(`🔍 Auto-detected type for inferredType: ${detected}`);
+      return detected;
+    }
+    return dataType;
+  }, [headers, dataType]);
 
   // ----------------------------------------------------------------------------
   // Sorting helpers
@@ -290,29 +553,1448 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     if (!selectedFile) return;
+    
     setFile(selectedFile);
     setImportStatus({ type: '', message: '' });
     setSortField(''); setSortDirection('asc');
-    await parseExcelFile(selectedFile);
+    
+    // Read workbook to get sheet names
+    try {
+      const data = await selectedFile.arrayBuffer();
+      const workbook = XLSX.read(data, { 
+        type: 'array',
+        cellDates: false,
+        cellNF: false,
+        cellText: false,
+        cellFormula: false,
+        cellStyles: false,
+        cellHTML: false
+      });
+      
+      const sheets = workbook.SheetNames;
+      setAvailableSheets(sheets);
+      
+      // Auto-select all sheets by default
+      setSelectedSheets(new Set(sheets));
+      setSelectAllSheets(true);
+      
+      // If only one sheet, proceed with parsing
+      if (sheets.length === 1) {
+        await parseExcelFile(selectedFile);
+      } else {
+        // For multi-sheet files, wait for user to confirm sheet selection
+        // Don't parse yet - let user choose sheets first
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error('Error reading file:', err);
+      setImportStatus({ type: 'error', message: 'Error reading file. Please try again.' });
+    }
+  };
+
+  // Handle sheet selection changes
+  const handleSheetToggle = (sheetName: string) => {
+    const newSelected = new Set(selectedSheets);
+    if (newSelected.has(sheetName)) {
+      newSelected.delete(sheetName);
+    } else {
+      newSelected.add(sheetName);
+    }
+    setSelectedSheets(newSelected);
+    setSelectAllSheets(newSelected.size === availableSheets.length);
+  };
+
+  // Handle "Select All" toggle
+  const handleSelectAllToggle = () => {
+    if (selectAllSheets) {
+      setSelectedSheets(new Set());
+      setSelectAllSheets(false);
+    } else {
+      setSelectedSheets(new Set(availableSheets));
+      setSelectAllSheets(true);
+    }
+  };
+
+  // Parse file with selected sheets
+  const handleParseWithSelectedSheets = async () => {
+    if (!file || selectedSheets.size === 0) {
+      setImportStatus({ type: 'error', message: 'Please select at least one sheet to import.' });
+      return;
+    }
+    await parseExcelFile(file);
+  };
+
+  // ============================================================================
+  // MULTI-SHEET PARSING ENGINE - Zero Loss Data Extraction
+  // ============================================================================
+  const parseMultiSheetWorkbook = async (
+    workbook: XLSX.WorkBook, 
+    config: MultiSheetConfig
+  ): Promise<{ data: any[]; metadata: Map<string, any>; errors: string[] }> => {
+    const extractedData = new Map<string, any[]>();
+    const metadata = new Map<string, any>();
+    const errors: string[] = [];
+
+    console.log('📊 Starting multi-sheet parsing for:', config.dataType);
+    console.log('📊 Available sheets:', workbook.SheetNames);
+
+    // Process each sheet mapping
+    for (const mapping of config.sheetMappings) {
+      try {
+        // Find matching sheet
+        let targetSheet: XLSX.WorkSheet | null = null;
+        let sheetName = '';
+
+        if (mapping.sheetIndex !== undefined) {
+          // Match by index
+          if (mapping.sheetIndex < workbook.SheetNames.length) {
+            sheetName = workbook.SheetNames[mapping.sheetIndex];
+            targetSheet = workbook.Sheets[sheetName];
+          } else {
+            errors.push(`Sheet index ${mapping.sheetIndex} out of range (total: ${workbook.SheetNames.length})`);
+            continue;
+          }
+        } else if (mapping.sheetName) {
+          // Match by name or regex
+          if (mapping.sheetName instanceof RegExp) {
+            const match = workbook.SheetNames.find(name => mapping.sheetName instanceof RegExp && mapping.sheetName.test(name));
+            if (match) {
+              sheetName = match;
+              targetSheet = workbook.Sheets[match];
+            }
+          } else {
+            // Exact match (case-insensitive)
+            const match = workbook.SheetNames.find(name => name.toLowerCase() === String(mapping.sheetName).toLowerCase());
+            if (match) {
+              sheetName = match;
+              targetSheet = workbook.Sheets[match];
+            }
+          }
+        }
+
+        if (!targetSheet) {
+          errors.push(`Sheet not found: ${mapping.sheetName || `index ${mapping.sheetIndex}`}`);
+          continue;
+        }
+
+        console.log(`📄 Processing sheet: "${sheetName}"`);
+
+        // Extract metadata if specified
+        if (mapping.extractMetadata) {
+          const meta = mapping.extractMetadata(targetSheet, workbook);
+          metadata.set(sheetName, meta);
+          console.log(`📋 Extracted metadata from ${sheetName}:`, meta);
+        }
+
+        // Read sheet data (both raw and formatted)
+        // For DPR sheets, we need better handling of merged cells
+        const rawData = XLSX.utils.sheet_to_json(targetSheet, { 
+          header: 1, 
+          raw: true, 
+          defval: null
+        }) as any[][];
+
+        const textData = XLSX.utils.sheet_to_json(targetSheet, { 
+          header: 1, 
+          raw: false, 
+          defval: null
+        }) as any[][];
+        
+        // Direct worksheet access for merged cells
+        // XLSX stores merged cell values in the top-left cell of the merge
+        // We'll use this for machine numbers and operator names
+        const worksheetCells = targetSheet;
+
+        // Determine header row and data start row
+        const headerRowIdx = mapping.headerRow ?? 0;
+        const dataStartIdx = mapping.dataStartRow ?? (headerRowIdx + 1);
+
+        if (headerRowIdx >= rawData.length) {
+          errors.push(`Sheet "${sheetName}": Header row ${headerRowIdx} doesn't exist`);
+          continue;
+        }
+
+        // Extract headers - for DPR, headers might be in rows 6 and 7 (merged)
+        // Combine headers from both rows to get complete header info
+        const headerRow1 = (rawData[headerRowIdx] || []).map((h, idx) => {
+          const textH = textData[headerRowIdx]?.[idx];
+          return String(textH !== null && textH !== undefined ? textH : h ?? '').trim();
+        });
+        
+        // Also check row 7 for merged headers (DPR structure)
+        let headerRow2: string[] = [];
+        if (headerRowIdx === 6 && rawData.length > 7) {
+          headerRow2 = (rawData[7] || []).map((h, idx) => {
+            const textH = textData[7]?.[idx];
+            return String(textH !== null && textH !== undefined ? textH : h ?? '').trim();
+          });
+        }
+        
+        // Combine headers - prefer non-empty values from either row
+        const headers = headerRow1.map((h1, idx) => {
+          const h2 = headerRow2[idx] || '';
+          // If row 1 header is empty but row 2 has value, use row 2
+          if (!h1 && h2) return h2;
+          // If row 2 has a more specific value, prefer it
+          if (h1 && h2 && h2.length > h1.length) return h2;
+          return h1;
+        });
+
+        console.log(`📋 Headers from ${sheetName} (rows ${headerRowIdx}-${headerRowIdx === 6 ? 7 : headerRowIdx}):`, headers);
+
+        // Build column index map for header-based fields
+        const headerIndexMap = new Map<string, number>();
+        headers.forEach((header, idx) => {
+          if (header) {
+            headerIndexMap.set(header.toLowerCase(), idx);
+            // Also add variations
+            headerIndexMap.set(header.toLowerCase().trim(), idx);
+          }
+        });
+
+        // Extract field data
+        const extractedRows: any[] = [];
+
+        for (let rowIdx = dataStartIdx; rowIdx < rawData.length; rowIdx++) {
+          const rawRow = rawData[rowIdx] || [];
+          const textRowData = textData[rowIdx] || [];
+          
+          // Skip empty rows
+          if (rawRow.every(cell => cell === null || cell === undefined || cell === '')) {
+            continue;
+          }
+
+          // Validate row if validator provided
+          if (mapping.validateRow && !mapping.validateRow(rawRow, rowIdx, rawData)) {
+            continue;
+          }
+
+          const rowData: any = {};
+
+          // For DPR machine sheets, ALWAYS extract machine number and operator from first row of 4-row block
+          // Machine numbers are in merged cells A8:A11, A12:A15, etc. (4 rows per machine)
+          // Operator names are in merged cells B8:B11, B12:B15, etc.
+          if (rowIdx >= 8) {
+            const blockRow = (rowIdx - 8) % 4; // 0, 1, 2, or 3 within the 4-row block
+            const firstRowOfBlock = rowIdx - blockRow; // First row of this 4-row block (8, 12, 16, etc.)
+            const firstRowExcelRow = firstRowOfBlock + 1; // Excel rows are 1-indexed
+            
+            // Use direct worksheet cell access for merged cells (better than array access)
+            const machineCellRef = XLSX.utils.encode_cell({ r: firstRowOfBlock, c: 0 }); // Column A
+            const operatorCellRef = XLSX.utils.encode_cell({ r: firstRowOfBlock, c: 1 }); // Column B
+            
+            const machineCell = worksheetCells[machineCellRef];
+            const operatorCell = worksheetCells[operatorCellRef];
+            
+            // Extract machine number - merged cells store value in top-left cell
+            if (machineCell) {
+              const machineNoRaw = String(machineCell.w ?? machineCell.v ?? '').trim();
+              // Match IMM-01, IMM-1, IMM 01, IMM 05 (with space), etc.
+              if (machineNoRaw && /^IMM[-\s]?0?(\d+)/i.test(machineNoRaw)) {
+                const match = machineNoRaw.match(/IMM[-\s]?0?(\d+)/i);
+                if (match) {
+                  const num = parseInt(match[1]);
+                  rowData.machineNo = num < 10 ? `IMM-0${num}` : `IMM-${num}`;
+                } else {
+                  rowData.machineNo = machineNoRaw;
+                }
+              }
+            }
+            
+            // Fallback: try array access if direct cell access didn't work
+            if (!rowData.machineNo && firstRowOfBlock >= 0 && firstRowOfBlock < rawData.length) {
+              const firstRow = rawData[firstRowOfBlock];
+              const firstRowText = textData[firstRowOfBlock];
+              
+              if (firstRow && firstRow.length > 0) {
+                const machineNoRaw = String(firstRowText?.[0] ?? firstRow[0] ?? '').trim();
+                if (machineNoRaw && /^IMM[-\s]?0?(\d+)/i.test(machineNoRaw)) {
+                  const match = machineNoRaw.match(/IMM[-\s]?0?(\d+)/i);
+                  if (match) {
+                    const num = parseInt(match[1]);
+                    rowData.machineNo = num < 10 ? `IMM-0${num}` : `IMM-${num}`;
+                  } else {
+                    rowData.machineNo = machineNoRaw;
+                  }
+                }
+              }
+            }
+            
+            // Extract operator name - also merged across 4 rows
+            if (operatorCell) {
+              const operatorName = String(operatorCell.w ?? operatorCell.v ?? '').trim();
+              if (operatorName && operatorName !== '' && operatorName !== '0' && !/^\d+$/.test(operatorName)) {
+                rowData.operatorName = operatorName;
+              }
+            }
+            
+            // Fallback for operator
+            if (!rowData.operatorName && firstRowOfBlock >= 0 && firstRowOfBlock < rawData.length) {
+              const firstRow = rawData[firstRowOfBlock];
+              const firstRowText = textData[firstRowOfBlock];
+              if (firstRow && firstRow.length > 1) {
+                const operatorName = String(firstRowText?.[1] ?? firstRow[1] ?? '').trim();
+                if (operatorName && operatorName !== '' && operatorName !== '0' && !/^\d+$/.test(operatorName)) {
+                  rowData.operatorName = operatorName;
+                }
+              }
+            }
+          }
+
+          // Extract each field
+          for (const field of mapping.fields) {
+            try {
+              let value: any = null;
+
+              // Method 1: Cell reference (e.g., "A1")
+              if (field.cellRef) {
+                const cell = targetSheet[field.cellRef];
+                if (cell) {
+                  value = cell.v ?? cell.w ?? null;
+                }
+              }
+              // Method 2: Fixed row/column position (for metadata)
+              else if (field.rowIndex !== undefined && field.columnIndex !== undefined) {
+                if (field.rowIndex < rawData.length) {
+                  const cellRow = rawData[field.rowIndex];
+                  if (field.columnIndex < cellRow.length) {
+                    value = textData[field.rowIndex]?.[field.columnIndex] ?? cellRow[field.columnIndex] ?? null;
+                  }
+                }
+              }
+              // Method 3: Header name match
+              else if (field.headerName) {
+                let colIdx: number | undefined;
+
+                if (field.headerName instanceof RegExp) {
+                  // Regex match
+                  colIdx = headers.findIndex(h => field.headerName instanceof RegExp && field.headerName.test(h));
+                } else {
+                  // Exact or case-insensitive match
+                  const searchHeader = String(field.headerName).toLowerCase().trim();
+                  colIdx = headerIndexMap.get(searchHeader);
+                  // Also try direct match
+                  if (colIdx === undefined) {
+                    colIdx = headers.findIndex(h => h.toLowerCase().trim() === searchHeader);
+                  }
+                }
+
+                if (colIdx !== undefined && colIdx >= 0 && colIdx < rawRow.length) {
+                  // Prefer text version, fallback to raw
+                  value = textRowData[colIdx] ?? rawRow[colIdx] ?? null;
+                  
+                  // Handle merged cells: for DPR, check appropriate rows based on block structure
+                  // Production data merges: C8:C9, D8:D9, etc. (rows 0-1 of block)
+                  // Changeover data merges: C10:C11, etc. (rows 2-3 of block)
+                  // Machine/Operator merges: A8:A11, B8:B11 (all 4 rows)
+                  if ((value === null || value === undefined || value === '') && rowIdx >= 8) {
+                    const blockRow = (rowIdx - 8) % 4;
+                    const firstRowOfBlock = rowIdx - blockRow;
+                    
+                    // For production data columns (C-Z typically), check merged row pattern
+                    // Rows 0-1 of block share merged cells (e.g., C8:C9)
+                    // Rows 2-3 of block share merged cells (e.g., C10:C11)
+                    if (colIdx >= 2) { // Production/changeover data columns
+                      if (blockRow === 1 || blockRow === 3) {
+                        // Check previous row (row 0 or row 2 of block) for merged value
+                        const prevRowInBlock = firstRowOfBlock + (blockRow === 1 ? 0 : 2);
+                        if (prevRowInBlock >= 0 && prevRowInBlock < rawData.length) {
+                          const prevRowData = rawData[prevRowInBlock];
+                          const prevRowText = textData[prevRowInBlock];
+                          if (prevRowData && colIdx < prevRowData.length) {
+                            const prevValue = prevRowText?.[colIdx] ?? prevRowData[colIdx];
+                            if (prevValue !== null && prevValue !== undefined && prevValue !== '') {
+                              value = prevValue;
+                            }
+                          }
+                        }
+                      }
+                    }
+                    
+                    // Always check first row of block (for cells merged across all 4 rows)
+                    if ((value === null || value === undefined || value === '') && firstRowOfBlock >= 0 && firstRowOfBlock < rawData.length && firstRowOfBlock !== rowIdx) {
+                      const firstRow = rawData[firstRowOfBlock];
+                      const firstRowText = textData[firstRowOfBlock];
+                      if (firstRow && colIdx < firstRow.length) {
+                        const firstRowValue = firstRowText?.[colIdx] ?? firstRow[colIdx];
+                        if (firstRowValue !== null && firstRowValue !== undefined && firstRowValue !== '') {
+                          value = firstRowValue;
+                        }
+                      }
+                    }
+                  }
+                  
+                  // Also check previous row (for adjacent merges)
+                  if ((value === null || value === undefined || value === '') && rowIdx > 0) {
+                    const prevRow = rawData[rowIdx - 1];
+                    const prevTextRow = textData[rowIdx - 1];
+                    if (prevRow && colIdx < prevRow.length) {
+                      const prevValue = prevTextRow?.[colIdx] ?? prevRow[colIdx];
+                      if (prevValue !== null && prevValue !== undefined && prevValue !== '') {
+                        value = prevValue;
+                      }
+                    }
+                  }
+                }
+              }
+              // Method 4: Column index
+              else if (field.columnIndex !== undefined) {
+                if (field.columnIndex < rawRow.length) {
+                  value = textRowData[field.columnIndex] ?? rawRow[field.columnIndex] ?? null;
+                  
+                  // Method 5: Handle merged cells - same logic as headerName method
+                  if ((value === null || value === undefined || value === '') && rowIdx >= 8) {
+                    const blockRow = (rowIdx - 8) % 4;
+                    const firstRowOfBlock = rowIdx - blockRow;
+                    
+                    // For production data columns, check merged row pattern
+                    if (field.columnIndex >= 2) {
+                      if (blockRow === 1 || blockRow === 3) {
+                        const prevRowInBlock = firstRowOfBlock + (blockRow === 1 ? 0 : 2);
+                        if (prevRowInBlock >= 0 && prevRowInBlock < rawData.length) {
+                          const prevRowData = rawData[prevRowInBlock];
+                          const prevRowText = textData[prevRowInBlock];
+                          if (prevRowData && field.columnIndex < prevRowData.length) {
+                            const prevValue = prevRowText?.[field.columnIndex] ?? prevRowData[field.columnIndex];
+                            if (prevValue !== null && prevValue !== undefined && prevValue !== '') {
+                              value = prevValue;
+                            }
+                          }
+                        }
+                      }
+                    }
+                    
+                    // Always check first row of block
+                    if ((value === null || value === undefined || value === '') && firstRowOfBlock >= 0 && firstRowOfBlock < rawData.length && firstRowOfBlock !== rowIdx) {
+                      const firstRow = rawData[firstRowOfBlock];
+                      const firstRowText = textData[firstRowOfBlock];
+                      if (firstRow && field.columnIndex < firstRow.length) {
+                        const firstRowValue = firstRowText?.[field.columnIndex] ?? firstRow[field.columnIndex];
+                        if (firstRowValue !== null && firstRowValue !== undefined && firstRowValue !== '') {
+                          value = firstRowValue;
+                        }
+                      }
+                    }
+                    
+                    // Also check previous row
+                    if ((value === null || value === undefined || value === '') && rowIdx > 0) {
+                      const prevRow = rawData[rowIdx - 1];
+                      const prevTextRow = textData[rowIdx - 1];
+                      if (prevRow && field.columnIndex < prevRow.length) {
+                        const prevValue = prevTextRow?.[field.columnIndex] ?? prevRow[field.columnIndex];
+                        if (prevValue !== null && prevValue !== undefined && prevValue !== '') {
+                          value = prevValue;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              // Apply transformation if provided
+              if (value !== null && value !== undefined && field.transform) {
+                value = field.transform(value, rawRow, targetSheet);
+              }
+
+              // Handle required fields
+              if (field.required && (value === null || value === undefined || value === '')) {
+                errors.push(`Sheet "${sheetName}", Row ${rowIdx + 1}: Required field "${field.targetField}" is missing`);
+                continue;
+              }
+
+              rowData[field.targetField] = value;
+            } catch (err) {
+              errors.push(`Sheet "${sheetName}", Row ${rowIdx + 1}, Field "${field.targetField}": ${err}`);
+            }
+          }
+
+          // Only add row if it has at least one non-null value
+          // For DPR, ensure we have machine number before adding
+          const hasValidData = Object.values(rowData).some(v => v !== null && v !== undefined && v !== '');
+          const hasMachineNo = rowData.machineNo && /^IMM[-\s]?\d+/i.test(String(rowData.machineNo));
+          
+          if (hasValidData && hasMachineNo) {
+            extractedRows.push(rowData);
+            console.log(`✅ Added row ${rowIdx + 1} for machine ${rowData.machineNo} from sheet ${sheetName}`);
+          } else if (hasValidData && !hasMachineNo) {
+            // Try one more time to get machine number from first row of block using direct cell access
+            if (rowIdx >= 8) {
+              const blockRow = (rowIdx - 8) % 4;
+              const firstRowOfBlock = rowIdx - blockRow;
+              
+              // Try direct worksheet cell access first
+              const machineCellRef = XLSX.utils.encode_cell({ r: firstRowOfBlock, c: 0 });
+              const machineCell = worksheetCells[machineCellRef];
+              
+              if (machineCell) {
+                const machineNoRaw = String(machineCell.w ?? machineCell.v ?? '').trim();
+                if (machineNoRaw && /^IMM[-\s]?0?(\d+)/i.test(machineNoRaw)) {
+                  const match = machineNoRaw.match(/IMM[-\s]?0?(\d+)/i);
+                  if (match) {
+                    const num = parseInt(match[1]);
+                    rowData.machineNo = num < 10 ? `IMM-0${num}` : `IMM-${num}`;
+                    extractedRows.push(rowData);
+                    console.log(`✅ Added row ${rowIdx + 1} for machine ${rowData.machineNo} (extracted on retry via direct cell) from sheet ${sheetName}`);
+                  }
+                }
+              }
+              
+              // Fallback to array access
+              if (!rowData.machineNo && firstRowOfBlock >= 0 && firstRowOfBlock < rawData.length) {
+                const firstRow = rawData[firstRowOfBlock];
+                const firstRowText = textData[firstRowOfBlock];
+                const machineNoRaw = String(firstRowText?.[0] ?? firstRow[0] ?? '').trim();
+                
+                if (machineNoRaw && /^IMM[-\s]?0?(\d+)/i.test(machineNoRaw)) {
+                  const match = machineNoRaw.match(/IMM[-\s]?0?(\d+)/i);
+                  if (match) {
+                    const num = parseInt(match[1]);
+                    rowData.machineNo = num < 10 ? `IMM-0${num}` : `IMM-${num}`;
+                    extractedRows.push(rowData);
+                    console.log(`✅ Added row ${rowIdx + 1} for machine ${rowData.machineNo} (extracted on retry via array) from sheet ${sheetName}`);
+                  } else {
+                    console.log(`⚠️ Row ${rowIdx + 1} (blockRow ${blockRow}, firstRow ${firstRowOfBlock}) has data but couldn't parse machine number. First row col A: "${machineNoRaw}". Row data keys:`, Object.keys(rowData));
+                  }
+                } else {
+                  console.log(`⚠️ Row ${rowIdx + 1} (blockRow ${blockRow}, firstRow ${firstRowOfBlock}) has data but no valid machine number. First row col A: "${machineNoRaw}". Row data keys:`, Object.keys(rowData));
+                }
+              } else if (!rowData.machineNo) {
+                console.log(`⚠️ Row ${rowIdx + 1} has data but no valid machine number. First row of block ${firstRowOfBlock} is out of range. Row data keys:`, Object.keys(rowData));
+              }
+            } else {
+              console.log(`⚠️ Row ${rowIdx + 1} has data but no valid machine number (row < 8). Row data keys:`, Object.keys(rowData));
+            }
+          }
+        }
+
+        console.log(`✅ Extracted ${extractedRows.length} rows from sheet "${sheetName}"`);
+        extractedData.set(sheetName, extractedRows);
+      } catch (err) {
+        errors.push(`Error processing sheet mapping: ${err}`);
+        console.error(`❌ Error processing sheet:`, err);
+      }
+    }
+
+    // Combine results using custom function or default
+    let combinedData: any[] = [];
+    if (config.combineResults) {
+      combinedData = config.combineResults(extractedData, metadata);
+    } else {
+      // Default: flatten all sheets into single array
+      extractedData.forEach((rows, sheetName) => {
+        rows.forEach(row => {
+          combinedData.push({ ...row, _sheetName: sheetName });
+        });
+      });
+    }
+
+    // Validate combined data if validator provided
+    if (config.validateImport) {
+      const validation = config.validateImport(combinedData);
+      if (!validation.valid) {
+        errors.push(...validation.errors);
+      }
+    }
+
+    console.log(`📊 Multi-sheet parsing complete: ${combinedData.length} records, ${errors.length} errors`);
+    return { data: combinedData, metadata, errors };
+  };
+
+  // ============================================================================
+  // DPR MULTI-SHEET CONFIGURATION - Zero Loss Data Extraction
+  // ============================================================================
+  const getDPRMultiSheetConfig = (workbook: XLSX.WorkBook): MultiSheetConfig => {
+    // Find summary sheet
+    const summarySheetName = workbook.SheetNames.find(name => 
+      name.toLowerCase() === 'summary'
+    ) || workbook.SheetNames.find(name => 
+      name.toLowerCase().includes('summary')
+    ) || workbook.SheetNames[0];
+
+    // Find all machine sheets (1a, 1b, 2a, 2b, etc.)
+    const machineSheets = workbook.SheetNames.filter(name => /^\d+[ab]$/i.test(name.trim()));
+
+    const sheetMappings: SheetFieldMapping[] = [];
+
+    // 1. SUMMARY SHEET - Extract metadata (date, shift, shift incharge)
+    sheetMappings.push({
+      sheetName: summarySheetName,
+      headerRow: undefined,
+      dataStartRow: undefined,
+      fields: [
+        // Date from B4
+        {
+          targetField: 'date',
+          cellRef: 'B4',
+          transform: (value: any) => {
+            if (!value) return null;
+            // Handle Excel date serial or date object
+            if (typeof value === 'number') {
+              try {
+                const d = XLSX.SSF.parse_date_code(value);
+                return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+              } catch {
+                const date = new Date((value - 25569) * 86400000);
+                return date.toISOString().split('T')[0];
+              }
+            }
+            if (value instanceof Date) {
+              return value.toISOString().split('T')[0];
+            }
+            // Parse string dates (DD-MMM-YY format)
+            const str = String(value).trim();
+            const ddmmyyMatch = str.match(/^(\d{1,2})[-/\s]([A-Za-z]{3})[-/\s](\d{2,4})$/i);
+            if (ddmmyyMatch) {
+              const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+              const monthIndex = monthNames.findIndex(m => ddmmyyMatch[2].toLowerCase().startsWith(m));
+              if (monthIndex >= 0) {
+                let year = parseInt(ddmmyyMatch[3]);
+                if (year < 100) year = 2000 + year;
+                return `${year}-${String(monthIndex + 1).padStart(2, '0')}-${ddmmyyMatch[1].padStart(2, '0')}`;
+              }
+            }
+            return String(value);
+          }
+        },
+        // Shift from N4
+        {
+          targetField: 'shift',
+          cellRef: 'N4',
+          transform: (value: any) => String(value || '').trim().toUpperCase()
+        },
+        // Shift Incharge from W4
+        {
+          targetField: 'shiftIncharge',
+          cellRef: 'W4',
+          transform: (value: any) => String(value || 'CHANDAN/DHIRAJ').trim()
+        }
+      ],
+      extractMetadata: (sheet: XLSX.WorkSheet) => {
+        const dateCell = sheet['B4'];
+        const shiftCell = sheet['N4'];
+        const inchargeCell = sheet['W4'];
+        
+        let date: string | null = null;
+        if (dateCell) {
+          const val = dateCell.v ?? dateCell.w ?? null;
+          if (typeof val === 'number') {
+            try {
+              const d = XLSX.SSF.parse_date_code(val);
+              date = `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+            } catch {
+              const dateObj = new Date((val - 25569) * 86400000);
+              date = dateObj.toISOString().split('T')[0];
+            }
+          } else if (val instanceof Date) {
+            date = val.toISOString().split('T')[0];
+          } else if (val) {
+            date = String(val);
+          }
+        }
+        
+        return {
+          date: date,
+          shift: shiftCell ? String(shiftCell.v ?? shiftCell.w ?? '').trim().toUpperCase() : 'DAY',
+          shiftIncharge: inchargeCell ? String(inchargeCell.v ?? inchargeCell.w ?? 'CHANDAN/DHIRAJ').trim() : 'CHANDAN/DHIRAJ'
+        };
+      }
+    });
+
+    // 2. MACHINE SHEETS - Extract production data for each machine
+    // Each machine sheet (1a, 1b, etc.) has the same structure
+    machineSheets.forEach(sheetName => {
+      const match = sheetName.match(/^(\d+)([ab])$/i);
+      if (!match) return;
+      
+      const machineNum = parseInt(match[1]);
+      const sheetType = match[2].toLowerCase(); // 'a' = current production, 'b' = changeover
+      
+      sheetMappings.push({
+        sheetName: sheetName,
+        headerRow: 6, // Headers in rows 6-7 (merged)
+        dataStartRow: 8, // Data starts at row 8
+        fields: [
+          // Machine number from column A (row 8, 12, 16, etc. - every 4 rows)
+          // This field will be extracted from the first row of each 4-row block
+          {
+            targetField: 'machineNo',
+            columnIndex: 0, // Column A
+            transform: (value: any) => {
+              const str = String(value || '').trim();
+              // Normalize format (IMM-01, IMM-1, IMM 01, etc. -> IMM-01)
+              const match = str.match(/IMM[-\s]?0?(\d+)/i);
+              if (match) {
+                const num = parseInt(match[1]);
+                return num < 10 ? `IMM-0${num}` : `IMM-${num}`;
+              }
+              return str || '';
+            },
+            required: false // Not required at field level - we extract it from first row of block
+          },
+          // Operator name from column B (merged across 4 rows)
+          {
+            targetField: 'operatorName',
+            columnIndex: 1, // Column B
+            transform: (value: any) => String(value || '').trim()
+          },
+          // Product from column C
+          {
+            targetField: 'product',
+            headerName: 'Product',
+            transform: (value: any) => String(value || '').trim()
+          },
+          // Cavity from column D
+          {
+            targetField: 'cavity',
+            headerName: 'Cavity',
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 0 : num;
+            }
+          },
+          // Target Cycle (sec) from column E
+          {
+            targetField: 'targetCycle',
+            headerName: /Trg Cycle/i,
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 0 : num;
+            }
+          },
+          // Target Run Time (min) from column F
+          {
+            targetField: 'targetRunTime',
+            headerName: /Trg Run Time/i,
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 720 : num; // Default 720 minutes
+            }
+          },
+          // Part Weight (gm) from column G
+          {
+            targetField: 'partWeight',
+            headerName: /Part Wt/i,
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 0 : num;
+            }
+          },
+          // Actual Part Weight (gm) from column H
+          {
+            targetField: 'actualPartWeight',
+            headerName: /Act part wt/i,
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 0 : num;
+            }
+          },
+          // Actual Cycle (sec) from column I
+          {
+            targetField: 'actualCycle',
+            headerName: /Act Cycle/i,
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 0 : num;
+            }
+          },
+          // No of Shots - Start from column J
+          {
+            targetField: 'shotsStart',
+            columnIndex: 9, // Column J
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 0 : num;
+            }
+          },
+          // No of Shots - End from column K
+          {
+            targetField: 'shotsEnd',
+            columnIndex: 10, // Column K
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 0 : num;
+            }
+          },
+          // Target Qty (Nos) from column L
+          {
+            targetField: 'targetQty',
+            headerName: /Target Qty/i,
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 0 : num;
+            }
+          },
+          // Actual Qty (Nos) from column M
+          {
+            targetField: 'actualQty',
+            headerName: /Actual Qty/i,
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 0 : num;
+            }
+          },
+          // Ok Prod Qty (Nos) from column N
+          {
+            targetField: 'okProdQty',
+            headerName: /Ok Prod Qty/i,
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 0 : num;
+            }
+          },
+          // Ok Prod (Kgs) from column O
+          {
+            targetField: 'okProdKgs',
+            headerName: /Ok Prod \(Kgs\)/i,
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 0 : num;
+            }
+          },
+          // Ok Prod (%) from column P
+          {
+            targetField: 'okProdPercent',
+            headerName: /Ok Prod \(%\)/i,
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 0 : num;
+            }
+          },
+          // Rej (Kgs) from column Q
+          {
+            targetField: 'rejKgs',
+            headerName: /Rej \(Kgs\)/i,
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 0 : num;
+            }
+          },
+          // lumps (KG) from column R (usually empty)
+          {
+            targetField: 'lumps',
+            headerName: /lumps/i,
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 0 : num;
+            }
+          },
+          // Run Time (mins) from column S
+          {
+            targetField: 'runTime',
+            headerName: /Run Time \(mins\)/i,
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 0 : num;
+            }
+          },
+          // Down time (min) from column T
+          {
+            targetField: 'downTime',
+            headerName: /Down time \(min\)/i,
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 0 : Math.abs(num); // Abs to handle negative values
+            }
+          },
+          // Stoppage Time - Reason, Start, End, Total from columns U-X (need to parse merged header)
+          {
+            targetField: 'stoppageReason',
+            columnIndex: 20, // Column U (approximate)
+            transform: (value: any) => String(value || '').trim()
+          },
+          {
+            targetField: 'stoppageStartTime',
+            columnIndex: 21, // Column V
+            transform: (value: any) => String(value || '').trim()
+          },
+          {
+            targetField: 'stoppageEndTime',
+            columnIndex: 22, // Column W
+            transform: (value: any) => String(value || '').trim()
+          },
+          {
+            targetField: 'stoppageTotalTime',
+            columnIndex: 23, // Column X
+            transform: (value: any) => {
+              const num = parseFloat(value);
+              return isNaN(num) ? 0 : num;
+            }
+          },
+          // Mould change from column Y
+          {
+            targetField: 'mouldChange',
+            headerName: /Mould change/i,
+            transform: (value: any) => String(value || '').trim()
+          },
+          // REMARK from column Z
+          {
+            targetField: 'remark',
+            headerName: /REMARK/i,
+            transform: (value: any) => String(value || '').trim()
+          }
+        ],
+        // Row validation: handle 4-row blocks per machine
+        // Each machine has a 4-row block: rows 8-11 (machine 1), 12-15 (machine 2), etc.
+        // Rows 0-1 of block (rows 8-9, 12-13, etc.) = current production
+        // Rows 2-3 of block (rows 10-11, 14-15, etc.) = changeover
+        validateRow: (row: any[], rowIndex: number, allRows?: any[][]) => {
+          // Skip rows before data starts
+          if (rowIndex < 8) return false;
+          
+          const blockRow = (rowIndex - 8) % 4; // 0, 1, 2, or 3 within a 4-row block
+          const firstRowOfBlock = rowIndex - blockRow;
+          
+          // Validate rows based on sheet type
+          // Sheet 'a': process rows 0-1 (production data)
+          // Sheet 'b': process rows 2-3 (changeover data)
+          
+          if (sheetType === 'a') {
+            // Sheet 'a' (current production): process rows 0-1 of each 4-row block
+            if (blockRow === 0 || blockRow === 1) {
+              // Check if first row of block has a valid machine number
+              if (allRows && firstRowOfBlock >= 0 && firstRowOfBlock < allRows.length) {
+                const firstRow = allRows[firstRowOfBlock];
+                if (firstRow && firstRow.length > 0) {
+                  const firstRowMachineNo = String(firstRow[0] || '').trim();
+                  // If first row has machine number, accept these rows
+                  if (/^IMM[-\s]?0?(\d+)/i.test(firstRowMachineNo)) {
+                    // Row 0 must have machine number, row 1 can be continuation
+                    if (blockRow === 0) {
+                      return true; // Always accept first row if it has machine number
+                    } else {
+                      // Row 1: accept if it has any data beyond machine/operator columns
+                      return row.slice(2).some(cell => {
+                        const val = String(cell || '').trim();
+                        return val !== '' && val !== '0' && val !== '0.00';
+                      });
+                    }
+                  }
+                }
+              }
+              return false;
+            } else {
+              return false; // Skip rows 2-3 (changeover rows for sheet 'a')
+            }
+          } else {
+            // Sheet 'b' (changeover): process rows 2-3 of each 4-row block
+            if (blockRow === 2 || blockRow === 3) {
+              // Verify this block has a valid machine number in first row
+              if (allRows && firstRowOfBlock >= 0 && firstRowOfBlock < allRows.length) {
+                const firstRow = allRows[firstRowOfBlock];
+                if (firstRow && firstRow.length > 0) {
+                  const firstRowMachineNo = String(firstRow[0] || '').trim();
+                  if (/^IMM[-\s]?0?(\d+)/i.test(firstRowMachineNo)) {
+                    // Check if this changeover row has any data
+                    if (blockRow === 2) {
+                      // Row 2 should have product data in column C (index 2)
+                      const product = String(row[2] || '').trim();
+                      if (product && product !== '') {
+                        return true;
+                      }
+                    }
+                    // Row 3 or row 2 without product - check for any meaningful data
+                    return row.some((cell, idx) => {
+                      if (idx < 2) return false; // Skip machine/operator columns
+                      const val = String(cell || '').trim();
+                      return val !== '' && val !== '0' && val !== '0.00';
+                    });
+                  }
+                }
+              }
+              return false;
+            } else {
+              return false; // Skip rows 0-1 (current production rows for sheet 'b')
+            }
+          }
+        }
+      });
+    });
+
+    return {
+      dataType: 'dpr',
+      sheetMappings,
+      combineResults: (extractedData: Map<string, any[]>, metadata: Map<string, any>) => {
+        // Get metadata from summary sheet
+        const summaryMeta = metadata.get(summarySheetName) || {};
+        
+        // Group machine sheets by machine number and type (a/b)
+        const machineGroups = new Map<number, { a?: any, b?: any, operatorName?: string }>();
+        
+        extractedData.forEach((rows, sheetName) => {
+          const match = sheetName.match(/^(\d+)([ab])$/i);
+          if (!match) return;
+          
+          const machineNum = parseInt(match[1]);
+          const type = match[2].toLowerCase() as 'a' | 'b';
+          
+          console.log(`📊 Processing sheet ${sheetName}: ${rows.length} rows extracted`);
+          
+          // For each machine in this sheet, group by machine number
+          // Each sheet might have multiple machines (multiple 4-row blocks)
+          const sheetMachineMap = new Map<number, any>();
+          
+          rows.forEach((row, idx) => {
+            if (!row.machineNo) {
+              console.log(`⚠️ Row ${idx} in ${sheetName} has no machineNo`);
+              return;
+            }
+            
+            // Extract machine number from machineNo (e.g., "IMM-01" -> 1)
+            const machineNoMatch = String(row.machineNo).match(/IMM[-\s]?0?(\d+)/i);
+            if (!machineNoMatch) {
+              console.log(`⚠️ Could not parse machine number from: ${row.machineNo}`);
+              return;
+            }
+            
+            const rowMachineNum = parseInt(machineNoMatch[1]);
+            
+            // Group rows by machine number within this sheet
+            if (!sheetMachineMap.has(rowMachineNum)) {
+              sheetMachineMap.set(rowMachineNum, {});
+            }
+            
+            const machineData = sheetMachineMap.get(rowMachineNum);
+            
+            // Store data by type (a or b)
+            if (type === 'a') {
+              // For sheet 'a', combine data from multiple rows if needed
+              if (!machineData.a) {
+                machineData.a = { ...row };
+              } else {
+                // Merge data - prefer non-empty values
+                Object.keys(row).forEach(key => {
+                  if (row[key] !== null && row[key] !== undefined && row[key] !== '') {
+                    machineData.a[key] = row[key];
+                  }
+                });
+              }
+            } else {
+              // For sheet 'b', combine changeover data
+              if (!machineData.b) {
+                machineData.b = { ...row };
+              } else {
+                // Merge data - prefer non-empty values
+                Object.keys(row).forEach(key => {
+                  if (row[key] !== null && row[key] !== undefined && row[key] !== '') {
+                    machineData.b[key] = row[key];
+                  }
+                });
+              }
+            }
+            
+            // Store operator name if available
+            if (row.operatorName && !machineData.operatorName) {
+              machineData.operatorName = row.operatorName;
+            }
+          });
+          
+          // Now add each machine from this sheet to the global groups
+          sheetMachineMap.forEach((machineData, rowMachineNum) => {
+            if (!machineGroups.has(rowMachineNum)) {
+              machineGroups.set(rowMachineNum, {});
+            }
+            
+            const group = machineGroups.get(rowMachineNum)!;
+            
+            // Merge data from this sheet into the group
+            if (machineData.a) {
+              if (!group.a) {
+                group.a = machineData.a;
+              } else {
+                // Merge - prefer non-empty values from new data
+                Object.keys(machineData.a).forEach(key => {
+                  if (machineData.a[key] !== null && machineData.a[key] !== undefined && machineData.a[key] !== '') {
+                    group.a[key] = machineData.a[key];
+                  }
+                });
+              }
+            }
+            
+            if (machineData.b) {
+              if (!group.b) {
+                group.b = machineData.b;
+              } else {
+                // Merge - prefer non-empty values from new data
+                Object.keys(machineData.b).forEach(key => {
+                  if (machineData.b[key] !== null && machineData.b[key] !== undefined && machineData.b[key] !== '') {
+                    group.b[key] = machineData.b[key];
+                  }
+                });
+              }
+            }
+            
+            if (machineData.operatorName && !group.operatorName) {
+              group.operatorName = machineData.operatorName;
+            }
+          });
+          
+          console.log(`📊 Sheet ${sheetName}: Processed ${sheetMachineMap.size} machines`);
+        });
+        
+        console.log(`📊 Total machine groups after processing all sheets: ${machineGroups.size}`);
+        
+        // Transform to final structure
+        const machines: any[] = [];
+        machineGroups.forEach((group, machineNum) => {
+          // Skip machines 9 and 10
+          if (machineNum === 9 || machineNum === 10) return;
+          
+          const machineNo = machineNum < 10 ? `IMM-0${machineNum}` : `IMM-${machineNum}`;
+          
+          // Transform current production (sheet a)
+          const currentProd = group.a ? {
+            product: group.a.product || '',
+            cavity: group.a.cavity || 0,
+            targetCycle: group.a.targetCycle || 0,
+            targetRunTime: group.a.targetRunTime || 720,
+            partWeight: group.a.partWeight || 0,
+            actualPartWeight: group.a.actualPartWeight || 0,
+            actualCycle: group.a.actualCycle || 0,
+            targetQty: group.a.targetQty || 0,
+            actualQty: group.a.actualQty || 0,
+            okProdQty: group.a.okProdQty || 0,
+            okProdKgs: group.a.okProdKgs || 0,
+            okProdPercent: group.a.okProdPercent || 0,
+            rejKgs: group.a.rejKgs || 0,
+            runTime: group.a.runTime || 0,
+            downTime: group.a.downTime || 0,
+            stoppageReason: group.a.stoppageReason || '',
+            startTime: String(group.a.shotsStart || ''),
+            endTime: String(group.a.shotsEnd || ''),
+            totalTime: group.a.stoppageTotalTime || 0,
+            mouldChange: group.a.mouldChange || '',
+            remark: group.a.remark || ''
+          } : {
+            product: '', cavity: 0, targetCycle: 0, targetRunTime: 720,
+            partWeight: 0, actualPartWeight: 0, actualCycle: 0,
+            targetQty: 0, actualQty: 0, okProdQty: 0, okProdKgs: 0, okProdPercent: 0,
+            rejKgs: 0, runTime: 0, downTime: 0, stoppageReason: '',
+            startTime: '', endTime: '', totalTime: 0, mouldChange: '', remark: ''
+          };
+          
+          // Transform changeover (sheet b)
+          const changeover = group.b ? {
+            product: group.b.product || '',
+            cavity: group.b.cavity || 0,
+            targetCycle: group.b.targetCycle || 0,
+            targetRunTime: group.b.targetRunTime || 0,
+            partWeight: group.b.partWeight || 0,
+            actualPartWeight: group.b.actualPartWeight || 0,
+            actualCycle: group.b.actualCycle || 0,
+            targetQty: group.b.targetQty || 0,
+            actualQty: group.b.actualQty || 0,
+            okProdQty: group.b.okProdQty || 0,
+            okProdKgs: group.b.okProdKgs || 0,
+            okProdPercent: group.b.okProdPercent || 0,
+            rejKgs: group.b.rejKgs || 0,
+            runTime: group.b.runTime || 0,
+            downTime: group.b.downTime || 0,
+            stoppageReason: group.b.stoppageReason || '',
+            startTime: String(group.b.shotsStart || ''),
+            endTime: String(group.b.shotsEnd || ''),
+            totalTime: group.b.stoppageTotalTime || 0,
+            mouldChange: group.b.mouldChange || '',
+            remark: group.b.remark || ''
+          } : {
+            product: '', cavity: 0, targetCycle: 0, targetRunTime: 0,
+            partWeight: 0, actualPartWeight: 0, actualCycle: 0,
+            targetQty: 0, actualQty: 0, okProdQty: 0, okProdKgs: 0, okProdPercent: 0,
+            rejKgs: 0, runTime: 0, downTime: 0, stoppageReason: '',
+            startTime: '', endTime: '', totalTime: 0, mouldChange: '', remark: ''
+          };
+          
+          machines.push({
+            machineNo,
+            operatorName: group.operatorName || `Operator ${machineNum}`,
+            currentProduction: currentProd,
+            changeover: changeover
+          });
+        });
+        
+        return [{
+          date: summaryMeta.date || new Date().toISOString().split('T')[0],
+          shift: summaryMeta.shift || 'DAY',
+          shiftIncharge: summaryMeta.shiftIncharge || 'CHANDAN/DHIRAJ',
+          machines: machines.sort((a, b) => {
+            const numA = parseInt(a.machineNo.replace('IMM-', ''));
+            const numB = parseInt(b.machineNo.replace('IMM-', ''));
+            return numA - numB;
+          })
+        }];
+      }
+    };
+  };
+
+  // Transform extracted DPR results to final structure with summary calculation
+  const transformDPRResults = (data: any[], metadata: Map<string, any>): any => {
+    if (data.length === 0) return null;
+    
+    const dprData = data[0]; // combineResults returns array with single DPR object
+    
+    // Calculate summary from machine data
+    const machines = dprData.machines || [];
+    const targetQty = machines.reduce((sum: number, m: any) => 
+      sum + (m.currentProduction?.targetQty || 0) + (m.changeover?.targetQty || 0), 0);
+    const actualQty = machines.reduce((sum: number, m: any) => 
+      sum + (m.currentProduction?.actualQty || 0) + (m.changeover?.actualQty || 0), 0);
+    const okProdQty = machines.reduce((sum: number, m: any) => 
+      sum + (m.currentProduction?.okProdQty || 0) + (m.changeover?.okProdQty || 0), 0);
+    const okProdKgs = machines.reduce((sum: number, m: any) => 
+      sum + (m.currentProduction?.okProdKgs || 0) + (m.changeover?.okProdKgs || 0), 0);
+    const rejKgs = machines.reduce((sum: number, m: any) => 
+      sum + (m.currentProduction?.rejKgs || 0) + (m.changeover?.rejKgs || 0), 0);
+    const runTime = machines.reduce((sum: number, m: any) => 
+      sum + (m.currentProduction?.runTime || 0) + (m.changeover?.runTime || 0), 0);
+    const downTime = machines.reduce((sum: number, m: any) => 
+      sum + (m.currentProduction?.downTime || 0) + (m.changeover?.downTime || 0), 0);
+    
+    return {
+      id: `${dprData.date}-${dprData.shift}-${Date.now()}`,
+      date: dprData.date,
+      shift: dprData.shift,
+      shiftIncharge: dprData.shiftIncharge,
+      machines: dprData.machines,
+      summary: {
+        targetQty,
+        actualQty,
+        okProdQty,
+        okProdKgs,
+        okProdPercent: actualQty > 0 ? (okProdQty / actualQty * 100) : 0,
+        rejKgs,
+        runTime,
+        downTime
+      }
+    };
   };
 
   const parseExcelFile = async (file: File) => {
     setLoading(true);
     try {
       const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, { type: 'array' });
-      const sheetName = workbook.SheetNames[0];
+      const workbook = XLSX.read(data, { 
+        type: 'array',
+        cellDates: false,
+        cellNF: false,
+        cellText: false,
+        cellFormula: false,
+        cellStyles: false,
+        cellHTML: false
+      });
+
+      // Filter workbook to only include selected sheets
+      if (selectedSheets.size > 0 && selectedSheets.size < workbook.SheetNames.length) {
+        // Create a filtered workbook with only selected sheets
+        const filteredWorkbook: XLSX.WorkBook = {
+          SheetNames: workbook.SheetNames.filter(name => selectedSheets.has(name)),
+          Sheets: {} as { [sheet: string]: XLSX.WorkSheet }
+        };
+        workbook.SheetNames.forEach(name => {
+          if (selectedSheets.has(name)) {
+            filteredWorkbook.Sheets[name] = workbook.Sheets[name];
+          }
+        });
+        // Use filtered workbook
+        Object.assign(workbook, filteredWorkbook);
+      }
+
+      // Check if this is a multi-sheet data type (e.g., DPR)
+      // If DPR type or workbook has multiple sheets that match DPR pattern, use multi-sheet parser
+      if (dataType === 'dpr' || (workbook.SheetNames.length > 1 && /summary|^\d+[ab]$/i.test(workbook.SheetNames.join('|')))) {
+        const dprConfig = getDPRMultiSheetConfig(workbook);
+        const result = await parseMultiSheetWorkbook(workbook, dprConfig);
+        
+        if (result.errors.length > 0) {
+          console.warn('⚠️ DPR parsing errors:', result.errors);
+          setImportStatus({ 
+            type: 'error', 
+            message: `Found ${result.errors.length} errors. Check console for details.` 
+          });
+        }
+        
+        if (result.data.length > 0) {
+          // Transform to DPR structure
+          const dprData = transformDPRResults(result.data, result.metadata);
+          setMappedData(prev => ({ ...prev, dpr: dprData }));
+          setImportStatus({ 
+            type: 'success', 
+            message: `✅ Parsed DPR: ${dprData.machines?.length || 0} machines, Date: ${dprData.date}, Shift: ${dprData.shift}` 
+          });
+        } else {
+          setImportStatus({ type: 'error', message: 'No DPR data extracted. Check sheet structure.' });
+        }
+        
+        setLoading(false);
+        return;
+      }
+
+      // For single-sheet files, use the first (or only) selected sheet
+      const sheetName = workbook.SheetNames.find(name => selectedSheets.size === 0 || selectedSheets.has(name)) || workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+        header: 1,
+        raw: true,
+        defval: ''
+      }) as any[][];
 
-      if (jsonData.length === 0) throw new Error('Empty sheet');
+      // Try alternative approach: read as text first to preserve formatting
+      const jsonDataAsText = XLSX.utils.sheet_to_json(worksheet, { 
+        header: 1,
+        raw: false,
+        defval: ''
+      }) as any[][];
+      
+      console.log('🔍 Raw Excel data (raw=true):', jsonData.slice(0, 3));
+      console.log('🔍 Text Excel data (raw=false):', jsonDataAsText.slice(0, 3));
+      
+      // Use the text version for qty_meter fields to preserve decimal formatting
+      const finalData = jsonData.map((row, rowIdx) => {
+        if (rowIdx === 0) return row; // Keep headers as is
+        
+        return row.map((cell, colIdx) => {
+          const header = jsonData[0][colIdx];
+          if (header === 'Qty/Meter' || header === 'Qty/Meter 2' || 
+              header === 'QTY/METER' || header === 'QTY/METER 2' ||
+              header === 'Qty/Meter.' || header === 'Qty/Meter 2.' ||
+              header === 'Qty Meter' || header === 'Qty Meter 2' ||
+              header === 'QTY METER' || header === 'QTY METER 2' ||
+              header === 'Quantity/Meter' || header === 'Quantity/Meter 2' ||
+              header === 'Quantity per Meter' || header === 'Quantity per Meter 2') {
+            // Use text version for qty_meter fields
+            const textValue = jsonDataAsText[rowIdx]?.[colIdx];
+            console.log(`🔍 Qty/Meter field "${header}": raw=${cell}, text=${textValue}`);
+            return textValue !== undefined ? textValue : cell;
+          }
+          return cell;
+        });
+      });
+      
+      console.log('🔍 Raw Excel data:', finalData.slice(0, 3));
+      
+              // Debug: Check specific qty_meter values in the raw data
+        if (finalData.length > 1) {
+          const headers = finalData[0];
+          const qtyMeterIndices: number[] = [];
+          headers.forEach((header, idx) => {
+            if (header === 'Qty/Meter' || header === 'Qty/Meter 2' || 
+                header === 'QTY/METER' || header === 'QTY/METER 2' ||
+                header === 'Qty/Meter.' || header === 'Qty/Meter 2.' ||
+                header === 'Qty Meter' || header === 'Qty Meter 2' ||
+                header === 'QTY METER' || header === 'QTY METER 2' ||
+                header === 'Quantity/Meter' || header === 'Quantity/Meter 2' ||
+                header === 'Quantity per Meter' || header === 'Quantity per Meter 2') {
+              qtyMeterIndices.push(idx);
+            }
+          });
+          if (qtyMeterIndices.length > 0) {
+            console.log('🔍 Found qty_meter column at index:', qtyMeterIndices);
+            console.log('🔍 Sample qty_meter values from raw data:');
+            finalData.slice(1, 4).forEach((row, idx) => {
+              if (row[qtyMeterIndices[0]] !== undefined) {
+                console.log(`🔍 Row ${idx + 1}: "${row[qtyMeterIndices[0]]}" (Type: ${typeof row[qtyMeterIndices[0]]})`);
+              }
+            });
+          }
+        }
+      
+      // Debug: Check worksheet properties and cell contents
+      console.log('🔍 Worksheet properties:', {
+        '!ref': worksheet['!ref'],
+        '!cols': worksheet['!cols'],
+        '!rows': worksheet['!rows']
+      });
+      
+      // Debug: Check specific cell contents for qty_meter columns
+      if (worksheet['!ref']) {
+        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        console.log('🔍 Worksheet range:', range);
+        
+        // Find qty_meter columns
+        const headers = finalData[0];
+        const qtyMeterIndices: number[] = [];
+        headers.forEach((header, idx) => {
+          if (header === 'Qty/Meter' || header === 'Qty/Meter 2' || 
+              header === 'QTY/METER' || header === 'QTY/METER 2' ||
+              header === 'Qty/Meter.' || header === 'Qty/Meter 2.' ||
+              header === 'Qty Meter' || header === 'Qty Meter 2' ||
+              header === 'QTY METER' || header === 'QTY METER 2' ||
+              header === 'Quantity/Meter' || header === 'Quantity/Meter 2' ||
+              header === 'Quantity per Meter' || header === 'Quantity per Meter 2') {
+            qtyMeterIndices.push(idx);
+          }
+        });
+        
+        console.log('🔍 Qty/Meter column indices:', qtyMeterIndices);
+        
+        // Check a few cells in qty_meter columns
+        qtyMeterIndices.forEach(colIdx => {
+          for (let row = range.s.r + 1; row <= Math.min(range.e.r, range.s.r + 3); row++) {
+            const cellAddress = XLSX.utils.encode_cell({r: row, c: colIdx});
+            const cell = worksheet[cellAddress];
+            if (cell) {
+              console.log(`🔍 Cell ${cellAddress} (${headers[colIdx]}):`, {
+                value: cell.v,
+                type: cell.t,
+                format: cell.z,
+                raw: cell
+              });
+            }
+          }
+        });
+      }
 
-      const headerRow = (jsonData[0] as string[]).map(h => (h ?? '').toString());
-      const dataRows = jsonData.slice(1);
+      if (finalData.length === 0) throw new Error('Empty sheet');
+
+      const headerRow = (finalData[0] as string[]).map(h => (h ?? '').toString());
+      const dataRows = finalData.slice(1);
 
       const rows: ExcelRow[] = dataRows.map(row => {
         const obj: ExcelRow = {};
-        headerRow.forEach((h, i) => { obj[h] = row[i] ?? ''; });
+        headerRow.forEach((h, i) => { 
+          let value = row[i] ?? '';
+          
+          // Special handling for qty_meter fields to preserve decimals
+          if (h === 'Qty/Meter' || h === 'Qty/Meter 2' || 
+              h === 'QTY/METER' || h === 'QTY/METER 2' ||
+              h === 'Qty/Meter.' || h === 'Qty/Meter 2.' ||
+              h === 'Qty Meter' || h === 'Qty Meter 2' ||
+              h === 'QTY METER' || h === 'QTY METER 2' ||
+              h === 'Quantity/Meter' || h === 'Quantity/Meter 2' ||
+              h === 'Quantity per Meter' || h === 'Quantity per Meter 2') {
+            console.log(`🔍 Raw Excel value for ${h}:`, row[i], 'Type:', typeof row[i], 'Raw:', row[i]);
+            
+            // Force conversion to preserve decimal precision
+            if (value !== '' && value !== null && value !== undefined) {
+              // Convert to string first, then parse to preserve decimals
+              const strValue = String(value);
+              console.log(`🔍 String conversion: "${row[i]}" -> "${strValue}"`);
+              
+              // Try to extract decimal places from the string representation
+              const decimalMatch = strValue.match(/\.(\d+)/);
+              if (decimalMatch) {
+                console.log(`🔍 Found decimal places: ${decimalMatch[1]}`);
+                const parsed = parseFloat(strValue);
+                if (!isNaN(parsed)) {
+                  value = parsed;
+                  console.log(`🔍 Final parsed value:`, value, 'Type:', typeof value);
+                }
+              } else {
+                // No decimal places found, but still try to parse
+                const parsed = parseFloat(strValue);
+                if (!isNaN(parsed)) {
+                  value = parsed;
+                  console.log(`🔍 No decimals found, parsed as:`, value, 'Type:', typeof value);
+                }
+              }
+            }
+            
+            // Additional debugging: Check if the original value had decimal places
+            if (typeof row[i] === 'number') {
+              console.log(`🔍 Original number value: ${row[i]}, has decimals: ${row[i] % 1 !== 0}`);
+            }
+          }
+          
+          obj[h] = value;
+        });
         return obj;
       });
 
@@ -320,11 +2002,19 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
       setFullRows(rows); // ✅ keep full dataset
       setPreview(rows.slice(0, 10));
 
-      // First mapping uses inferred type, not current selection, to avoid garbage
-      const typeToMap = scoreHeaders(headerRow);
-      setDataType(typeToMap);
+      // Use user's manual selection if available, otherwise auto-detect
+      let typeToMap: DataType;
+      if (dataType !== 'machines') { // If user has manually selected a type
+        typeToMap = dataType;
+        console.log(`🔍 Using user's manual selection: ${typeToMap}`);
+      } else {
+        typeToMap = scoreHeaders(headerRow);
+        setDataType(typeToMap);
+        console.log(`🔍 Auto-detected type: ${typeToMap}`);
+      }
+      
       await mapDataToFormat(rows, typeToMap);
-      setImportStatus({ type: 'info', message: `Detected "${typeToMap.replace('_', ' ')}" format from headers.` });
+      setImportStatus({ type: 'info', message: `Using "${typeToMap.replace('_', ' ')}" format.` });
     } catch (err) {
       console.error(err);
       setImportStatus({ type: 'error', message: 'Error parsing Excel file. Please check the format.' });
@@ -427,6 +2117,10 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
     const availableColumns = Object.keys(data[0] || {});
     const flexibleMapping: Record<string, string> = {};
 
+    console.log('🔍 Mapping data for type:', type);
+    console.log('🔍 Available columns:', availableColumns);
+    console.log('🔍 Template mapping:', mapping);
+
     // Build flexible header mapping
     Object.entries(mapping).forEach(([expected, dbField]) => {
       if (availableColumns.includes(expected)) flexibleMapping[expected] = dbField;
@@ -436,12 +2130,18 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
       }
     });
 
+    console.log('🔍 Flexible mapping:', flexibleMapping);
+
     // Raw materials special
     if (type === 'raw_materials') return mapRawMaterialsData(data);
     if (type === 'packing_materials') return mapPackingMaterialsData(data);
 
-    const mappedItems = data.map(row => {
+    const mappedItems = data.map((row, index) => {
       const mapped: any = {};
+      
+      if (index < 3) { // Only log first 3 rows to avoid spam
+        console.log(`🔍 Processing row ${index}:`, row);
+      }
 
       Object.entries(flexibleMapping).forEach(([excelCol, dbCol]) => {
         let value = row[excelCol];
@@ -492,6 +2192,54 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           if (dbCol === 'date' && value && typeof value === 'number') {
             const d = XLSX.SSF.parse_date_code(value);
             value = `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+          }
+        }
+
+
+
+        // FG BOM quantity fields need numeric conversion with precision handling
+        if (type === 'fg_bom') {
+          console.log('🔍 FG BOM ROW DATA:', row);
+          console.log('🔍 FG BOM HEADERS:', Object.keys(row));
+          console.log('🔍 FG BOM MAPPING:', flexibleMapping);
+          
+          if (['qty_meter', 'qty_meter_2', 'sfg_1_qty', 'sfg_2_qty', 'cnt_qty', 'poly_qty'].includes(dbCol)) {
+            console.log('🔍 Processing field:', dbCol, 'Excel value:', value, 'Type:', typeof value);
+            if (value === '' || value === null || value === undefined) {
+              value = null;
+            } else {
+              const parsed = parseFloat(value);
+              if (isNaN(parsed)) {
+                value = null;
+              } else {
+                // Limit to exactly 2 decimal places without rounding
+                value = Math.floor(parsed * 100) / 100;
+              }
+            }
+            console.log('🔍 After precision conversion:', value, 'Type:', typeof value);
+          }
+        }
+
+        // LOCAL BOM quantity fields need numeric conversion with precision handling
+        if (type === 'local_bom') {
+          console.log('🔍 LOCAL BOM ROW DATA:', row);
+          console.log('🔍 LOCAL BOM HEADERS:', Object.keys(row));
+          console.log('🔍 LOCAL BOM MAPPING:', flexibleMapping);
+          
+          if (['qty_meter', 'qty_meter_2', 'sfg_1_qty', 'sfg_2_qty', 'cnt_qty', 'poly_qty'].includes(dbCol)) {
+            console.log('🔍 Processing field:', dbCol, 'Excel value:', value, 'Type:', typeof value);
+            if (value === '' || value === null || value === undefined) {
+              value = null;
+            } else {
+              const parsed = parseFloat(value);
+              if (isNaN(parsed)) {
+                value = null;
+              } else {
+                // Limit to exactly 2 decimal places without rounding
+                value = Math.floor(parsed * 100) / 100;
+              }
+            }
+            console.log('🔍 After precision conversion:', value, 'Type:', typeof value);
           }
         }
 
@@ -556,7 +2304,11 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
       }
 
       return mapped;
-    }).filter(item => {
+    });
+
+    console.log('🔍 Mapped items before filtering:', mappedItems.slice(0, 3));
+
+    const filteredItems = mappedItems.filter(item => {
       // Required field check by type
       switch (type as DataType) {
         case 'machines':
@@ -578,26 +2330,57 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
         case 'lines':
           return !!(item.line_id && String(item.line_id).trim());
       
+        case 'bom_masters':
+          return !!(item.sfg_code && String(item.sfg_code).trim());
+      
+        case 'fg_bom':
+          return !!(item.sl_no && item.item_code && String(item.sl_no).trim() && String(item.item_code).trim());
+      
+        case 'local_bom':
+          return !!(item.sl_no && item.item_code && String(item.sl_no).trim() && String(item.item_code).trim());
+      
+        case 'sfg_bom':
+          return !!(item.sl_no && item.sfg_code && String(item.sl_no).trim() && String(item.sfg_code).trim());
+      
         case 'schedules':
         default:
           return !!(item.schedule_id && String(item.schedule_id).trim());
       }
     });
 
-    setMappedData(prev => ({ ...prev, [type]: mappedItems } as ImportData));
+    console.log('🔍 Filtered items:', filteredItems.slice(0, 3));
+    console.log('🔍 Total items after filtering:', filteredItems.length);
+
+    setMappedData(prev => {
+      const newMappedData = { ...prev, [type]: filteredItems } as ImportData;
+          console.log('🔍 Setting mapped data for', type, ':', filteredItems.length, 'items');
+    console.log('🔍 Sample filtered items:', filteredItems.slice(0, 3));
+    console.log('🔍 New mapped data state:', newMappedData);
+    return newMappedData;
+    });
     setImportStatus({ type: '', message: '' });
   };
 
   // ----------------------------------------------------------------------------
   // Import
   const handleImport = async () => {
-    if (mappedData[dataType].length === 0) {
-      setImportStatus({ type: 'error', message: 'No valid data to import.' });
-      return;
+    // For DPR, check if dpr object exists
+    if (dataType === 'dpr') {
+      if (!mappedData.dpr) {
+        setImportStatus({ type: 'error', message: 'No valid DPR data to import.' });
+        return;
+      }
+    } else {
+      // For other types, check array length
+      if (!Array.isArray(mappedData[dataType]) || mappedData[dataType].length === 0) {
+        setImportStatus({ type: 'error', message: 'No valid data to import.' });
+        return;
+      }
     }
 
     // Guard: if user forced a different type than detected & headers mismatch, warn
-    if (headers.length && dataType !== inferredType) {
+    // But only if the user hasn't manually selected a type (i.e., still using default 'machines')
+    if (headers.length && dataType !== inferredType && dataType === 'machines') {
       setImportStatus({
         type: 'error',
         message: `This file looks like "${inferredType.replace('_', ' ')}". Switch to that type or upload a matching template for "${dataType.replace('_', ' ')}".`
@@ -737,6 +2520,50 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           
           // Import lines
           result = toCreate.length ? await lineAPI.bulkCreate(toCreate) : [];
+          break;
+        }
+        case 'maintenance_checklists': {
+          const existing = await maintenanceChecklistAPI.getAll();
+          const existingNames = new Set(existing.map(c => `${c.name}-${c.line_id || c.machine_id}`));
+          
+          // Group the Excel data by checklist name and line/machine
+          const checklistGroups = new Map();
+          
+          mappedData.maintenance_checklists?.forEach((row: any) => {
+            const key = `${row.name}-${row.line_id || row.machine_id}`;
+            if (!checklistGroups.has(key)) {
+              checklistGroups.set(key, {
+                name: row.name,
+                description: row.name,
+                checklist_type: row.checklist_type || 'general',
+                line_id: row.line_id || null,
+                machine_id: row.machine_id || null,
+                unit: row.unit || 'Unit 1',
+                items: [],
+                estimated_duration_minutes: row.estimated_duration_minutes || 30
+              });
+            }
+            
+            // Add task item to the checklist
+            if (row.task_description) {
+              checklistGroups.get(key).items.push({
+                id: row.item_id || `item_${checklistGroups.get(key).items.length + 1}`,
+                task: row.task_description,
+                completed: false,
+                frequency: row.frequency || 'daily',
+                priority: row.priority || 'medium',
+                category: row.category || 'general'
+              });
+            }
+          });
+          
+          const toCreate = Array.from(checklistGroups.values()).filter(checklist => {
+            const key = `${checklist.name}-${checklist.line_id || checklist.machine_id}`;
+            if (existingNames.has(key)) { duplicateCount++; return false; }
+            return true;
+          });
+          
+          result = toCreate.length ? await maintenanceChecklistAPI.bulkCreate(toCreate) : [];
           
           // Update machine line assignments dynamically
           if (result.length > 0) {
@@ -790,6 +2617,183 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           
           break;
         }
+        case 'bom_masters': {
+          // For backward compatibility, treat as SFG BOM
+          const existing = await bomMasterAPI.getByCategory('SFG');
+          const existingCodes = new Set(existing.map(b => b.sfg_code));
+          const toCreate = mappedData.bom_masters.filter(b => {
+            const code = b.sfg_code;
+            if (existingCodes.has(code)) { duplicateCount++; return false; }
+            return true;
+          });
+          
+          // Create SFG BOM masters one by one
+          const createdBOMs = [];
+          for (const bom of toCreate) {
+            try {
+              const bomData = {
+                status: 'draft' as const,
+                created_by: user?.username || 'excel_import',
+                // Common fields
+                sl_no: bom.sl_no || 0,
+                // SFG-specific fields
+                item_name: bom.item_name || '',
+                sfg_code: bom.sfg_code || '',
+                pcs: bom.pcs || 0,
+                part_weight_gm_pcs: bom.part_weight_gm_pcs || 0,
+                colour: bom.colour || '',
+                hp_percentage: bom.hp_percentage || 0,
+                icp_percentage: bom.icp_percentage || 0,
+                rcp_percentage: bom.rcp_percentage || 0,
+                ldpe_percentage: bom.ldpe_percentage || 0,
+                gpps_percentage: bom.gpps_percentage || 0,
+                mb_percentage: bom.mb_percentage || 0
+              };
+              const created = await bomMasterAPI.create(bomData);
+              if (created) createdBOMs.push(created);
+            } catch (error) {
+              console.warn('Failed to create SFG BOM master:', bom.sfg_code, error);
+              duplicateCount++;
+            }
+          }
+          result = createdBOMs;
+          break;
+        }
+        case 'sfg_bom': {
+          // Import SFG BOM data
+          const existing = await bomMasterAPI.getByCategory('SFG');
+          const existingCodes = new Set(existing.map(b => b.sfg_code));
+          const toCreate = mappedData.sfg_bom.filter(b => {
+            const code = b.sfg_code;
+            if (existingCodes.has(code)) { duplicateCount++; return false; }
+            return true;
+          });
+          
+          // Create SFG BOM masters one by one
+          const createdBOMs = [];
+          for (const bom of toCreate) {
+            try {
+              const bomData = {
+                status: 'draft' as const,
+                created_by: user?.username || 'excel_import',
+                // Common fields
+                sl_no: bom.sl_no || 0,
+                // SFG-specific fields
+                item_name: bom.item_name || '',
+                sfg_code: bom.sfg_code || '',
+                pcs: bom.pcs || 0,
+                part_weight_gm_pcs: bom.part_weight_gm_pcs || 0,
+                colour: bom.colour || '',
+                hp_percentage: bom.hp_percentage || 0,
+                icp_percentage: bom.icp_percentage || 0,
+                rcp_percentage: bom.rcp_percentage || 0,
+                ldpe_percentage: bom.ldpe_percentage || 0,
+                gpps_percentage: bom.gpps_percentage || 0,
+                mb_percentage: bom.mb_percentage || 0
+              };
+              const created = await bomMasterAPI.create(bomData);
+              if (created) createdBOMs.push(created);
+            } catch (error) {
+              console.warn('Failed to create SFG BOM master:', bom.sfg_code, error);
+              duplicateCount++;
+            }
+          }
+          result = createdBOMs;
+          break;
+        }
+
+        case 'fg_bom': {
+          // Import FG BOM data
+          const existing = await bomMasterAPI.getByCategory('FG');
+          const existingCodes = new Set(existing.map(b => b.item_code));
+          const toCreate = mappedData.fg_bom.filter(b => {
+            const code = b.item_code;
+            if (existingCodes.has(code)) { duplicateCount++; return false; }
+            return true;
+          });
+          
+          // Create FG BOM masters one by one
+          const createdBOMs = [];
+          for (const bom of toCreate) {
+            try {
+              const bomData = {
+                status: 'draft' as const,
+                created_by: user?.username || 'excel_import',
+                // Common fields
+                sl_no: bom.sl_no || 0,
+                // FG-specific fields
+                item_code: bom.item_code || '',
+                party_name: bom.party_name || '',
+                pack_size: bom.pack_size || '',
+                sfg_1: bom.sfg_1 || '',
+                sfg_1_qty: bom.sfg_1_qty || 0,
+                sfg_2: bom.sfg_2 || '',
+                sfg_2_qty: bom.sfg_2_qty || 0,
+                cnt_code: bom.cnt_code || '',
+                cnt_qty: bom.cnt_qty || 0,
+                polybag_code: bom.polybag_code || '',
+                poly_qty: bom.poly_qty || 0,
+                bopp_1: bom.bopp_1 || '',
+                qty_meter: bom.qty_meter ?? 0,
+                bopp_2: bom.bopp_2 || '',
+                qty_meter_2: bom.qty_meter_2 ?? 0
+              };
+              const created = await bomMasterAPI.create(bomData);
+              if (created) createdBOMs.push(created);
+            } catch (error) {
+              console.warn('Failed to create FG BOM master:', bom.item_code, error);
+              duplicateCount++;
+            }
+          }
+          result = createdBOMs;
+          break;
+        }
+
+        case 'local_bom': {
+          // Import LOCAL BOM data
+          const existing = await bomMasterAPI.getByCategory('LOCAL');
+          const existingCodes = new Set(existing.map(b => b.item_code));
+          const toCreate = mappedData.local_bom.filter(b => {
+            const code = b.item_code;
+            if (existingCodes.has(code)) { duplicateCount++; return false; }
+            return true;
+          });
+          
+          // Create LOCAL BOM masters one by one
+          const createdBOMs = [];
+          for (const bom of toCreate) {
+            try {
+              const bomData = {
+                status: 'draft' as const,
+                created_by: user?.username || 'excel_import',
+                // Common fields
+                sl_no: bom.sl_no || 0,
+                // LOCAL-specific fields
+                item_code: bom.item_code || '',
+                pack_size: bom.pack_size || '',
+                sfg_1: bom.sfg_1 || '',
+                sfg_1_qty: bom.sfg_1_qty || 0,
+                sfg_2: bom.sfg_2 || '',
+                sfg_2_qty: bom.sfg_2_qty || 0,
+                cnt_code: bom.cnt_code || '',
+                cnt_qty: bom.cnt_qty || 0,
+                polybag_code: bom.polybag_code || '',
+                poly_qty: bom.poly_qty || 0,
+                bopp_1: bom.bopp_1 || '',
+                qty_meter: bom.qty_meter ?? 0,
+                bopp_2: bom.bopp_2 || '',
+                qty_meter_2: bom.qty_meter_2 ?? 0
+              };
+              const created = await bomMasterAPI.create(bomData);
+              if (created) createdBOMs.push(created);
+            } catch (error) {
+              console.warn('Failed to create LOCAL BOM master:', bom.item_code, error);
+              duplicateCount++;
+            }
+          }
+          result = createdBOMs;
+          break;
+        }
       }
 
       const newRecords = result?.length || 0;
@@ -807,7 +2811,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
         setFile(null);
         setPreview([]);
         setFullRows([]);
-        setMappedData({ machines: [], molds: [], schedules: [], raw_materials: [], packing_materials: [], lines: [] });
+        setMappedData({ machines: [], molds: [], schedules: [], raw_materials: [], packing_materials: [], lines: [], maintenance_checklists: [], bom_masters: [], sfg_bom: [], fg_bom: [], local_bom: [] });
         setHeaders([]);
         fileInputRef.current && (fileInputRef.current.value = '');
       }, 1000);
@@ -822,7 +2826,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
   // ----------------------------------------------------------------------------
   // Template download (uses canonical headers)
   const downloadTemplate = () => {
-    const headers = CANONICAL_HEADERS[dataType];
+    const headers = CANONICAL_HEADERS[dataType] || [];
     const sampleRows: any[] = (() => {
       switch (dataType) {
         case 'machines':
@@ -859,6 +2863,32 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             ['1', 'TOYO-1', 'WITT-1', 'Hoist-1', 'CONY-1', 'Active', 'Unit 1'],
             ['2', 'JSW-1', 'WITT-2', 'Hoist-2', 'CONY-2', 'Active', 'Unit 1']
           ];
+        case 'maintenance_checklists':
+          return [
+            ['Daily', 'Machine Check', 'Check oil levels', 'High', 'Every 8 hours', 'Active'],
+            ['Weekly', 'Safety Check', 'Inspect safety guards', 'Medium', 'Every Monday', 'Active']
+          ];
+        case 'bom_masters':
+        case 'sfg_bom':
+          return [
+            [1, 'Sample SFG Item 1', 'SFG-001', 100, 25.5, 'Red', 20, 15, 10, 30, 20, 5],
+            [2, 'Sample SFG Item 2', 'SFG-002', 50, 18.2, 'Blue', 25, 12, 8, 35, 15, 5],
+            [3, 'Sample SFG Item 3', 'SFG-003', 75, 32.1, 'Green', 18, 20, 12, 25, 20, 5]
+          ];
+
+        case 'fg_bom':
+          return [
+            [1, 'FG-001', 'Party A', '500ml', 'SFG-001', 2, 'SFG-002', 1, 'CNT-001', 100, 'PB-500ML', 1000, 'BOPP-001', 1.20, 'BOPP-002', 0.80],
+            [2, 'FG-002', 'Party B', '1L', 'SFG-003', 3, 'SFG-001', 1, 'CNT-002', 50, 'PB-1L', 500, 'BOPP-003', 1.50, 'BOPP-004', 0.90]
+          ];
+
+        case 'local_bom':
+          return [
+            [1, 'LOCAL-001', '250ml', 'SFG-001', 1, 'SFG-002', 0.5, 'CNT-003', 200, 'PB-250ML', 2000, 'BOPP-005', 25, 'BOPP-006', 15],
+            [2, 'LOCAL-002', '100ml', 'SFG-003', 0.5, 'SFG-001', 0.25, 'CNT-004', 500, 'PB-100ML', 5000, 'BOPP-007', 10, 'BOPP-008', 5]
+          ];
+        default:
+          return [];
       }
     })();
 
@@ -975,6 +3005,70 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           ]));
           break;
         }
+        case 'bom_masters':
+        case 'sfg_bom': {
+          const rows = await bomMasterAPI.getAll();
+          data = rows.map(item => ([
+            item.sl_no ?? 0, // Sl
+            item.item_name ?? '', // Item Name
+            item.sfg_code ?? '', // SFG-Code
+            item.pcs ?? 0, // Pcs
+            item.part_weight_gm_pcs ?? 0, // Part Wt (gm/pcs)
+            item.colour ?? '', // Colour
+            item.hp_percentage ?? 0, // HP %
+            item.icp_percentage ?? 0, // ICP %
+            item.rcp_percentage ?? 0, // RCP %
+            item.ldpe_percentage ?? 0, // LDPE %
+            item.gpps_percentage ?? 0, // GPPS %
+            item.mb_percentage ?? 0  // MB %
+          ]));
+          break;
+        }
+
+        case 'fg_bom': {
+          const rows = await bomMasterAPI.getByCategory('FG');
+          data = rows.map(item => ([
+            item.sl_no ?? '',
+            item.item_code ?? '',
+            item.party_name ?? '',
+            item.pack_size ?? '',
+            item.sfg_1 ?? '',
+            item.sfg_1_qty ?? '',
+            item.sfg_2 ?? '',
+            item.sfg_2_qty ?? '',
+            item.cnt_code ?? '',
+            item.cnt_qty ?? '',
+            item.polybag_code ?? '',
+            item.poly_qty ?? '',
+            item.bopp_1 ?? '',
+            item.qty_meter ?? '',
+            item.bopp_2 ?? '',
+            item.qty_meter_2 ?? ''
+          ]));
+          break;
+        }
+
+        case 'local_bom': {
+          const rows = await bomMasterAPI.getByCategory('LOCAL');
+          data = rows.map(item => ([
+            item.sl_no ?? '',
+            item.item_code ?? '',
+            item.pack_size ?? '',
+            item.sfg_1 ?? '',
+            item.sfg_1_qty ?? '',
+            item.sfg_2 ?? '',
+            item.sfg_2_qty ?? '',
+            item.cnt_code ?? '',
+            item.cnt_qty ?? '',
+            item.polybag_code ?? '',
+            item.poly_qty ?? '',
+            item.bopp_1 ?? '',
+            item.qty_meter ?? '',
+            item.bopp_2 ?? '',
+            item.qty_meter_2 ?? ''
+          ]));
+          break;
+        }
       }
 
       if (data.length === 0) {
@@ -1002,7 +3096,34 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
 
   // ----------------------------------------------------------------------------
   // Render
-  const currentHeaders = headers.length ? headers : CANONICAL_HEADERS[dataType];
+  // For DPR, currentHeaders should be empty or use a different approach since DPR has a custom structure
+  const currentHeaders = dataType === 'dpr' 
+    ? [] 
+    : (headers.length ? headers : CANONICAL_HEADERS[dataType] || []);
+  
+  // Check if data exists - DPR is an object, other types are arrays
+  const hasData = dataType === 'dpr' 
+    ? !!mappedData.dpr 
+    : (Array.isArray(mappedData[dataType]) && mappedData[dataType].length > 0);
+  
+  const dataLength = dataType === 'dpr' 
+    ? (mappedData.dpr ? 1 : 0)
+    : (Array.isArray(mappedData[dataType]) ? mappedData[dataType].length : 0);
+  
+  // Debug: Log current state
+  console.log('🔍 Current dataType:', dataType);
+  console.log('🔍 Current mappedData:', mappedData);
+  console.log('🔍 mappedData[dataType]:', mappedData[dataType]);
+  if (dataType === 'dpr') {
+    console.log('🔍 DPR data:', mappedData.dpr);
+  } else {
+    console.log('🔍 mappedData[dataType] length:', dataLength);
+    if (dataLength > 0) {
+      console.log('🔍 First mapped item:', mappedData[dataType][0]);
+      console.log('🔍 First item qty_meter:', mappedData[dataType][0]?.qty_meter);
+      console.log('🔍 First item qty_meter_2:', mappedData[dataType][0]?.qty_meter_2);
+    }
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -1026,14 +3147,16 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">Select Data Type</label>
             <div className="flex flex-wrap gap-3">
-              {(['machines', 'molds', 'schedules', 'raw_materials', 'packing_materials', 'lines'] as DataType[]).map(type => (
+              {(['machines', 'molds', 'schedules', 'raw_materials', 'packing_materials', 'lines', 'bom_masters', 'sfg_bom', 'fg_bom', 'local_bom'] as DataType[]).map(type => (
                 <button
                   key={type}
                   onClick={async () => {
+                    console.log('🔍 Data type changed from', dataType, 'to', type);
                     setDataType(type);
                     setSortField(''); setSortDirection('asc');
                     // Re-map from full dataset (never from preview)
                     if (file && fullRows.length > 0) {
+                      console.log('🔍 Re-mapping data for new type:', type);
                       await mapDataToFormat(fullRows, type);
                     }
                   }}
@@ -1049,10 +3172,11 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             </div>
 
             {/* Warn if mismatch between selection and detected headers */}
-            {headers.length > 0 && dataType !== inferredType && (
+            {/* But only if the user hasn't manually selected a type (i.e., still using default 'machines') */}
+            {headers.length > 0 && dataType !== inferredType && dataType === 'machines' && (
               <div className="mt-3 p-3 rounded-md border text-sm bg-yellow-50 text-yellow-900 border-yellow-200 flex items-start">
                 <Info className="w-4 h-4 mr-2 mt-[2px]" />
-                This file looks like “{inferredType.replace('_', ' ')}”. You selected “{dataType.replace('_', ' ')}”.
+                This file looks like "{inferredType.replace('_', ' ')}". You selected "{dataType.replace('_', ' ')}".
                 Import may skip most rows. Switch types or upload a matching template.
               </div>
             )}
@@ -1132,7 +3256,10 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
                         setFile(null);
                         setPreview([]);
                         setFullRows([]);
-                        setMappedData({ machines: [], molds: [], schedules: [], raw_materials: [], packing_materials: [], lines: [] });
+                        setAvailableSheets([]);
+                        setSelectedSheets(new Set());
+                        setSelectAllSheets(false);
+                        setMappedData({ machines: [], molds: [], schedules: [], raw_materials: [], packing_materials: [], lines: [], maintenance_checklists: [], bom_masters: [], sfg_bom: [], fg_bom: [], local_bom: [] });
                         fileInputRef.current && (fileInputRef.current.value = '');
                         setHeaders([]);
                         setImportStatus({ type: '', message: '' });
@@ -1147,6 +3274,86 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             </div>
           </div>
 
+          {/* Sheet Selection UI - Show when file has multiple sheets */}
+          {file && availableSheets.length > 1 && (
+            <div className="mb-6 bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="font-medium text-blue-900">Select Sheets to Import</h3>
+                  <p className="text-sm text-blue-700">Choose which sheets to import from this workbook</p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handleSelectAllToggle}
+                    className="text-sm px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                  >
+                    {selectAllSheets ? 'Deselect All' : 'Select All'}
+                  </button>
+                  <button
+                    onClick={handleParseWithSelectedSheets}
+                    disabled={selectedSheets.size === 0 || loading}
+                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Parsing...
+                      </>
+                    ) : (
+                      <>
+                        <FileSpreadsheet className="w-4 h-4 mr-2" />
+                        Parse Selected Sheets ({selectedSheets.size})
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-48 overflow-y-auto">
+                {availableSheets.map((sheetName) => {
+                  const isSelected = selectedSheets.has(sheetName);
+                  const isSummary = /summary/i.test(sheetName);
+                  const isMachine = /^\d+[ab]$/i.test(sheetName);
+                  
+                  return (
+                    <label
+                      key={sheetName}
+                      className={`flex items-center p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                        isSelected
+                          ? 'bg-blue-100 border-blue-500'
+                          : 'bg-white border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleSheetToggle(sheetName)}
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 mr-2"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center">
+                          <span className="font-medium text-gray-900 truncate">{sheetName}</span>
+                          {isSummary && (
+                            <span className="ml-2 px-1.5 py-0.5 text-xs bg-purple-100 text-purple-700 rounded">Summary</span>
+                          )}
+                          {isMachine && (
+                            <span className="ml-2 px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded">Machine</span>
+                          )}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              
+              {selectedSheets.size === 0 && (
+                <p className="mt-3 text-sm text-red-600">
+                  ⚠️ Please select at least one sheet to import.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Loading */}
           {loading && (
             <div className="flex items-center justify-center py-8">
@@ -1156,13 +3363,15 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           )}
 
           {/* Preview */}
-          {preview.length > 0 && !loading && (
+          {hasData && !loading && (
             <div className="mb-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-medium text-gray-800">Data Preview</h3>
                 <div className="flex items-center space-x-4">
                   <span className="text-sm text-gray-600">
-                    {mappedData[dataType].length} valid record(s) found
+                    {dataType === 'dpr' 
+                      ? 'DPR data loaded'
+                      : `${dataLength} valid record(s) found`}
                   </span>
                   <button
                     onClick={() => setShowPreview(!showPreview)}
@@ -1179,10 +3388,10 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-200">
-                        {currentHeaders.map(header => (
+                        {currentHeaders.map((header, index) => (
                           <th
-                            key={header}
-                            className="text-left py-2 px-3 font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                            key={`${header}-${index}`}
+                            className="text-center py-2 px-3 font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
                             onClick={() => handleSortChange(header)}
                           >
                             <div className="flex items-center justify-between">
@@ -1205,19 +3414,58 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
                       </tr>
                     </thead>
                     <tbody>
-                      {sortData(preview, sortField, sortDirection).slice(0, 5).map((row, idx) => (
-                        <tr key={idx} className="border-b border-gray-100">
-                          {currentHeaders.map(header => (
-                            <td key={header} className="py-2 px-3 text-gray-600">
-                              {row[header] ? String(row[header]) : '-'}
-                            </td>
-                          ))}
+                      {dataType === 'dpr' ? (
+                        <tr>
+                          <td colSpan={10} className="py-4 text-center text-gray-700">
+                            <div className="space-y-2">
+                              <p className="font-medium">DPR Data Imported Successfully</p>
+                              {mappedData.dpr && (
+                                <div className="text-sm text-gray-600 space-y-1">
+                                  <p>Date: {mappedData.dpr.date}</p>
+                                  <p>Shift: {mappedData.dpr.shift}</p>
+                                  <p>Shift Incharge: {mappedData.dpr.shiftIncharge}</p>
+                                  <p>Machines: {mappedData.dpr.machines?.length || 0}</p>
+                                </div>
+                              )}
+                              <p className="text-xs text-gray-500 mt-2">Click "Import Data" to save this DPR.</p>
+                            </div>
+                          </td>
                         </tr>
-                      ))}
+                      ) : dataLength > 0 ? (
+                        mappedData[dataType].slice(0, 5).map((row: any, idx: number) => {
+                          // Debug: Log the row data being displayed
+                          if (idx === 0) {
+                            console.log('🔍 Preview table - First row data:', row);
+                            console.log('🔍 Preview table - Current headers:', currentHeaders);
+                            console.log('🔍 Preview table - Current dataType:', dataType);
+                          }
+                          return (
+                            <tr key={idx} className="border-b border-gray-100">
+                              {currentHeaders.map((header, index) => {
+                                // Find the corresponding database field for this header
+                                const mapping = TEMPLATE_MAPPINGS[dataType as keyof typeof TEMPLATE_MAPPINGS];
+                                const dbField = mapping?.[header as keyof typeof mapping];
+                                const value = dbField ? (row as any)[dbField] : null;
+                                return (
+                                  <td key={`${header}-${index}`} className="py-2 px-3 text-gray-600">
+                                    {value !== null && value !== undefined ? String(value) : '-'}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={currentHeaders.length} className="py-4 text-center text-gray-500">
+                            No valid data to display
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
-                  {preview.length > 5 && (
-                    <p className="text-center text-gray-500 mt-3">... and {preview.length - 5} more rows</p>
+                  {dataType !== 'dpr' && dataLength > 5 && (
+                    <p className="text-center text-gray-500 mt-3">... and {dataLength - 5} more rows</p>
                   )}
                 </div>
               )}
@@ -1255,7 +3503,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           </button>
           <button
             onClick={handleImport}
-            disabled={mappedData[dataType].length === 0 || importing}
+            disabled={!hasData || importing}
             className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {importing ? (

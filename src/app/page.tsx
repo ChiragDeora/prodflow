@@ -1,11 +1,11 @@
 'use client';
 
-import { RouteGuard } from "../components/auth/RouteGuard";
 import ProductionSchedulerERP from "../components/ProductionSchedulerERP";
+import RouteGuard from "../components/auth/RouteGuard";
 
 export default function Home() {
   return (
-    <RouteGuard requireAuth={true}>
+    <RouteGuard requireAuth={false}>
       <ProductionSchedulerERP />
     </RouteGuard>
   );

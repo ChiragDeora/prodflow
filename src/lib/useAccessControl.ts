@@ -1,6 +1,4 @@
-import { useState, useEffect } from 'react';
 import { useAuth } from '../components/auth/AuthProvider';
-import { accessControlUtils } from './auth';
 
 interface AccessControlState {
   canAccessModule: (moduleName: string) => boolean;
@@ -12,100 +10,32 @@ interface AccessControlState {
 }
 
 export const useAccessControl = (): AccessControlState => {
-  const { user, profile } = useAuth();
-  const [moduleAccessCache, setModuleAccessCache] = useState<Record<string, { canAccess: boolean; accessLevel: string }>>({});
-  const [permissionCache, setPermissionCache] = useState<Record<string, boolean>>({});
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Clear cache when user changes
-  useEffect(() => {
-    setModuleAccessCache({});
-    setPermissionCache({});
-  }, [user?.id]);
+  const { user, isLoading, error } = useAuth();
 
   const canAccessModule = (moduleName: string): boolean => {
-    if (!user || !profile) return false;
-    if (moduleAccessCache[moduleName]) {
-      return moduleAccessCache[moduleName].canAccess;
-    }
-    return false;
+    if (!user) return false;
+    // For now, allow access to all modules if user is logged in
+    // This can be extended with proper permission checking
+    return true;
   };
 
   const hasPermission = (permissionName: string): boolean => {
-    if (!user || !profile) return false;
-    if (permissionCache[permissionName] !== undefined) {
-      return permissionCache[permissionName];
-    }
-    return false;
+    if (!user) return false;
+    // For now, root admin has all permissions
+    return user.isRootAdmin || false;
   };
 
   const canPerformAction = (action: string, resource: string): boolean => {
-    const permissionName = `${resource}.${action}`;
-    return hasPermission(permissionName);
+    if (!user) return false;
+    // Simple implementation - root admin can do everything
+    return user.isRootAdmin || false;
   };
 
   const getModuleAccessLevel = (moduleName: string): string => {
-    if (!user || !profile) return 'blocked';
-    const cached = moduleAccessCache[moduleName];
-    return cached ? cached.accessLevel : 'blocked';
+    if (!user) return 'blocked';
+    // For now, return 'full' access for logged in users
+    return 'full';
   };
-
-  // Load access control data when user is authenticated
-  useEffect(() => {
-    if (!user || !profile) return;
-
-    const loadAccessControlData = async () => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const modules = ['master-data', 'production-schedule', 'operator-panel', 'reports', 'approvals', 'admin', 'profile'];
-        const moduleAccessPromises = modules.map(async (moduleName) => {
-          const result = await accessControlUtils.canAccessModule(moduleName);
-          return { moduleName, ...result };
-        });
-
-        const moduleResults = await Promise.all(moduleAccessPromises);
-        const newModuleCache: Record<string, { canAccess: boolean; accessLevel: string }> = {};
-        moduleResults.forEach(({ moduleName, canAccess, accessLevel }) => {
-          newModuleCache[moduleName] = { canAccess, accessLevel };
-        });
-        setModuleAccessCache(newModuleCache);
-
-        const commonPermissions = [
-          'machines.view', 'machines.create', 'machines.edit', 'machines.delete',
-          'molds.view', 'molds.create', 'molds.edit', 'molds.delete',
-          'schedule.view', 'schedule.create', 'schedule.edit', 'schedule.delete', 'schedule.approve',
-          'operator.view', 'operator.update',
-          'reports.view', 'reports.export',
-          'approvals.view', 'approvals.approve', 'approvals.reject',
-          'users.view', 'users.create', 'users.edit', 'users.delete', 'users.permissions',
-          'profile.view', 'profile.edit'
-        ];
-
-        const permissionPromises = commonPermissions.map(async (permissionName) => {
-          const result = await accessControlUtils.hasPermission(permissionName);
-          return { permissionName, hasPermission: result.hasPermission };
-        });
-
-        const permissionResults = await Promise.all(permissionPromises);
-        const newPermissionCache: Record<string, boolean> = {};
-        permissionResults.forEach(({ permissionName, hasPermission }) => {
-          newPermissionCache[permissionName] = hasPermission;
-        });
-        setPermissionCache(newPermissionCache);
-
-      } catch (err) {
-        console.error('Error loading access control data:', err);
-        setError('Failed to load access control data');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadAccessControlData();
-  }, [user?.id, profile?.id]);
 
   return {
     canAccessModule,
@@ -147,4 +77,4 @@ export const useActionPermission = (action: string, resource: string) => {
     isLoading,
     error
   };
-}; 
+};

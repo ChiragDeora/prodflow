@@ -10,11 +10,15 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.53.0",
+    "@types/bcrypt": "^6.0.0",
+    "@types/uuid": "^10.0.0",
+    "bcrypt": "^6.0.0",
     "file-saver": "^2.0.5",
     "lucide-react": "^0.522.0",
     "next": "15.0.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "uuid": "^11.1.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

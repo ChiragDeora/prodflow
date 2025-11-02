@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  HelpCircle, Info, Link, Menu, Package, Plus, Save, Upload, User, Wrench, X
+  HelpCircle, Info, Link, Menu, Package, Plus, Save, Upload, User, Wrench, X, Settings, Shield
 } from 'lucide-react';
 import { useAuth } from './auth/AuthProvider';
 import ExcelFileReader from './ExcelFileReader';
@@ -24,7 +24,7 @@ import {
   Line as SupabaseLine,
   Unit
 } from '../lib/supabase';
-import { authAPI, userProfileAPI } from '../lib/auth';
+
 import { moduleRegistry, getAvailableModules, getModule } from './modules/moduleRegistry';
 
 
@@ -58,45 +58,21 @@ interface MenuItem {
   description: string;
 }
 
-type ModuleType = 'scheduler' | 'masters' | 'approvals' | 'reports' | 'operators' | 'maintenance' | 'quality' | 'profile' | 'user-management';
+type ModuleType = 'scheduler' | 'masters' | 'approvals' | 'reports' | 'operators' | 'maintenance' | 'quality' | 'profile' | 'production' | 'store-dispatch';
 type ModalType = 'job' | 'machine' | 'mold' | 'packing_material' | 'raw_material' | 'line' | 'view_machine' | 'view_mold' | 'view_schedule' | 'view_packing_material' | 'view_raw_material' | 'view_line' | 'edit_line' | '';
 type ActionType = 'edit' | 'delete' | 'view' | 'approve' | 'mark_done';
 type ItemType = 'machine' | 'mold' | 'schedule' | 'material' | 'product' | 'raw_material' | 'packing_material' | 'line';
 type DataType = 'machines' | 'molds' | 'raw_materials' | 'packing_materials' | 'lines';
 
 const ProductionSchedulerERP: React.FC = () => {
-  const [currentModule, setCurrentModule] = useState<ModuleType>(() => {
-    // Try to get the current module from localStorage with user-specific key, default to 'scheduler'
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      const saved = localStorage.getItem(`prodSchedulerCurrentModule_${userId}`);
-      return (saved as ModuleType) || 'scheduler';
-    }
-    return 'scheduler';
-  });
+  const [currentModule, setCurrentModule] = useState<ModuleType>('scheduler');
   
   const [currentView, setCurrentView] = useState<string>('daily');
   
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    // Try to get the selected date from localStorage with user-specific key, default to today
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      const saved = localStorage.getItem(`prodSchedulerSelectedDate_${userId}`);
-      return saved || new Date().toISOString().split('T')[0];
-    }
-    return new Date().toISOString().split('T')[0];
-  });
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   // Unit filter state - now using unit IDs instead of names
-  const [selectedUnit, setSelectedUnit] = useState<string>(() => {
-    // Try to get the selected unit from localStorage with user-specific key, default to 'all'
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      const saved = localStorage.getItem(`prodSchedulerSelectedUnit_${userId}`);
-      return saved || 'all';
-    }
-    return 'all';
-  });
+  const [selectedUnit, setSelectedUnit] = useState<string>('all');
 
   const [showModal, setShowModal] = useState<boolean>(false);
   const [modalType, setModalType] = useState<ModalType>('');
@@ -111,117 +87,26 @@ const ProductionSchedulerERP: React.FC = () => {
 
   
   // Separate sorting states for Machine Master and Mold Master tabs
-  const [machineSortField, setMachineSortField] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      const saved = localStorage.getItem(`prodSchedulerMachineSortField_${userId}`);
-      return saved || 'machine_id';
-    }
-    return 'machine_id';
-  });
-  
-  const [machineSortDirection, setMachineSortDirection] = useState<'asc' | 'desc'>(() => {
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      const saved = localStorage.getItem(`prodSchedulerMachineSortDirection_${userId}`);
-      return (saved as 'asc' | 'desc') || 'asc';
-    }
-    return 'asc';
-  });
+  const [machineSortField, setMachineSortField] = useState<string>('machine_id');
+  const [machineSortDirection, setMachineSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [machineCategoryFilter, setMachineCategoryFilter] = useState<string>('all');
+  const [moldSortField, setMoldSortField] = useState<string>('mold_id');
+  const [moldSortDirection, setMoldSortDirection] = useState<'asc' | 'desc'>('asc');
 
-  const [machineCategoryFilter, setMachineCategoryFilter] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      const saved = localStorage.getItem(`prodSchedulerMachineCategoryFilter_${userId}`);
-      return saved || 'all';
-    }
-    return 'all';
-  });
+  // Raw Materials sorting state
+  const [rawMaterialSortField, setRawMaterialSortField] = useState<string>('sl_no');
+  const [rawMaterialSortDirection, setRawMaterialSortDirection] = useState<'asc' | 'desc'>('asc');
 
-  const [moldSortField, setMoldSortField] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      const saved = localStorage.getItem(`prodSchedulerMoldSortField_${userId}`);
-      return saved || 'mold_id';
-    }
-    return 'mold_id';
-  });
-  
-  const [moldSortDirection, setMoldSortDirection] = useState<'asc' | 'desc'>(() => {
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      const saved = localStorage.getItem(`prodSchedulerMoldSortDirection_${userId}`);
-      return (saved as 'asc' | 'desc') || 'asc';
-    }
-    return 'asc';
-  });
-
-  // Raw Materials sorting state with user-specific persistence
-  const [rawMaterialSortField, setRawMaterialSortField] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      const saved = localStorage.getItem(`prodSchedulerRawMaterialSortField_${userId}`);
-      return saved || 'sl_no';
-    }
-    return 'sl_no';
-  });
-  
-  const [rawMaterialSortDirection, setRawMaterialSortDirection] = useState<'asc' | 'desc'>(() => {
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      const saved = localStorage.getItem(`prodSchedulerRawMaterialSortDirection_${userId}`);
-      return (saved as 'asc' | 'desc') || 'asc';
-    }
-    return 'asc';
-  });
-
-  // Packing Materials sorting state with user-specific persistence
-  const [packingMaterialSortField, setPackingMaterialSortField] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      const saved = localStorage.getItem(`prodSchedulerPackingMaterialSortField_${userId}`);
-      return saved || 'sl_no';
-    }
-    return 'sl_no';
-  });
-  
-  const [packingMaterialSortDirection, setPackingMaterialSortDirection] = useState<'asc' | 'desc'>(() => {
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      const saved = localStorage.getItem(`prodSchedulerPackingMaterialSortDirection_${userId}`);
-      return (saved as 'asc' | 'desc') || 'asc';
-    }
-    return 'asc';
-  });
+  // Packing Materials sorting state
+  const [packingMaterialSortField, setPackingMaterialSortField] = useState<string>('sl_no');
+  const [packingMaterialSortDirection, setPackingMaterialSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Line sorting state
-  const [lineSortField, setLineSortField] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      const saved = localStorage.getItem(`prodSchedulerLineSortField_${userId}`);
-              return saved || 'line_id';
-      }
-      return 'line_id';
-  });
+  const [lineSortField, setLineSortField] = useState<string>('line_id');
+  const [lineSortDirection, setLineSortDirection] = useState<'asc' | 'desc'>('asc');
 
-  const [lineSortDirection, setLineSortDirection] = useState<'asc' | 'desc'>(() => {
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      const saved = localStorage.getItem(`prodSchedulerLineSortDirection_${userId}`);
-      return (saved as 'asc' | 'desc') || 'asc';
-    }
-    return 'asc';
-  });
-
-  // Packing Materials category filter state with user-specific persistence
-  const [packingMaterialCategoryFilter, setPackingMaterialCategoryFilter] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const userId = localStorage.getItem('currentUserId') || 'default';
-      const saved = localStorage.getItem(`prodSchedulerPackingMaterialCategoryFilter_${userId}`);
-      return saved || 'all';
-    }
-    return 'all';
-  });
+  // Packing Materials category filter state
+  const [packingMaterialCategoryFilter, setPackingMaterialCategoryFilter] = useState<string>('all');
 
 
   
@@ -263,15 +148,7 @@ const ProductionSchedulerERP: React.FC = () => {
       try {
         console.log(`Starting data loading (attempt ${retryCount + 1}/${maxRetries})...`);
         
-        // Check session first before attempting data load
-        const { session } = await authAPI.getSession();
-        if (!session) {
-          console.log('No valid session, skipping data load');
-          if (isMounted) {
-            setLoading(false);
-          }
-          return;
-        }
+        // Using SimpleAuthProvider - no session check needed
         
         // Comment out timeout to prevent interruptions during normal usage
         // const timeoutPromise = new Promise((_, reject) => 
@@ -331,23 +208,98 @@ const ProductionSchedulerERP: React.FC = () => {
     try {
       console.log('Loading all data...');
       
-      // Check if we have a valid session before loading data
-      const { session } = await authAPI.getSession();
-      if (!session) {
-        console.log('No valid session, skipping data load');
-        setLoading(false);
-        return;
-      }
+      // Using SimpleAuthProvider - no session check needed
       
-          const [machines, molds, schedules, rawMaterials, packingMaterials, lines, unitsData] = await Promise.all([
-      machineAPI.getAll(),
-      moldAPI.getAll(),
-      scheduleAPI.getAll(),
-      rawMaterialAPI.getAll(),
-      packingMaterialAPI.getAll(),
-      lineAPI.getAll(),
-      unitAPI.getAll()
-    ]);
+          console.log('Starting API calls...');
+          
+          // Call APIs individually to catch specific errors
+          let machines: Machine[] = [];
+          let molds: Mold[] = [];
+          let schedules: ScheduleJob[] = [];
+          let rawMaterials: RawMaterial[] = [];
+          let packingMaterials: PackingMaterial[] = [];
+          let lines: Line[] = [];
+          let unitsData: Unit[] = [];
+          
+          try {
+            machines = await machineAPI.getAll();
+            console.log('Machines API call successful:', machines.length);
+          } catch (error) {
+            console.error('Machines API call failed:', error);
+            machines = [];
+          }
+          
+          try {
+            molds = await moldAPI.getAll();
+            console.log('Molds API call successful:', molds.length);
+          } catch (error: any) {
+            console.error('Molds API call failed:', error);
+            console.error('Molds error details:', {
+              message: error?.message,
+              details: error?.details,
+              hint: error?.hint,
+              code: error?.code
+            });
+            molds = [];
+          }
+          
+          try {
+            schedules = await scheduleAPI.getAll();
+            console.log('Schedules API call successful:', schedules.length);
+          } catch (error) {
+            console.error('Schedules API call failed:', error);
+            schedules = [];
+          }
+          
+          try {
+            rawMaterials = await rawMaterialAPI.getAll();
+            console.log('Raw Materials API call successful:', rawMaterials.length);
+          } catch (error) {
+            console.error('Raw Materials API call failed:', error);
+            rawMaterials = [];
+          }
+          
+          try {
+            packingMaterials = await packingMaterialAPI.getAll();
+            console.log('Packing Materials API call successful:', packingMaterials.length);
+          } catch (error: any) {
+            console.error('Packing Materials API call failed:', error);
+            console.error('Packing Materials error details:', {
+              message: error?.message,
+              details: error?.details,
+              hint: error?.hint,
+              code: error?.code
+            });
+            packingMaterials = [];
+          }
+          
+          try {
+            lines = await lineAPI.getAll();
+            console.log('Lines API call successful:', lines.length);
+          } catch (error: any) {
+            console.error('Lines API call failed:', error);
+            console.error('Lines error details:', {
+              message: error?.message,
+              details: error?.details,
+              hint: error?.hint,
+              code: error?.code
+            });
+            lines = [];
+          }
+          
+          try {
+            unitsData = await unitAPI.getAll();
+            console.log('Units API call successful:', unitsData.length);
+          } catch (error: any) {
+            console.error('Units API call failed:', error);
+            console.error('Units error details:', {
+              message: error?.message,
+              details: error?.details,
+              hint: error?.hint,
+              code: error?.code
+            });
+            unitsData = [];
+          }
       
               console.log('Data loaded successfully:', { 
           machines: machines.length,
@@ -358,6 +310,20 @@ const ProductionSchedulerERP: React.FC = () => {
           lines: lines.length,
           units: unitsData.length
         });
+        
+        // Debug: Log sample data to see what's being loaded
+        console.log('Sample packing materials:', packingMaterials.slice(0, 3));
+        console.log('Sample molds:', molds.slice(0, 3));
+        console.log('Sample lines:', lines.slice(0, 3));
+        
+        // More detailed debugging
+        console.log('Raw data details:');
+        console.log('- machines:', machines);
+        console.log('- molds:', molds);
+        console.log('- lines:', lines);
+        console.log('- rawMaterials:', rawMaterials);
+        console.log('- packingMaterials:', packingMaterials);
+        console.log('- units:', unitsData);
       
               setMachinesMaster(machines);
         setMoldsMaster(molds);
@@ -366,6 +332,10 @@ const ProductionSchedulerERP: React.FC = () => {
         setPackingMaterialsMaster(packingMaterials);
         setLinesMaster(lines);
       setUnits(unitsData);
+      console.log('📦 Units loaded from database:', unitsData.length, 'units');
+      if (unitsData.length > 0) {
+        console.log('📋 Sample unit:', unitsData[0]);
+      }
       
         // Load unit management settings
   try {
@@ -771,11 +741,14 @@ const ProductionSchedulerERP: React.FC = () => {
 
   // Unit filter handler
   const handleUnitFilterChange = (unit: string) => {
+    console.log('🔄 Unit filter changing from', selectedUnit, 'to', unit);
     setSelectedUnit(unit);
+    
     // Save to localStorage with user-specific key
     if (typeof window !== 'undefined') {
       const userId = localStorage.getItem('currentUserId') || 'default';
       localStorage.setItem(`prodSchedulerSelectedUnit_${userId}`, unit);
+      console.log('💾 Saved unit selection to localStorage:', unit);
     }
   };
 
@@ -798,7 +771,9 @@ const ProductionSchedulerERP: React.FC = () => {
   // Get available unit IDs from units table
   const getAvailableUnitIds = (): string[] => {
     try {
-      return units.map((unit: Unit) => unit.id).sort();
+      const unitIds = units.map((unit: Unit) => unit.id).sort();
+      console.log('🆔 Available unit IDs:', unitIds);
+      return unitIds;
     } catch (error) {
       console.error('Error getting unit IDs:', error);
       return [];
@@ -808,7 +783,9 @@ const ProductionSchedulerERP: React.FC = () => {
   // Get available units for display (names)
   const getAvailableUnits = (): { id: string; name: string }[] => {
     try {
-      return units.map((unit: Unit) => ({ id: unit.id, name: unit.name })).sort((a, b) => a.name.localeCompare(b.name));
+      const availableUnits = units.map((unit: Unit) => ({ id: unit.id, name: unit.name })).sort((a, b) => a.name.localeCompare(b.name));
+      console.log('📊 Available units for display:', availableUnits);
+      return availableUnits;
     } catch (error) {
       console.error('Error getting units:', error);
       return [];
@@ -817,7 +794,18 @@ const ProductionSchedulerERP: React.FC = () => {
 
   // Filter data based on selected unit
   const getFilteredData = () => {
+    console.log('getFilteredData called with selectedUnit:', selectedUnit);
+    console.log('Available units:', units.map(u => ({ id: u.id, name: u.name })));
+    console.log('Raw data counts:', {
+      machines: machinesMaster.length,
+      molds: moldsMaster.length,
+      lines: linesMaster.length,
+      rawMaterials: rawMaterialsMaster.length,
+      packingMaterials: packingMaterialsMaster.length
+    });
+    
     if (selectedUnit === 'all') {
+      console.log('Returning all data (no unit filter)');
       return {
         machines: machinesMaster,
         molds: moldsMaster,
@@ -831,8 +819,12 @@ const ProductionSchedulerERP: React.FC = () => {
     const selectedUnitData = units.find(unit => unit.id === selectedUnit);
     const selectedUnitName = selectedUnitData?.name;
     
+    console.log('Selected unit data:', selectedUnitData);
+    console.log('Selected unit name:', selectedUnitName);
+    
     if (!selectedUnitName) {
       // If unit not found, return all data
+      console.log('Unit not found, returning all data');
       return {
         machines: machinesMaster,
         molds: moldsMaster,
@@ -842,13 +834,23 @@ const ProductionSchedulerERP: React.FC = () => {
       };
     }
     
-    return {
+    const filteredData = {
       machines: machinesMaster.filter((machine: Machine) => machine.unit === selectedUnitName),
       molds: moldsMaster.filter((mold: Mold) => mold.unit === selectedUnitName),
       lines: linesMaster.filter((line: Line) => line.unit === selectedUnitName),
       rawMaterials: rawMaterialsMaster.filter((material: RawMaterial) => material.unit === selectedUnitName),
       packingMaterials: packingMaterialsMaster.filter((material: PackingMaterial) => material.unit === selectedUnitName)
     };
+    
+    console.log('Filtered data counts:', {
+      machines: filteredData.machines.length,
+      molds: filteredData.molds.length,
+      lines: filteredData.lines.length,
+      rawMaterials: filteredData.rawMaterials.length,
+      packingMaterials: filteredData.packingMaterials.length
+    });
+    
+    return filteredData;
   };
 
   // Get sorted machines
@@ -1026,7 +1028,7 @@ const ProductionSchedulerERP: React.FC = () => {
 
   // Get menu items from module registry (excluding profile)
   const menuItems: MenuItem[] = getAvailableModules()
-    .filter(config => config.id !== 'profile')
+    .filter(config => config.id !== 'profile' && config.id !== 'scheduler') // Commented out Production Scheduler
     .map(config => ({
       id: config.id,
       label: config.label,
@@ -1228,7 +1230,7 @@ const ProductionSchedulerERP: React.FC = () => {
   };
 
   const Sidebar: React.FC = () => {
-    const { user, profile, signOut } = useAuth();
+    const { user, logout } = useAuth();
     
     const handleModuleChange = (module: ModuleType) => {
       setCurrentModule(module);
@@ -1258,12 +1260,9 @@ const ProductionSchedulerERP: React.FC = () => {
     
     const handleSignOut = async () => {
       try {
-        await signOut();
-        // The signOut function now handles the redirect
+        await logout();
       } catch (error) {
-        console.error('Error signing out:', error);
-        // Fallback redirect
-        window.location.href = '/auth/login';
+        console.error('Logout error:', error);
       }
     };
 
@@ -1272,7 +1271,15 @@ const ProductionSchedulerERP: React.FC = () => {
         <div className="p-3 border-b border-gray-700">
           <div className={`flex items-center ${sidebarOpen ? 'justify-between' : 'justify-center'}`}>
             {sidebarOpen && <h2 className="text-lg font-semibold">ProdFlow</h2>}
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-gray-400 hover:text-white">
+            <button onClick={() => {
+              const newState = !sidebarOpen;
+              setSidebarOpen(newState);
+              // Save to localStorage with user-specific key
+              if (typeof window !== 'undefined') {
+                const userId = localStorage.getItem('currentUserId') || 'default';
+                localStorage.setItem(`prodSchedulerSidebarOpen_${userId}`, JSON.stringify(newState));
+              }
+            }} className="text-gray-400 hover:text-white">
               <Menu className="w-5 h-5" />
             </button>
           </div>
@@ -1317,6 +1324,7 @@ const ProductionSchedulerERP: React.FC = () => {
               </button>
             );
           })}
+
         </nav>
 
         {/* Current User Section - Bottom Left */}
@@ -1333,10 +1341,10 @@ const ProductionSchedulerERP: React.FC = () => {
             {sidebarOpen && (
               <div className="ml-2 flex-1">
                 <div className="font-medium text-xs truncate">
-                  {profile?.full_name || user?.email || 'Current User'}
+                  {user?.fullName || user?.email || 'Current User'}
                 </div>
                 <div className="text-xs text-gray-400 capitalize">
-                  {profile?.role || 'User'}
+                  {user?.isRootAdmin ? 'Root Admin' : 'User'}
                 </div>
               </div>
             )}
@@ -1401,7 +1409,10 @@ const ProductionSchedulerERP: React.FC = () => {
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
                   target.style.display = 'none';
-                  target.parentElement!.innerHTML = '<div class="text-gray-500 p-8 border border-gray-200 rounded-lg">Failed to load nameplate image</div>';
+                  const errorDiv = document.createElement('div');
+                  errorDiv.className = 'text-gray-500 p-8 border border-gray-200 rounded-lg';
+                  errorDiv.textContent = 'Failed to load nameplate image';
+                  target.parentElement!.appendChild(errorDiv);
                 }}
               />
                   </div>
@@ -1679,13 +1690,14 @@ const ProductionSchedulerERP: React.FC = () => {
                     <Upload className="w-4 h-4 mr-2" />
                     Import Excel
                   </button>
-                <button 
-                  onClick={() => {setModalType('job'); setShowModal(true);}}
-                  className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Job
-                </button>
+                  <button 
+                    onClick={() => {setModalType('job'); setShowModal(true);}}
+                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    New Job
+                  </button>
+
                 </div>
               </div>
             </div>
@@ -1698,6 +1710,8 @@ const ProductionSchedulerERP: React.FC = () => {
           </div>
         );
     }
+
+
 
     // Render other modules with appropriate props
     const getModuleProps = () => {
@@ -1787,11 +1801,17 @@ const ProductionSchedulerERP: React.FC = () => {
           return {};
         case 'maintenance':
           return {
-
             machinesMaster: sortedMachines,
+            linesMaster: sortedLines,
+            unitManagementEnabled,
+            defaultUnit,
+            units
           };
         case 'quality':
-          return {};
+          return {
+            linesMaster: sortedLines,
+            moldsMaster: sortedMolds
+          };
       case 'profile':
           return {};
       default:
@@ -1801,6 +1821,96 @@ const ProductionSchedulerERP: React.FC = () => {
 
     return <ModuleComponent {...getModuleProps()} />;
   };
+
+  // Restore user preferences from localStorage on component mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const userId = localStorage.getItem('currentUserId') || 'default';
+      
+      // Restore unit selection (but don't set it yet - wait for units to load)
+      const savedUnit = localStorage.getItem(`prodSchedulerSelectedUnit_${userId}`);
+      if (savedUnit) {
+        console.log('📋 Found saved unit selection:', savedUnit);
+        // Don't set it here - let the units-loaded useEffect handle it
+      }
+      
+      // Restore sorting preferences
+      const savedMachineSortField = localStorage.getItem(`prodSchedulerMachineSortField_${userId}`);
+      const savedMachineSortDirection = localStorage.getItem(`prodSchedulerMachineSortDirection_${userId}`);
+      if (savedMachineSortField) setMachineSortField(savedMachineSortField);
+      if (savedMachineSortDirection) setMachineSortDirection(savedMachineSortDirection as 'asc' | 'desc');
+      
+      const savedMoldSortField = localStorage.getItem(`prodSchedulerMoldSortField_${userId}`);
+      const savedMoldSortDirection = localStorage.getItem(`prodSchedulerMoldSortDirection_${userId}`);
+      if (savedMoldSortField) setMoldSortField(savedMoldSortField);
+      if (savedMoldSortDirection) setMoldSortDirection(savedMoldSortDirection as 'asc' | 'desc');
+      
+      const savedRawMaterialSortField = localStorage.getItem(`prodSchedulerRawMaterialSortField_${userId}`);
+      const savedRawMaterialSortDirection = localStorage.getItem(`prodSchedulerRawMaterialSortDirection_${userId}`);
+      if (savedRawMaterialSortField) setRawMaterialSortField(savedRawMaterialSortField);
+      if (savedRawMaterialSortDirection) setRawMaterialSortDirection(savedRawMaterialSortDirection as 'asc' | 'desc');
+      
+      const savedPackingMaterialSortField = localStorage.getItem(`prodSchedulerPackingMaterialSortField_${userId}`);
+      const savedPackingMaterialSortDirection = localStorage.getItem(`prodSchedulerPackingMaterialSortDirection_${userId}`);
+      if (savedPackingMaterialSortField) setPackingMaterialSortField(savedPackingMaterialSortField);
+      if (savedPackingMaterialSortDirection) setPackingMaterialSortDirection(savedPackingMaterialSortDirection as 'asc' | 'desc');
+      
+      const savedLineSortField = localStorage.getItem(`prodSchedulerLineSortField_${userId}`);
+      const savedLineSortDirection = localStorage.getItem(`prodSchedulerLineSortDirection_${userId}`);
+      if (savedLineSortField) setLineSortField(savedLineSortField);
+      if (savedLineSortDirection) setLineSortDirection(savedLineSortDirection as 'asc' | 'desc');
+      
+      // Restore filter preferences
+      const savedMachineCategoryFilter = localStorage.getItem(`prodSchedulerMachineCategoryFilter_${userId}`);
+      if (savedMachineCategoryFilter) setMachineCategoryFilter(savedMachineCategoryFilter);
+      
+      const savedPackingMaterialCategoryFilter = localStorage.getItem(`prodSchedulerPackingMaterialCategoryFilter_${userId}`);
+      if (savedPackingMaterialCategoryFilter) setPackingMaterialCategoryFilter(savedPackingMaterialCategoryFilter);
+      
+      // Restore module selection
+      const savedCurrentModule = localStorage.getItem(`prodSchedulerCurrentModule_${userId}`);
+      if (savedCurrentModule) setCurrentModule(savedCurrentModule as ModuleType);
+      
+      // Restore sidebar state
+      const savedSidebarOpen = localStorage.getItem(`prodSchedulerSidebarOpen_${userId}`);
+      if (savedSidebarOpen !== null) setSidebarOpen(JSON.parse(savedSidebarOpen));
+      
+      // Restore selected date
+      const savedSelectedDate = localStorage.getItem(`prodSchedulerSelectedDate_${userId}`);
+      if (savedSelectedDate) setSelectedDate(savedSelectedDate);
+    }
+  }, []);
+
+  // Restore unit selection after units are loaded
+  useEffect(() => {
+    if (units.length > 0) {
+      // Check if there's a saved unit selection that we can restore
+      if (typeof window !== 'undefined') {
+        const userId = localStorage.getItem('currentUserId') || 'default';
+        const savedUnit = localStorage.getItem(`prodSchedulerSelectedUnit_${userId}`);
+        
+        if (savedUnit && savedUnit !== 'all') {
+          // Verify the saved unit still exists
+          const availableUnitIds = getAvailableUnitIds();
+          if (availableUnitIds.includes(savedUnit)) {
+            setSelectedUnit(savedUnit);
+            console.log('✅ Restored unit selection after units loaded:', savedUnit);
+          } else {
+            console.log('⚠️ Saved unit no longer exists, keeping current selection');
+          }
+        } else if (savedUnit === 'all') {
+          // If user explicitly chose "all", respect that choice
+          setSelectedUnit('all');
+          console.log('✅ Restored "all units" selection');
+        }
+      }
+    }
+  }, [units]); // Remove selectedUnit dependency to prevent loops
+
+  // Monitor selectedUnit changes for debugging
+  useEffect(() => {
+    console.log('🎯 selectedUnit changed to:', selectedUnit);
+  }, [selectedUnit]);
 
   return (
     <div className="h-screen bg-gray-100 flex">
@@ -3342,7 +3452,10 @@ const ProductionSchedulerERP: React.FC = () => {
                                 onError={(e) => {
                                   const target = e.target as HTMLImageElement;
                                   target.style.display = 'none';
-                                  target.parentElement!.innerHTML = '<div class="text-gray-500 p-8 border border-gray-200 rounded-lg">Failed to load TDS image</div>';
+                                  const errorDiv = document.createElement('div');
+                                  errorDiv.className = 'text-gray-500 p-8 border border-gray-200 rounded-lg';
+                                  errorDiv.textContent = 'Failed to load TDS image';
+                                  target.parentElement!.appendChild(errorDiv);
                                 }}
                               />
                             </div>

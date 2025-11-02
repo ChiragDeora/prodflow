@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, AlertTriangle, XCircle, Search, Filter, Plus, BarChart3, FileText, Eye } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle, Search, Filter, Plus, BarChart3, FileText, Eye, Scale, ClipboardCheck, Ruler } from 'lucide-react';
+import DailyWeightReport from '../reports/DailyWeightReport';
+import FirstPiecesApprovalReport from '../reports/FirstPiecesApprovalReport';
+// import FirstPiecesWallThicknessReport from '../reports/FirstPiecesWallThicknessReport';
+import IncomingMaterialInspectionForm from './IncomingMaterialInspectionForm';
+import ContainerInspectionForm from './ContainerInspectionForm';
 
 interface QualityInspection {
   id: string;
@@ -19,16 +24,39 @@ interface QualityInspection {
 }
 
 interface QualityControlModuleProps {
-  // Add any props that might be needed
+  linesMaster: any[];
+  moldsMaster: any[];
 }
 
-const QualityControlModule: React.FC<QualityControlModuleProps> = () => {
+const QualityControlModule: React.FC<QualityControlModuleProps> = ({ linesMaster, moldsMaster }) => {
   const [activeTab, setActiveTab] = useState('inspections');
   const [inspections, setInspections] = useState<QualityInspection[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [resultFilter, setResultFilter] = useState<string>('all');
+  const [selectedInspectionType, setSelectedInspectionType] = useState<string | null>(null);
+
+  // Restore active tab from localStorage on component mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const userId = localStorage.getItem('currentUserId') || 'default';
+      const savedActiveTab = localStorage.getItem(`qualityControlActiveTab_${userId}`);
+      if (savedActiveTab) {
+        setActiveTab(savedActiveTab);
+      }
+    }
+  }, []);
+
+  // Handle tab change with localStorage persistence
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    // Save to localStorage with user-specific key
+    if (typeof window !== 'undefined') {
+      const userId = localStorage.getItem('currentUserId') || 'default';
+      localStorage.setItem(`qualityControlActiveTab_${userId}`, tab);
+    }
+  };
 
   // Mock data for demonstration
   useEffect(() => {
@@ -137,7 +165,7 @@ const QualityControlModule: React.FC<QualityControlModuleProps> = () => {
       <div className="border-b border-gray-200 bg-white">
         <nav className="flex space-x-8 px-6 overflow-x-auto">
           <button
-            onClick={() => setActiveTab('inspections')}
+            onClick={() => handleTabChange('inspections')}
             className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
               activeTab === 'inspections'
                 ? 'border-blue-500 text-blue-600'
@@ -148,7 +176,7 @@ const QualityControlModule: React.FC<QualityControlModuleProps> = () => {
             Quality Inspections
           </button>
           <button
-            onClick={() => setActiveTab('standards')}
+            onClick={() => handleTabChange('standards')}
             className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
               activeTab === 'standards'
                 ? 'border-blue-500 text-blue-600'
@@ -159,7 +187,7 @@ const QualityControlModule: React.FC<QualityControlModuleProps> = () => {
             Quality Standards
           </button>
           <button
-            onClick={() => setActiveTab('analytics')}
+            onClick={() => handleTabChange('analytics')}
             className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
               activeTab === 'analytics'
                 ? 'border-blue-500 text-blue-600'
@@ -169,6 +197,40 @@ const QualityControlModule: React.FC<QualityControlModuleProps> = () => {
             <BarChart3 className="w-5 h-5 inline mr-2" />
             Quality Analytics
           </button>
+          <button
+            onClick={() => handleTabChange('weight-report')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+              activeTab === 'weight-report'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Scale className="w-5 h-5 inline mr-2" />
+            Daily Weight Report
+          </button>
+          <button
+            onClick={() => handleTabChange('first-pieces-approval')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+              activeTab === 'first-pieces-approval'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <ClipboardCheck className="w-5 h-5 inline mr-2" />
+            First Pieces Approval Report
+          </button>
+          {/* <button
+            onClick={() => handleTabChange('wall-thickness-report')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+              activeTab === 'wall-thickness-report'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Ruler className="w-5 h-5 inline mr-2" />
+            First Pieces Wall Thickness Report
+          </button> */}
+
         </nav>
       </div>
 
@@ -176,141 +238,319 @@ const QualityControlModule: React.FC<QualityControlModuleProps> = () => {
       <div className="flex-1 overflow-auto p-6">
         {activeTab === 'inspections' && (
           <div className="space-y-6">
-            {/* Header */}
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-gray-900">Quality Inspections</h2>
-              <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center">
-                <Plus className="w-4 h-4 mr-2" />
-                New Inspection
-              </button>
-            </div>
+            {!selectedInspectionType ? (
+              <>
+                {/* Header */}
+                <div className="flex justify-between items-center">
+                  <h2 className="text-2xl font-bold text-gray-900">Quality Inspections</h2>
+                </div>
 
-            {/* Filters */}
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <input
-                      type="text"
-                      placeholder="Search inspections..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
+                {/* Inspection Type Selection Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {/* Material Inspection Card */}
+                  <div 
+                    className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => setSelectedInspectionType('material')}
+                  >
+                    <div className="flex items-center mb-4">
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
+                        <CheckCircle className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">Material Inspection</h3>
+                        <p className="text-sm text-gray-500">Incoming raw materials quality check</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Type:</span>
+                        <span className="font-medium">Raw Materials</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Parameters:</span>
+                        <span className="font-medium">11+ Tests</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Samples:</span>
+                        <span className="font-medium">Dynamic</span>
+                      </div>
+                    </div>
+                    <button className="w-full mt-4 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                      Start Material Inspection
+                    </button>
+                  </div>
+
+                  {/* Container Inspection Card */}
+                  <div 
+                    className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => setSelectedInspectionType('container')}
+                  >
+                    <div className="flex items-center mb-4">
+                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-4">
+                        <CheckCircle className="w-6 h-6 text-green-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">Container Inspection</h3>
+                        <p className="text-sm text-gray-500">Packaging containers quality verification</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Type:</span>
+                        <span className="font-medium">Packaging</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Parameters:</span>
+                        <span className="font-medium">8+ Tests</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Samples:</span>
+                        <span className="font-medium">Dynamic</span>
+                      </div>
+                    </div>
+                    <button className="w-full mt-4 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
+                      Start Container Inspection
+                    </button>
+                  </div>
+
+                  {/* Custom Inspection Card */}
+                  <div 
+                    className="bg-white rounded-lg border-2 border-dashed border-gray-300 p-6 hover:border-gray-400 transition-colors cursor-pointer"
+                    onClick={() => setSelectedInspectionType('custom')}
+                  >
+                    <div className="flex items-center mb-4">
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mr-4">
+                        <Plus className="w-6 h-6 text-gray-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">Custom Inspection</h3>
+                        <p className="text-sm text-gray-500">Create a new inspection type</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-sm text-gray-500">
+                        Define your own inspection parameters and criteria
+                      </div>
+                    </div>
+                    <button className="w-full mt-4 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors">
+                      Create New
+                    </button>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="pending">Pending</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                  </select>
+
+                {/* Recent Inspection History */}
+                <div className="bg-white rounded-lg border border-gray-200">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900">Recent Inspection History</h3>
+                    <p className="text-sm text-gray-500">Last 10 inspection reports</p>
+                  </div>
+                  <div className="p-8 text-center">
+                    <CheckCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h4 className="text-lg font-medium text-gray-900 mb-2">No Inspection History</h4>
+                    <p className="text-gray-500">No inspection reports have been completed yet. Start your first inspection above.</p>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Result</label>
-                  <select
-                    value={resultFilter}
-                    onChange={(e) => setResultFilter(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              </>
+            ) : (
+              <>
+                {/* Back Button and Form */}
+                <div className="flex items-center mb-6">
+                  <button
+                    onClick={() => setSelectedInspectionType(null)}
+                    className="flex items-center text-gray-600 hover:text-gray-900 mr-4"
                   >
-                    <option value="all">All Results</option>
-                    <option value="pass">Pass</option>
-                    <option value="fail">Fail</option>
-                    <option value="conditional_pass">Conditional Pass</option>
-                  </select>
-                </div>
-                <div className="flex items-end">
-                  <button className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 flex items-center justify-center">
-                    <Filter className="w-4 h-4 mr-2" />
-                    Clear Filters
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back to Inspection Types
                   </button>
                 </div>
-              </div>
-            </div>
 
-            {/* Inspections List */}
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              {loading ? (
-                <div className="p-8 text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="mt-2 text-gray-500">Loading inspections...</p>
-                </div>
-              ) : filteredInspections.length === 0 ? (
-                <div className="p-8 text-center">
-                  <CheckCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">No quality inspections found</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Inspection ID</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Batch</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Machine</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Inspector</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Result</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pass Rate</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredInspections.map((inspection) => (
-                        <tr key={inspection.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {inspection.inspection_id}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">{inspection.product_name}</div>
-                              <div className="text-sm text-gray-500">{inspection.inspection_date}</div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{inspection.batch_number}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{inspection.machine_id}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{inspection.inspector}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(inspection.status)}`}>
-                              {inspection.status.replace('_', ' ').charAt(0).toUpperCase() + inspection.status.replace('_', ' ').slice(1)}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full border ${getResultColor(inspection.result)}`}>
-                              {getResultIcon(inspection.result)}
-                              <span className="ml-1">{inspection.result.replace('_', ' ').charAt(0).toUpperCase() + inspection.result.replace('_', ' ').slice(1)}</span>
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`text-sm font-medium ${getPassRateColor(inspection.pass_rate)}`}>
-                              {inspection.pass_rate}%
-                            </span>
-                            <div className="text-xs text-gray-500">
-                              {inspection.defects_found}/{inspection.total_samples} defects
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button className="text-blue-600 hover:text-blue-900 flex items-center">
-                              <Eye className="w-4 h-4 mr-1" />
-                              View
+                {selectedInspectionType === 'material' && (
+                  <div>
+                    <div className="mb-6">
+                      <h2 className="text-2xl font-bold text-gray-900">Material Inspection Report</h2>
+                    </div>
+                    <IncomingMaterialInspectionForm />
+                  </div>
+                )}
+
+                {selectedInspectionType === 'container' && (
+                  <div>
+                    <div className="mb-6">
+                      <h2 className="text-2xl font-bold text-gray-900">Container Inspection Report</h2>
+                    </div>
+                    <ContainerInspectionForm />
+                  </div>
+                )}
+
+                {selectedInspectionType === 'custom' && (
+                  <div>
+                    <div className="mb-6">
+                      <h2 className="text-2xl font-bold text-gray-900">Create Custom Inspection</h2>
+                    </div>
+                    
+                    {/* Custom Inspection Builder */}
+                    <div className="bg-white rounded-lg border border-gray-200 p-6">
+                      <div className="mb-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Define Your Custom Inspection</h3>
+                        
+                        {/* Basic Information */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Inspection Name</label>
+                            <input
+                              type="text"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="e.g., Chemical Analysis Inspection"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                            <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                              <option value="">Select Category</option>
+                              <option value="raw-material">Raw Material</option>
+                              <option value="packaging">Packaging</option>
+                              <option value="chemical">Chemical</option>
+                              <option value="equipment">Equipment</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                            <textarea
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              rows={3}
+                              placeholder="Describe what this inspection covers..."
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Default Sample Size</label>
+                            <input
+                              type="number"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="5"
+                              min="1"
+                              max="20"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Parameter Builder */}
+                        <div className="mb-6">
+                          <div className="flex justify-between items-center mb-4">
+                            <h4 className="text-md font-semibold text-gray-900">Inspection Parameters</h4>
+                            <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center text-sm">
+                              <Plus className="w-4 h-4 mr-2" />
+                              Add Parameter
                             </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+                          </div>
+                          
+                          {/* Sample Parameters */}
+                          <div className="space-y-4">
+                            <div className="border border-gray-200 rounded-lg p-4">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">Parameter Name</label>
+                                  <input
+                                    type="text"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="e.g., pH Level"
+                                    defaultValue="pH Level"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">Standard/Unit</label>
+                                  <input
+                                    type="text"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="e.g., 6.5-7.5 pH"
+                                    defaultValue="6.5-7.5 pH"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">Input Type</label>
+                                  <select className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="text">Text Input</option>
+                                    <option value="number">Number Input</option>
+                                    <option value="select">Pass/Fail Select</option>
+                                    <option value="textarea">Text Area</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <div className="mt-3 flex justify-end">
+                                <button className="text-red-600 hover:text-red-800 text-sm">Remove</button>
+                              </div>
+                            </div>
+
+                            <div className="border border-gray-200 rounded-lg p-4">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">Parameter Name</label>
+                                  <input
+                                    type="text"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="e.g., Temperature"
+                                    defaultValue="Temperature"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">Standard/Unit</label>
+                                  <input
+                                    type="text"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="e.g., 20-25°C"
+                                    defaultValue="20-25°C"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">Input Type</label>
+                                  <select className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="number">Number Input</option>
+                                    <option value="text">Text Input</option>
+                                    <option value="select">Pass/Fail Select</option>
+                                    <option value="textarea">Text Area</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <div className="mt-3 flex justify-end">
+                                <button className="text-red-600 hover:text-red-800 text-sm">Remove</button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Preview Section */}
+                        <div className="mb-6">
+                          <h4 className="text-md font-semibold text-gray-900 mb-4">Preview</h4>
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <p className="text-sm text-gray-600 mb-2">This is how your custom inspection form will look:</p>
+                            <div className="bg-white border border-gray-300 rounded p-3">
+                              <div className="text-sm font-medium text-gray-900 mb-2">Chemical Analysis Inspection</div>
+                              <div className="text-xs text-gray-500 space-y-1">
+                                <div>• pH Level (6.5-7.5 pH) - Number Input</div>
+                                <div>• Temperature (20-25°C) - Number Input</div>
+                                <div>• + 3 more parameters...</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex justify-end space-x-4">
+                          <button className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
+                            Cancel
+                          </button>
+                          <button className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                            Create Inspection Template
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 
@@ -333,6 +573,32 @@ const QualityControlModule: React.FC<QualityControlModuleProps> = () => {
             </div>
           </div>
         )}
+
+        {activeTab === 'weight-report' && (
+          <div className="space-y-6">
+            <DailyWeightReport 
+              linesMaster={linesMaster} 
+              moldsMaster={moldsMaster} 
+            />
+          </div>
+        )}
+
+        {activeTab === 'first-pieces-approval' && (
+          <div className="space-y-6">
+            <FirstPiecesApprovalReport 
+              linesMaster={linesMaster} 
+              moldsMaster={moldsMaster} 
+            />
+          </div>
+        )}
+
+        {/* {activeTab === 'wall-thickness-report' && (
+          <div className="space-y-6">
+            <FirstPiecesWallThicknessReport />
+          </div>
+        )} */}
+
+
       </div>
     </div>
   );

@@ -8,6 +8,8 @@ import MoldMaster from './MoldMaster';
 import RawMaterialsMaster from './RawMaterialsMaster';
 import PackingMaterialsMaster from './PackingMaterialsMaster';
 import LineMaster from './LineMaster';
+import BOMMaster from '../bom-master';
+
 import { 
   Machine as SupabaseMachine, 
   Mold as SupabaseMold,
@@ -211,6 +213,17 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
             <Link className="w-5 h-5 inline mr-2" />
             Line Master
           </button>
+          <button
+            onClick={() => handleTabChange('bom_master')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+              activeTab === 'bom_master'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Package className="w-5 h-5 inline mr-2" />
+            BOM Master
+          </button>
         </nav>
       </div>
 
@@ -312,6 +325,10 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
             defaultUnit={defaultUnit}
             units={units}
           />
+        )}
+
+        {activeTab === 'bom_master' && (
+          <BOMMaster />
         )}
       </div>
     </div>

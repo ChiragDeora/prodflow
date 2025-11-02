@@ -1,419 +1,340 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { authAPI, userProfileAPI, sessionManager, UserProfile, AuthUser } from '../../lib/auth';
-import { supabase } from '../../lib/supabase';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+interface AuthUser {
+  id: string;
+  username: string;
+  email: string;
+  fullName: string;
+  phone?: string;
+  status: string;
+  isRootAdmin: boolean;
+  requiresPasswordReset?: boolean;
+  lastLogin?: string;
+  createdAt: string;
+}
 
 interface AuthContextType {
   user: AuthUser | null;
-  profile: UserProfile | null;
-  loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error?: any }>;
-  signUp: (email: string, password: string, fullName: string, phoneNumber: string, department?: string) => Promise<{ error?: any }>;
-  signOut: () => Promise<void>;
-  resetPassword: (email: string) => Promise<{ error?: any }>;
-  updatePassword: (newPassword: string) => Promise<{ error?: any }>;
-  refreshProfile: () => Promise<void>;
-  isAdmin: boolean;
-  hasRole: (role: UserProfile['role'] | UserProfile['role'][]) => boolean;
+  isLoading: boolean;
+  error: string | null;
+  clearError: () => void;
+  login: (username: string, password: string) => Promise<{ success: boolean; error?: string; requiresPasswordReset?: boolean }>;
+  logout: () => Promise<void>;
+  signup: (data: SignupData) => Promise<{ success: boolean; error?: string }>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export const useAuth = (): AuthContextType => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
-
-interface AuthProviderProps {
-  children: ReactNode;
+interface SignupData {
+  username: string;
+  email: string;
+  password: string;
+  fullName: string;
+  phone?: string;
 }
 
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+const AuthContext = createContext<AuthContextType | null>(null);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
-  const isAdmin = profile?.role === 'admin';
-
-  // Debug logging for admin role
+  // Check authentication status on mount
   useEffect(() => {
-    console.log('Admin role check:', {
-      profile: profile ? {
-        id: profile.id,
-        full_name: profile.full_name,
-        email: profile.email,
-        role: profile.role,
-        department: profile.department
-      } : null,
-      isAdmin,
-      user: user?.email
-    });
-  }, [profile, isAdmin, user]);
-
-  const hasRole = (role: UserProfile['role'] | UserProfile['role'][]): boolean => {
-    if (!profile) return false;
-    if (Array.isArray(role)) {
-      return role.includes(profile.role);
-    }
-    return profile.role === role;
-  };
-
-  const refreshProfile = async (): Promise<void> => {
-    if (!user) return;
+    checkAuth();
     
-    try {
-      const { profile: userProfile } = await userProfileAPI.getProfile(user.id);
-      setProfile(userProfile);
-    } catch (error) {
-      console.error('Error refreshing profile:', error);
-    }
-  };
-
-  const signIn = async (email: string, password: string): Promise<{ error?: any }> => {
-    try {
-      console.log('Signing in user:', email);
-      setLoading(true);
-      
-      // Add timeout to prevent hanging
-      const signInTimeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Sign in timeout')), 15000)
-      );
-      
-      const signInPromise = authAPI.signIn({ phoneNumber: email, password });
-      const { user: authUser, session, error } = await Promise.race([signInPromise, signInTimeout]) as any;
-      
-      if (error) {
-        console.error('Sign in error:', error);
-        return { error };
-      }
-
-      if (authUser && session) {
-        console.log('Sign in successful, setting user');
-        setUser(authUser);
-        
-        // Save user ID to localStorage immediately
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('currentUserId', authUser.id);
-          // Store email for session expiration recovery
-          if (authUser.email) {
-            localStorage.setItem('lastUserEmail', authUser.email);
-          }
-        }
-        
-        // Fetch profile with timeout
-        try {
-          console.log('Fetching profile after sign in...');
-          const profileTimeout = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Profile fetch timeout')), 10000)
-          );
-          
-          const profilePromise = userProfileAPI.getProfile(authUser.id);
-          const { profile: userProfile } = await Promise.race([profilePromise, profileTimeout]) as any;
-          console.log('Profile loaded:', userProfile?.full_name);
-          setProfile(userProfile);
-        } catch (profileError) {
-          console.error('Error fetching profile after sign in:', profileError);
-          // Continue without profile - don't block login
-        }
-      }
-
-      return {};
-    } catch (error) {
-      console.error('Sign in exception:', error);
-      return { error };
-    } finally {
-      console.log('Sign in complete, setting loading to false');
-      setLoading(false);
-    }
-  };
-
-  const signUp = async (email: string, password: string, fullName: string, phoneNumber: string, department?: string): Promise<{ error?: any }> => {
-    try {
-      setLoading(true);
-      const { user: authUser, error } = await authAPI.signUp({
-        email,
-        password,
-        fullName,
-        phoneNumber,
-        department
-      });
-      
-      if (error) {
-        return { error };
-      }
-
-      // Note: User will need to confirm email before they can sign in
-      return {};
-    } catch (error) {
-      return { error };
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const signOut = async (): Promise<void> => {
-    try {
-      console.log('Signing out user');
-      
-      // Clear state immediately
-      setUser(null);
-      setProfile(null);
-      setLoading(false);
-      
-      // Clear localStorage immediately
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('currentUserId');
-        localStorage.removeItem('lastUserEmail');
-      }
-      
-      console.log('State cleared, calling authAPI.signOut()');
-      
-      // Call the API signOut (but don't wait for it)
-      authAPI.signOut().catch(error => {
-        console.error('Sign out API error:', error);
-      });
-      
-      console.log('Redirecting to login page');
-      
-      // Redirect immediately
-      window.location.href = '/auth/login';
-      
-    } catch (error) {
-      console.error('Sign out exception:', error);
-      // Even if there's an error, clear state and redirect
-      setUser(null);
-      setProfile(null);
-      setLoading(false);
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('currentUserId');
-        localStorage.removeItem('lastUserEmail');
-      }
-      window.location.href = '/auth/login';
-    }
-  };
-
-  const resetPassword = async (email: string): Promise<{ error?: any }> => {
-    return await authAPI.resetPassword(email);
-  };
-
-  const updatePassword = async (newPassword: string): Promise<{ error?: any }> => {
-    return await authAPI.updatePassword(newPassword);
-  };
-
-  // Initialize auth state and setup listeners
-  useEffect(() => {
-    let mounted = true;
-
-    // Get initial session with improved error handling
-    const initializeAuth = async () => {
-      try {
-        console.log('Initializing auth...');
-        
-        // Simple auth initialization with timeout
-        const authTimeout = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Auth initialization timeout')), 10000) // 10 second timeout
-        );
-        
-        const authPromise = (async () => {
-          const { session, error } = await authAPI.getSession();
-          return { session, error };
-        })();
-        
-        const { session, error } = await Promise.race([authPromise, authTimeout]) as { session: any; error?: any };
-        
-        console.log('Session result:', session ? 'Found session' : 'No session', error ? `Error: ${error.message}` : 'No error');
-        
-        if (error) {
-          console.error('Session error:', error);
-          // Clear any stale data on error
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('currentUserId');
-            localStorage.removeItem('lastUserEmail');
-          }
-        }
-        
-        if (session?.user && mounted) {
-          console.log('Setting user:', session.user.email);
-          setUser(session.user as AuthUser);
-          
-          // Save user data
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('currentUserId', session.user.id);
-            if (session.user.email) {
-              localStorage.setItem('lastUserEmail', session.user.email);
-            }
-          }
-          
-          // Fetch profile with enhanced fallback logic
-          userProfileAPI.getProfile(session.user.id).then(({ profile: userProfile, error: profileError }) => {
-            if (mounted) {
-              if (profileError) {
-                console.error('Error fetching profile during initialization:', profileError);
-                console.log('User ID:', session.user.id);
-                console.log('User email:', session.user.email);
-                
-                                  // Try to link existing profile by email
-                  return userProfileAPI.linkUserProfile(session.user.email || '').then(({ profile: linkedProfile, error: linkError }) => {
-                    if (linkedProfile && mounted) {
-                      console.log('Linked existing profile during initialization:', linkedProfile);
-                      setProfile(linkedProfile);
-                    } else {
-                      console.log('No profile to link, user may need admin to create profile first');
-                      console.error('Profile linking failed:', linkError);
-                    }
-                  });
-              } else if (userProfile) {
-                console.log('Profile loaded during initialization:', userProfile);
-                setProfile(userProfile);
-              } else {
-                console.log('No profile found during initialization for user:', session.user.id);
-              }
-            }
-          }).catch(profileError => {
-            console.error('Exception fetching profile during initialization:', profileError);
-          });
-        } else {
-          console.log('No valid session found');
-          // Clear any stale data when no session is found
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('currentUserId');
-            localStorage.removeItem('lastUserEmail');
-          }
-        }
-      } catch (error) {
-        console.error('Error initializing auth:', error);
-        // If auth fails, still stop loading and continue without auth
-        if (mounted) {
-          console.log('Auth failed, continuing without authentication');
-          setLoading(false);
-          // Clear any stale data
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('currentUserId');
-            localStorage.removeItem('lastUserEmail');
-          }
-        }
-      } finally {
-        if (mounted) {
-          console.log('Auth initialization complete');
-          setLoading(false);
-        }
-      }
-    };
-
-    // Simple fallback timeout
-    const fallbackTimeout = setTimeout(() => {
-      if (mounted && loading) {
-        console.log('Auth initialization timeout, forcing loading to false');
-        setLoading(false);
-      }
-    }, 8000); // 8 second fallback
-
-    console.log('Starting auth initialization...');
-    initializeAuth();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!mounted) return;
-
-        console.log('Auth state changed:', event, session?.user?.email);
-
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          if (session?.user) {
-            console.log('User signed in:', session.user.email);
-            setUser(session.user as AuthUser);
-            
-            // Save user data
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('currentUserId', session.user.id);
-              if (session.user.email) {
-                localStorage.setItem('lastUserEmail', session.user.email);
-              }
-            }
-            
-            // Fetch profile (but don't block)
-            userProfileAPI.getProfile(session.user.id).then(({ profile: userProfile, error: profileError }) => {
-              if (mounted) {
-                if (profileError) {
-                  console.error('Error fetching profile on auth change:', profileError);
-                  console.log('User ID:', session.user.id);
-                  console.log('User email:', session.user.email);
-                  
-                  // Try to link existing profile by email
-                  return userProfileAPI.linkUserProfile(session.user.email || '').then(({ profile: linkedProfile, error: linkError }) => {
-                    if (linkedProfile && mounted) {
-                      console.log('Linked existing profile on auth change:', linkedProfile);
-                      setProfile(linkedProfile);
-                    } else {
-                      console.log('No profile to link on auth change');
-                      console.error('Profile linking failed on auth change:', linkError);
-                    }
-                  });
-                } else if (userProfile) {
-                  console.log('Profile loaded successfully:', userProfile);
-                  setProfile(userProfile);
-                } else {
-                  console.log('No profile found for user:', session.user.id);
-                }
-              }
-            }).catch(profileError => {
-              console.error('Exception fetching profile on auth change:', profileError);
-            });
-          }
-        } else if (event === 'SIGNED_OUT') {
-          console.log('User signed out');
-          setUser(null);
-          setProfile(null);
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('currentUserId');
-            localStorage.removeItem('lastUserEmail');
-          }
-        }
-        
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    );
-
+    // Cleanup function to remove event listeners
     return () => {
-      mounted = false;
-      clearTimeout(fallbackTimeout);
-      subscription.unsubscribe();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('popstate', () => {
+          window.history.pushState(null, '', '/auth/login');
+        });
+      }
     };
   }, []);
 
-  const value: AuthContextType = {
-    user,
-    profile,
-    loading,
-    signIn,
-    signUp,
-    signOut,
-    resetPassword,
-    updatePassword,
-    refreshProfile,
-    isAdmin,
-    hasRole
+  const checkAuth = async () => {
+    try {
+      console.log('🔍 Starting auth check...');
+      setError(null); // Clear any previous errors
+      
+      // Check if user has logged out (prevent back button access)
+      if (typeof window !== 'undefined') {
+        const logoutTimestamp = localStorage.getItem('logoutTimestamp');
+        if (logoutTimestamp) {
+          const logoutTime = parseInt(logoutTimestamp);
+          const currentTime = Date.now();
+          const timeSinceLogout = currentTime - logoutTime;
+          
+          // If logout was less than 24 hours ago, force re-authentication
+          if (timeSinceLogout < 24 * 60 * 60 * 1000) {
+            console.log('🚫 User has logged out, preventing back button access');
+            setUser(null);
+            setError('Session expired. Please log in again.');
+            setIsLoading(false);
+            
+            // Clear the logout timestamp and redirect to login
+            localStorage.removeItem('logoutTimestamp');
+            router.replace('/auth/login');
+            return;
+          } else {
+            // Clear old logout timestamp
+            localStorage.removeItem('logoutTimestamp');
+          }
+        }
+      }
+      
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await fetch('/api/auth/verify-session', {
+        credentials: 'include',
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Auth successful, user data:', data.user);
+        setUser(data.user);
+        setError(null);
+      } else {
+        setUser(null);
+        // Only set error for non-401 responses (401 just means not logged in)
+        if (response.status !== 401) {
+          try {
+            const errorData = await response.json();
+            console.log('❌ Auth error:', errorData.error || 'Authentication error');
+            setError(errorData.error || 'Authentication error');
+          } catch (parseError) {
+            console.log('❌ Could not parse error response');
+            setError('Authentication error');
+          }
+        } else {
+          // 401 is expected for unauthenticated users - no need to log it
+        }
+      }
+    } catch (error) {
+      // Only log non-AbortError errors to reduce noise
+      if (error instanceof Error && error.name !== 'AbortError') {
+        console.error('❌ Auth check error:', error);
+        setError('Network error. Please check your connection.');
+      } else if (error instanceof Error && error.name === 'AbortError') {
+        console.log('⏰ Auth check was cancelled (likely due to navigation)');
+        // Don't set error for AbortError as it's usually due to navigation
+      }
+      setUser(null);
+    } finally {
+      console.log('🏁 Auth check completed, setting loading to false');
+      setIsLoading(false);
+    }
   };
 
-  // Debug session status in development
-  if (process.env.NODE_ENV === 'development') {
-    console.log('Auth state:', {
-      user: user?.email,
-      profile: profile?.full_name,
-      loading,
-      isAdmin
-    });
-  }
+  const login = async (username: string, password: string) => {
+    try {
+      setError(null); // Clear any previous errors
+      setIsLoading(true); // Show loading during login
+      
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+        credentials: 'include'
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setUser(data.user);
+        setError(null);
+        
+        // Clear console errors after successful login
+        if (typeof window !== 'undefined') {
+          // Clear console
+          console.clear();
+          
+          // Log successful login
+          console.log('✅ Login successful - Console cleared');
+          console.log('👤 User:', data.user.username);
+          console.log('🔐 Role:', data.user.isRootAdmin ? 'Root Admin' : 'User');
+          
+          // Clear any lingering extension errors by refreshing console state
+          setTimeout(() => {
+            // Force console refresh to clear extension errors
+            console.log('🧹 Console cleaned and ready for production use');
+          }, 100);
+        }
+        
+        return { 
+          success: true, 
+          requiresPasswordReset: data.user.requiresPasswordReset 
+        };
+      } else {
+        setUser(null);
+        setError(data.error || 'Login failed');
+        return { success: false, error: data.error };
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setUser(null);
+      setError('Network error. Please try again.');
+      return { success: false, error: 'Network error. Please try again.' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      setError(null); // Clear any errors on logout
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include'
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Clear user preferences from localStorage before logout
+      if (typeof window !== 'undefined') {
+        const userId = localStorage.getItem('currentUserId') || 'default';
+        const keysToRemove: string[] = [];
+        
+        // Find all keys that belong to the current user
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.endsWith(`_${userId}`)) {
+            keysToRemove.push(key);
+          }
+        }
+        
+        // Remove all user-specific keys
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        console.log(`Cleared ${keysToRemove.length} user preferences on logout`);
+      }
+      
+      setUser(null);
+      setError(null);
+      
+      // Add a logout timestamp to prevent back button access
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('logoutTimestamp', Date.now().toString());
+        
+        // Clear browser history to prevent back button access
+        if (window.history && window.history.pushState) {
+          // Replace current history entry with login page
+          window.history.replaceState(null, '', '/auth/login');
+          // Clear all history entries
+          window.history.pushState(null, '', '/auth/login');
+        }
+      }
+      
+      // Force navigation to login page and prevent back button
+      router.replace('/auth/login');
+      
+      // Additional security: disable back button after logout
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          window.history.pushState(null, '', '/auth/login');
+          window.addEventListener('popstate', () => {
+            window.history.pushState(null, '', '/auth/login');
+          });
+        }
+      }, 100);
+    }
+  };
+
+  const signup = async (data: SignupData) => {
+    try {
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+        credentials: 'include'
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        return { success: true };
+      } else {
+        return { success: false, error: result.error };
+      }
+    } catch (error) {
+      console.error('Signup error:', error);
+      return { success: false, error: 'Network error. Please try again.' };
+    }
+  };
+
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    try {
+      const response = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ currentPassword, newPassword }),
+        credentials: 'include'
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Update user to reflect password change
+        if (user) {
+          setUser({ ...user, requiresPasswordReset: false });
+        }
+        return { success: true };
+      } else {
+        return { success: false, error: data.error };
+      }
+    } catch (error) {
+      console.error('Change password error:', error);
+      return { success: false, error: 'Network error. Please try again.' };
+    }
+  };
+
+  const refreshUser = async () => {
+    await checkAuth();
+  };
+
+  const clearError = () => {
+    setError(null);
+  };
+
+  const value: AuthContextType = {
+    user,
+    isLoading,
+    error,
+    clearError,
+    login,
+    logout,
+    signup,
+    changePassword,
+    refreshUser
+  };
 
   return (
     <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
-}; 
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}

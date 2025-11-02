@@ -1,0 +1,1978 @@
+Formulas from Sheet: 8B
+==================================================
+
+Header: Cavity, Cell: D8
+  Excel: =IFERROR((VLOOKUP(C8,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E8
+  Excel: =IFERROR((VLOOKUP(C8,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G8
+  Excel: =IFERROR((VLOOKUP(C8,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: No of Shots → Start, Cell: J8
+  Excel: =13405+9115
+  Human: =13405+9115
+
+Header: End, Cell: K8
+  Excel: =22520+9110
+  Human: =22520+9110
+
+Header: Target Qty (Nos), Cell: L8
+  Excel: =IFERROR(F8*60/E8*D8,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M8
+  Excel: =IFERROR((K8-J8)*D8,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O8
+  Excel: =IFERROR(N8*(G8/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P8
+  Excel: =IFERROR(N8/L8,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q8
+  Excel: =IFERROR((M8-N8)*G8/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S8
+  Excel: =(K8-J8)*I8/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T8
+  Excel: =F8-S8
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X8
+  Excel: =IF((W8-V8)*1440=0,"",(W8-V8)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X9
+  Excel: =IF((W9-V9)*1440=0,"",(W9-V9)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D10
+  Excel: =IFERROR((VLOOKUP(C10,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E10
+  Excel: =IFERROR((VLOOKUP(C10,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Trg Run Time (min), Cell: F10
+  Excel: =IFERROR(720-F8,"")
+  Human: =IFERROR(720-(Trg Run Time (min)),"")
+
+Header: Part Wt (gm), Cell: G10
+  Excel: =IFERROR((VLOOKUP(C10,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L10
+  Excel: =IFERROR(F10*60/E10*D10,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M10
+  Excel: =IFERROR((K10-J10)*D10,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O10
+  Excel: =IFERROR(N10*(G10/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P10
+  Excel: =IFERROR(N10/L10,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q10
+  Excel: =IFERROR((M10-N10)*G10/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S10
+  Excel: =(K10-J10)*I10/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T10
+  Excel: =F10-S10
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X10
+  Excel: =IF((W10-V10)*1440=0,"",(W10-V10)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X11
+  Excel: =IF((W11-V11)*1440=0,"",(W11-V11)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D12
+  Excel: =IFERROR((VLOOKUP(C12,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E12
+  Excel: =IFERROR((VLOOKUP(C12,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G12
+  Excel: =IFERROR((VLOOKUP(C12,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: No of Shots → Start, Cell: J12
+  Excel: =57475+7790
+  Human: =57475+7790
+
+Header: End, Cell: K12
+  Excel: =65265+7790
+  Human: =65265+7790
+
+Header: Target Qty (Nos), Cell: L12
+  Excel: =IFERROR(F12*60/E12*D12,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M12
+  Excel: =IFERROR((K12-J12)*D12,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O12
+  Excel: =IFERROR(N12*(G12/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P12
+  Excel: =IFERROR(N12/L12,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q12
+  Excel: =IFERROR((M12-N12)*G12/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S12
+  Excel: =(K12-J12)*I12/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T12
+  Excel: =F12-S12
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X12
+  Excel: =IF((W12-V12)*1440=0,"",(W12-V12)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X13
+  Excel: =IF((W13-V13)*1440=0,"",(W13-V13)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D14
+  Excel: =IFERROR((VLOOKUP(C14,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E14
+  Excel: =IFERROR((VLOOKUP(C14,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Trg Run Time (min), Cell: F14
+  Excel: =IFERROR(720-F12,"")
+  Human: =IFERROR(720-(Trg Run Time (min)),"")
+
+Header: Part Wt (gm), Cell: G14
+  Excel: =IFERROR((VLOOKUP(C14,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L14
+  Excel: =IFERROR(F14*60/E14*D14,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M14
+  Excel: =IFERROR((K14-J14)*D14,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O14
+  Excel: =IFERROR(N14*(G14/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P14
+  Excel: =IFERROR(N14/L14,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q14
+  Excel: =IFERROR((M14-N14)*G14/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S14
+  Excel: =(K14-J14)*I14/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T14
+  Excel: =F14-S14
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X14
+  Excel: =IF((W14-V14)*1440=0,"",(W14-V14)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X15
+  Excel: =IF((W15-V15)*1440=0,"",(W15-V15)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D16
+  Excel: =IFERROR((VLOOKUP(C16,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E16
+  Excel: =IFERROR((VLOOKUP(C16,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G16
+  Excel: =IFERROR((VLOOKUP(C16,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: End, Cell: K16
+  Excel: =3330+6964
+  Human: =3330+6964
+
+Header: Target Qty (Nos), Cell: L16
+  Excel: =IFERROR(F16*60/E16*D16,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M16
+  Excel: =IFERROR((K16-J16)*D16,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O16
+  Excel: =IFERROR(N16*(G16/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P16
+  Excel: =IFERROR(N16/L16,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q16
+  Excel: =IFERROR((M16-N16)*G16/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S16
+  Excel: =(K16-J16)*I16/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T16
+  Excel: =F16-S16
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X16
+  Excel: =IF((W16-V16)*1440=0,"",(W16-V16)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X17
+  Excel: =IF((W17-V17)*1440=0,"",(W17-V17)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D18
+  Excel: =IFERROR((VLOOKUP(C18,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E18
+  Excel: =IFERROR((VLOOKUP(C18,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Trg Run Time (min), Cell: F18
+  Excel: =IFERROR(720-F16,"")
+  Human: =IFERROR(720-(Trg Run Time (min)),"")
+
+Header: Part Wt (gm), Cell: G18
+  Excel: =IFERROR((VLOOKUP(C18,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L18
+  Excel: =IFERROR(F18*60/E18*D18,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M18
+  Excel: =IFERROR((K18-J18)*D18,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O18
+  Excel: =IFERROR(N18*(G18/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P18
+  Excel: =IFERROR(N18/L18,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q18
+  Excel: =IFERROR((M18-N18)*G18/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S18
+  Excel: =(K18-J18)*I18/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T18
+  Excel: =F18-S18
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X18
+  Excel: =IF((W18-V18)*1440=0,"",(W18-V18)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X19
+  Excel: =IF((W19-V19)*1440=0,"",(W19-V19)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D20
+  Excel: =IFERROR((VLOOKUP(C20,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E20
+  Excel: =IFERROR((VLOOKUP(C20,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G20
+  Excel: =IFERROR((VLOOKUP(C20,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: No of Shots → Start, Cell: J20
+  Excel: =21052+7565
+  Human: =21052+7565
+
+Header: End, Cell: K20
+  Excel: =28617+7402
+  Human: =28617+7402
+
+Header: Target Qty (Nos), Cell: L20
+  Excel: =IFERROR(F20*60/E20*D20,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M20
+  Excel: =IFERROR((K20-J20)*D20,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O20
+  Excel: =IFERROR(N20*(G20/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P20
+  Excel: =IFERROR(N20/L20,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q20
+  Excel: =IFERROR((M20-N20)*G20/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S20
+  Excel: =(K20-J20)*I20/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T20
+  Excel: =F20-S20
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X20
+  Excel: =IF((W20-V20)*1440=0,"",(W20-V20)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X21
+  Excel: =IF((W21-V21)*1440=0,"",(W21-V21)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D22
+  Excel: =IFERROR((VLOOKUP(C22,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E22
+  Excel: =IFERROR((VLOOKUP(C22,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Trg Run Time (min), Cell: F22
+  Excel: =IFERROR(720-F20,"")
+  Human: =IFERROR(720-(Trg Run Time (min)),"")
+
+Header: Part Wt (gm), Cell: G22
+  Excel: =IFERROR((VLOOKUP(C22,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L22
+  Excel: =IFERROR(F22*60/E22*D22,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M22
+  Excel: =IFERROR((K22-J22)*D22,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O22
+  Excel: =IFERROR(N22*(G22/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P22
+  Excel: =IFERROR(N22/L22,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q22
+  Excel: =IFERROR((M22-N22)*G22/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S22
+  Excel: =(K22-J22)*I22/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T22
+  Excel: =F22-S22
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X22
+  Excel: =IF((W22-V22)*1440=0,"",(W22-V22)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X23
+  Excel: =IF((W23-V23)*1440=0,"",(W23-V23)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D24
+  Excel: =IFERROR((VLOOKUP(C24,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E24
+  Excel: =IFERROR((VLOOKUP(C24,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G24
+  Excel: =IFERROR((VLOOKUP(C24,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: No of Shots → Start, Cell: J24
+  Excel: =24896+4783
+  Human: =24896+4783
+
+Header: End, Cell: K24
+  Excel: =29679+7565
+  Human: =29679+7565
+
+Header: Target Qty (Nos), Cell: L24
+  Excel: =IFERROR(F24*60/E24*D24,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M24
+  Excel: =IFERROR((K24-J24)*D24,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O24
+  Excel: =IFERROR(N24*(G24/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P24
+  Excel: =IFERROR(N24/L24,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q24
+  Excel: =IFERROR((M24-N24)*G24/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S24
+  Excel: =(K24-J24)*I24/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T24
+  Excel: =F24-S24
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X24
+  Excel: =IF((W24-V24)*1440=0,"",(W24-V24)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X25
+  Excel: =IF((W25-V25)*1440=0,"",(W25-V25)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D26
+  Excel: =IFERROR((VLOOKUP(C26,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E26
+  Excel: =IFERROR((VLOOKUP(C26,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Trg Run Time (min), Cell: F26
+  Excel: =IFERROR(720-F24,"")
+  Human: =IFERROR(720-(Trg Run Time (min)),"")
+
+Header: Part Wt (gm), Cell: G26
+  Excel: =IFERROR((VLOOKUP(C26,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L26
+  Excel: =IFERROR(F26*60/E26*D26,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M26
+  Excel: =IFERROR((K26-J26)*D26,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O26
+  Excel: =IFERROR(N26*(G26/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P26
+  Excel: =IFERROR(N26/L26,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q26
+  Excel: =IFERROR((M26-N26)*G26/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S26
+  Excel: =(K26-J26)*I26/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T26
+  Excel: =F26-S26
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X26
+  Excel: =IF((W26-V26)*1440=0,"",(W26-V26)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X27
+  Excel: =IF((W27-V27)*1440=0,"",(W27-V27)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D28
+  Excel: =IFERROR((VLOOKUP(C28,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E28
+  Excel: =IFERROR((VLOOKUP(C28,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G28
+  Excel: =IFERROR((VLOOKUP(C28,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: No of Shots → Start, Cell: J28
+  Excel: =90137+6570
+  Human: =90137+6570
+
+Header: End, Cell: K28
+  Excel: =96707+6110
+  Human: =96707+6110
+
+Header: Target Qty (Nos), Cell: L28
+  Excel: =IFERROR(F28*60/E28*D28,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M28
+  Excel: =IFERROR((K28-J28)*D28,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O28
+  Excel: =IFERROR(N28*(G28/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P28
+  Excel: =IFERROR(N28/L28,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q28
+  Excel: =IFERROR((M28-N28)*G28/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S28
+  Excel: =(K28-J28)*I28/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T28
+  Excel: =F28-S28
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X28
+  Excel: =IF((W28-V28)*1440=0,"",(W28-V28)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X29
+  Excel: =IF((W29-V29)*1440=0,"",(W29-V29)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D30
+  Excel: =IFERROR((VLOOKUP(C30,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E30
+  Excel: =IFERROR((VLOOKUP(C30,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Trg Run Time (min), Cell: F30
+  Excel: =IFERROR(720-F28,"")
+  Human: =IFERROR(720-(Trg Run Time (min)),"")
+
+Header: Part Wt (gm), Cell: G30
+  Excel: =IFERROR((VLOOKUP(C30,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L30
+  Excel: =IFERROR(F30*60/E30*D30,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M30
+  Excel: =IFERROR((K30-J30)*D30,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O30
+  Excel: =IFERROR(N30*(G30/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P30
+  Excel: =IFERROR(N30/L30,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q30
+  Excel: =IFERROR((M30-N30)*G30/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S30
+  Excel: =(K30-J30)*I30/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T30
+  Excel: =F30-S30
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X30
+  Excel: =IF((W30-V30)*1440=0,"",(W30-V30)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X31
+  Excel: =IF((W31-V31)*1440=0,"",(W31-V31)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D32
+  Excel: =IFERROR((VLOOKUP(C32,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E32
+  Excel: =IFERROR((VLOOKUP(C32,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G32
+  Excel: =IFERROR((VLOOKUP(C32,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: No of Shots → Start, Cell: J32
+  Excel: =25990+7360
+  Human: =25990+7360
+
+Header: End, Cell: K32
+  Excel: =33350+7538
+  Human: =33350+7538
+
+Header: Target Qty (Nos), Cell: L32
+  Excel: =IFERROR(F32*60/E32*D32,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M32
+  Excel: =IFERROR((K32-J32)*D32,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O32
+  Excel: =IFERROR(N32*(G32/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P32
+  Excel: =IFERROR(N32/L32,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q32
+  Excel: =IFERROR((M32-N32)*G32/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S32
+  Excel: =(K32-J32)*I32/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T32
+  Excel: =F32-S32
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X32
+  Excel: =IF((W32-V32)*1440=0,"",(W32-V32)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X33
+  Excel: =IF((W33-V33)*1440=0,"",(W33-V33)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D34
+  Excel: =IFERROR((VLOOKUP(C34,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E34
+  Excel: =IFERROR((VLOOKUP(C34,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Trg Run Time (min), Cell: F34
+  Excel: =IFERROR(720-F32,"")
+  Human: =IFERROR(720-(Trg Run Time (min)),"")
+
+Header: Part Wt (gm), Cell: G34
+  Excel: =IFERROR((VLOOKUP(C34,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L34
+  Excel: =IFERROR(F34*60/E34*D34,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M34
+  Excel: =IFERROR((K34-J34)*D34,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O34
+  Excel: =IFERROR(N34*(G34/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P34
+  Excel: =IFERROR(N34/L34,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q34
+  Excel: =IFERROR((M34-N34)*G34/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S34
+  Excel: =(K34-J34)*I34/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T34
+  Excel: =F34-S34
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X34
+  Excel: =IF((W34-V34)*1440=0,"",(W34-V34)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X35
+  Excel: =IF((W35-V35)*1440=0,"",(W35-V35)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D36
+  Excel: =IFERROR((VLOOKUP(C36,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E36
+  Excel: =IFERROR((VLOOKUP(C36,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G36
+  Excel: =IFERROR((VLOOKUP(C36,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: No of Shots → Start, Cell: J36
+  Excel: =67317+7270
+  Human: =67317+7270
+
+Header: End, Cell: K36
+  Excel: =74587+5120
+  Human: =74587+5120
+
+Header: Target Qty (Nos), Cell: L36
+  Excel: =IFERROR(F36*60/E36*D36,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M36
+  Excel: =IFERROR((K36-J36)*D36,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O36
+  Excel: =IFERROR(N36*(G36/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P36
+  Excel: =IFERROR(N36/L36,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q36
+  Excel: =IFERROR((M36-N36)*G36/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S36
+  Excel: =(K36-J36)*I36/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T36
+  Excel: =F36-S36
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X36
+  Excel: =IF((W36-V36)*1440=0,"",(W36-V36)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X37
+  Excel: =IF((W37-V37)*1440=0,"",(W37-V37)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D38
+  Excel: =IFERROR((VLOOKUP(C38,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E38
+  Excel: =IFERROR((VLOOKUP(C38,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Trg Run Time (min), Cell: F38
+  Excel: =IFERROR(720-F36,"")
+  Human: =IFERROR(720-(Trg Run Time (min)),"")
+
+Header: Part Wt (gm), Cell: G38
+  Excel: =IFERROR((VLOOKUP(C38,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L38
+  Excel: =IFERROR(F38*60/E38*D38,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M38
+  Excel: =IFERROR((K38-J38)*D38,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O38
+  Excel: =IFERROR(N38*(G38/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P38
+  Excel: =IFERROR(N38/L38,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q38
+  Excel: =IFERROR((M38-N38)*G38/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S38
+  Excel: =(K38-J38)*I38/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T38
+  Excel: =F38-S38
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X38
+  Excel: =IF((W38-V38)*1440=0,"",(W38-V38)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X39
+  Excel: =IF((W39-V39)*1440=0,"",(W39-V39)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D40
+  Excel: =IFERROR((VLOOKUP(C40,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E40
+  Excel: =IFERROR((VLOOKUP(C40,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G40
+  Excel: =IFERROR((VLOOKUP(C40,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L40
+  Excel: =IFERROR(F40*60/E40*D40,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M40
+  Excel: =IFERROR((K40-J40)*D40,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O40
+  Excel: =IFERROR(N40*(G40/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P40
+  Excel: =IFERROR(N40/L40,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q40
+  Excel: =IFERROR((M40-N40)*G40/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S40
+  Excel: =(K40-J40)*I40/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T40
+  Excel: =F40-S40
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X40
+  Excel: =IF((W40-V40)*1440=0,"",(W40-V40)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X41
+  Excel: =IF((W41-V41)*1440=0,"",(W41-V41)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D42
+  Excel: =IFERROR((VLOOKUP(C42,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E42
+  Excel: =IFERROR((VLOOKUP(C42,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G42
+  Excel: =IFERROR((VLOOKUP(C42,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L42
+  Excel: =IFERROR(F42*60/E42*D42,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M42
+  Excel: =IFERROR((K42-J42)*D42,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O42
+  Excel: =IFERROR(N42*(G42/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P42
+  Excel: =IFERROR(N42/L42,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q42
+  Excel: =IFERROR((M42-N42)*G42/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S42
+  Excel: =(K42-J42)*I42/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T42
+  Excel: =F42-S42
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X42
+  Excel: =IF((W42-V42)*1440=0,"",(W42-V42)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X43
+  Excel: =IF((W43-V43)*1440=0,"",(W43-V43)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D44
+  Excel: =IFERROR((VLOOKUP(C44,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E44
+  Excel: =IFERROR((VLOOKUP(C44,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G44
+  Excel: =IFERROR((VLOOKUP(C44,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L44
+  Excel: =IFERROR(F44*60/E44*D44,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M44
+  Excel: =IFERROR((K44-J44)*D44,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O44
+  Excel: =IFERROR(N44*(G44/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P44
+  Excel: =IFERROR(N44/L44,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q44
+  Excel: =IFERROR((M44-N44)*G44/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S44
+  Excel: =(K44-J44)*I44/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T44
+  Excel: =F44-S44
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X44
+  Excel: =IF((W44-V44)*1440=0,"",(W44-V44)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X45
+  Excel: =IF((W45-V45)*1440=0,"",(W45-V45)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D46
+  Excel: =IFERROR((VLOOKUP(C46,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E46
+  Excel: =IFERROR((VLOOKUP(C46,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G46
+  Excel: =IFERROR((VLOOKUP(C46,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L46
+  Excel: =IFERROR(F46*60/E46*D46,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M46
+  Excel: =IFERROR((K46-J46)*D46,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O46
+  Excel: =IFERROR(N46*(G46/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P46
+  Excel: =IFERROR(N46/L46,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q46
+  Excel: =IFERROR((M46-N46)*G46/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S46
+  Excel: =(K46-J46)*I46/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T46
+  Excel: =F46-S46
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X46
+  Excel: =IF((W46-V46)*1440=0,"",(W46-V46)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X47
+  Excel: =IF((W47-V47)*1440=0,"",(W47-V47)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D48
+  Excel: =IFERROR((VLOOKUP(C48,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E48
+  Excel: =IFERROR((VLOOKUP(C48,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G48
+  Excel: =IFERROR((VLOOKUP(C48,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: No of Shots → Start, Cell: J48
+  Excel: =7200+6725
+  Human: =7200+6725
+
+Header: End, Cell: K48
+  Excel: =13925+6785
+  Human: =13925+6785
+
+Header: Target Qty (Nos), Cell: L48
+  Excel: =IFERROR(F48*60/E48*D48,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M48
+  Excel: =IFERROR((K48-J48)*D48,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O48
+  Excel: =IFERROR(N48*(G48/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P48
+  Excel: =IFERROR(N48/L48,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q48
+  Excel: =IFERROR((M48-N48)*G48/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S48
+  Excel: =(K48-J48)*I48/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T48
+  Excel: =F48-S48
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X48
+  Excel: =IF((W48-V48)*1440=0,"",(W48-V48)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X49
+  Excel: =IF((W49-V49)*1440=0,"",(W49-V49)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D50
+  Excel: =IFERROR((VLOOKUP(C50,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E50
+  Excel: =IFERROR((VLOOKUP(C50,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Trg Run Time (min), Cell: F50
+  Excel: =IFERROR(720-F48,"")
+  Human: =IFERROR(720-(Trg Run Time (min)),"")
+
+Header: Part Wt (gm), Cell: G50
+  Excel: =IFERROR((VLOOKUP(C50,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L50
+  Excel: =IFERROR(F50*60/E50*D50,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M50
+  Excel: =IFERROR((K50-J50)*D50,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O50
+  Excel: =IFERROR(N50*(G50/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P50
+  Excel: =IFERROR(N50/L50,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q50
+  Excel: =IFERROR((M50-N50)*G50/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S50
+  Excel: =(K50-J50)*I50/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T50
+  Excel: =F50-S50
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X50
+  Excel: =IF((W50-V50)*1440=0,"",(W50-V50)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X51
+  Excel: =IF((W51-V51)*1440=0,"",(W51-V51)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D52
+  Excel: =IFERROR((VLOOKUP(C52,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E52
+  Excel: =IFERROR((VLOOKUP(C52,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G52
+  Excel: =IFERROR((VLOOKUP(C52,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: End, Cell: K52
+  Excel: =5315+6940
+  Human: =5315+6940
+
+Header: Target Qty (Nos), Cell: L52
+  Excel: =IFERROR(F52*60/E52*D52,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M52
+  Excel: =IFERROR((K52-J52)*D52,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O52
+  Excel: =IFERROR(N52*(G52/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P52
+  Excel: =IFERROR(N52/L52,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q52
+  Excel: =IFERROR((M52-N52)*G52/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S52
+  Excel: =(K52-J52)*I52/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T52
+  Excel: =F52-S52
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X52
+  Excel: =IF((W52-V52)*1440=0,"",(W52-V52)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X53
+  Excel: =IF((W53-V53)*1440=0,"",(W53-V53)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D54
+  Excel: =IFERROR((VLOOKUP(C54,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E54
+  Excel: =IFERROR((VLOOKUP(C54,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Trg Run Time (min), Cell: F54
+  Excel: =IFERROR(720-F52,"")
+  Human: =IFERROR(720-(Trg Run Time (min)),"")
+
+Header: Part Wt (gm), Cell: G54
+  Excel: =IFERROR((VLOOKUP(C54,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L54
+  Excel: =IFERROR(F54*60/E54*D54,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M54
+  Excel: =IFERROR((K54-J54)*D54,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O54
+  Excel: =IFERROR(N54*(G54/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P54
+  Excel: =IFERROR(N54/L54,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q54
+  Excel: =IFERROR((M54-N54)*G54/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S54
+  Excel: =(K54-J54)*I54/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T54
+  Excel: =F54-S54
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X54
+  Excel: =IF((W54-V54)*1440=0,"",(W54-V54)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X55
+  Excel: =IF((W55-V55)*1440=0,"",(W55-V55)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D56
+  Excel: =IFERROR((VLOOKUP(C56,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E56
+  Excel: =IFERROR((VLOOKUP(C56,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G56
+  Excel: =IFERROR((VLOOKUP(C56,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: No of Shots → Start, Cell: J56
+  Excel: =10182+6985
+  Human: =10182+6985
+
+Header: End, Cell: K56
+  Excel: =17167+6975
+  Human: =17167+6975
+
+Header: Target Qty (Nos), Cell: L56
+  Excel: =IFERROR(F56*60/E56*D56,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M56
+  Excel: =IFERROR((K56-J56)*D56,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O56
+  Excel: =IFERROR(N56*(G56/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P56
+  Excel: =IFERROR(N56/L56,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q56
+  Excel: =IFERROR((M56-N56)*G56/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S56
+  Excel: =(K56-J56)*I56/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T56
+  Excel: =F56-S56
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X56
+  Excel: =IF((W56-V56)*1440=0,"",(W56-V56)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X57
+  Excel: =IF((W57-V57)*1440=0,"",(W57-V57)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D58
+  Excel: =IFERROR((VLOOKUP(C58,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E58
+  Excel: =IFERROR((VLOOKUP(C58,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Trg Run Time (min), Cell: F58
+  Excel: =IFERROR(720-F56,"")
+  Human: =IFERROR(720-(Trg Run Time (min)),"")
+
+Header: Part Wt (gm), Cell: G58
+  Excel: =IFERROR((VLOOKUP(C58,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L58
+  Excel: =IFERROR(F58*60/E58*D58,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M58
+  Excel: =IFERROR((K58-J58)*D58,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O58
+  Excel: =IFERROR(N58*(G58/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P58
+  Excel: =IFERROR(N58/L58,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q58
+  Excel: =IFERROR((M58-N58)*G58/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S58
+  Excel: =(K58-J58)*I58/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T58
+  Excel: =F58-S58
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X58
+  Excel: =IF((W58-V58)*1440=0,"",(W58-V58)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X59
+  Excel: =IF((W59-V59)*1440=0,"",(W59-V59)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D60
+  Excel: =IFERROR((VLOOKUP(C60,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E60
+  Excel: =IFERROR((VLOOKUP(C60,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G60
+  Excel: =IFERROR((VLOOKUP(C60,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: No of Shots → Start, Cell: J60
+  Excel: =11590+9010
+  Human: =11590+9010
+
+Header: End, Cell: K60
+  Excel: =20600+9030
+  Human: =20600+9030
+
+Header: Target Qty (Nos), Cell: L60
+  Excel: =IFERROR(F60*60/E60*D60,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M60
+  Excel: =IFERROR((K60-J60)*D60,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O60
+  Excel: =IFERROR(N60*(G60/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P60
+  Excel: =IFERROR(N60/L60,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q60
+  Excel: =IFERROR((M60-N60)*G60/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S60
+  Excel: =(K60-J60)*I60/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T60
+  Excel: =F60-S60
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X60
+  Excel: =IF((W60-V60)*1440=0,"",(W60-V60)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X61
+  Excel: =IF((W61-V61)*1440=0,"",(W61-V61)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D62
+  Excel: =IFERROR((VLOOKUP(C62,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E62
+  Excel: =IFERROR((VLOOKUP(C62,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Trg Run Time (min), Cell: F62
+  Excel: =IFERROR(720-F60,"")
+  Human: =IFERROR(720-(Trg Run Time (min)),"")
+
+Header: Part Wt (gm), Cell: G62
+  Excel: =IFERROR((VLOOKUP(C62,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L62
+  Excel: =IFERROR(F62*60/E62*D62,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M62
+  Excel: =IFERROR((K62-J62)*D62,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O62
+  Excel: =IFERROR(N62*(G62/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P62
+  Excel: =IFERROR(N62/L62,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q62
+  Excel: =IFERROR((M62-N62)*G62/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S62
+  Excel: =(K62-J62)*I62/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T62
+  Excel: =F62-S62
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X62
+  Excel: =IF((W62-V62)*1440=0,"",(W62-V62)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X63
+  Excel: =IF((W63-V63)*1440=0,"",(W63-V63)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D64
+  Excel: =IFERROR((VLOOKUP(C64,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E64
+  Excel: =IFERROR((VLOOKUP(C64,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G64
+  Excel: =IFERROR((VLOOKUP(C64,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: No of Shots → Start, Cell: J64
+  Excel: =63555+8480
+  Human: =63555+8480
+
+Header: End, Cell: K64
+  Excel: =72035+8512
+  Human: =72035+8512
+
+Header: Target Qty (Nos), Cell: L64
+  Excel: =IFERROR(F64*60/E64*D64,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M64
+  Excel: =IFERROR((K64-J64)*D64,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O64
+  Excel: =IFERROR(N64*(G64/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P64
+  Excel: =IFERROR(N64/L64,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q64
+  Excel: =IFERROR((M64-N64)*G64/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S64
+  Excel: =(K64-J64)*I64/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T64
+  Excel: =F64-S64
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X64
+  Excel: =IF((W64-V64)*1440=0,"",(W64-V64)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X65
+  Excel: =IF((W65-V65)*1440=0,"",(W65-V65)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D66
+  Excel: =IFERROR((VLOOKUP(C66,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E66
+  Excel: =IFERROR((VLOOKUP(C66,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Trg Run Time (min), Cell: F66
+  Excel: =IFERROR(720-F64,"")
+  Human: =IFERROR(720-(Trg Run Time (min)),"")
+
+Header: Part Wt (gm), Cell: G66
+  Excel: =IFERROR((VLOOKUP(C66,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L66
+  Excel: =IFERROR(F66*60/E66*D66,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M66
+  Excel: =IFERROR((K66-J66)*D66,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O66
+  Excel: =IFERROR(N66*(G66/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P66
+  Excel: =IFERROR(N66/L66,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q66
+  Excel: =IFERROR((M66-N66)*G66/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S66
+  Excel: =(K66-J66)*I66/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T66
+  Excel: =F66-S66
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X66
+  Excel: =IF((W66-V66)*1440=0,"",(W66-V66)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X67
+  Excel: =IF((W67-V67)*1440=0,"",(W67-V67)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D68
+  Excel: =IFERROR((VLOOKUP(C68,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E68
+  Excel: =IFERROR((VLOOKUP(C68,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G68
+  Excel: =IFERROR((VLOOKUP(C68,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: No of Shots → Start, Cell: J68
+  Excel: =65536+8520
+  Human: =65536+8520
+
+Header: End, Cell: K68
+  Excel: =74056+8520
+  Human: =74056+8520
+
+Header: Target Qty (Nos), Cell: L68
+  Excel: =IFERROR(F68*60/E68*D68,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M68
+  Excel: =IFERROR((K68-J68)*D68,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O68
+  Excel: =IFERROR(N68*(G68/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P68
+  Excel: =IFERROR(N68/L68,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q68
+  Excel: =IFERROR((M68-N68)*G68/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S68
+  Excel: =(K68-J68)*I68/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T68
+  Excel: =F68-S68
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X68
+  Excel: =IF((W68-V68)*1440=0,"",(W68-V68)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X69
+  Excel: =IF((W69-V69)*1440=0,"",(W69-V69)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D70
+  Excel: =IFERROR((VLOOKUP(C70,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E70
+  Excel: =IFERROR((VLOOKUP(C70,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Trg Run Time (min), Cell: F70
+  Excel: =IFERROR(720-F68,"")
+  Human: =IFERROR(720-(Trg Run Time (min)),"")
+
+Header: Part Wt (gm), Cell: G70
+  Excel: =IFERROR((VLOOKUP(C70,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L70
+  Excel: =IFERROR(F70*60/E70*D70,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M70
+  Excel: =IFERROR((K70-J70)*D70,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O70
+  Excel: =IFERROR(N70*(G70/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P70
+  Excel: =IFERROR(N70/L70,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q70
+  Excel: =IFERROR((M70-N70)*G70/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S70
+  Excel: =(K70-J70)*I70/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T70
+  Excel: =F70-S70
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X70
+  Excel: =IF((W70-V70)*1440=0,"",(W70-V70)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X71
+  Excel: =IF((W71-V71)*1440=0,"",(W71-V71)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D72
+  Excel: =IFERROR((VLOOKUP(C72,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E72
+  Excel: =IFERROR((VLOOKUP(C72,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G72
+  Excel: =IFERROR((VLOOKUP(C72,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: End, Cell: K72
+  Excel: =690+7421
+  Human: =690+7421
+
+Header: Target Qty (Nos), Cell: L72
+  Excel: =IFERROR(F72*60/E72*D72,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M72
+  Excel: =IFERROR((K72-J72)*D72,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O72
+  Excel: =IFERROR(N72*(G72/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P72
+  Excel: =IFERROR(N72/L72,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q72
+  Excel: =IFERROR((M72-N72)*G72/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S72
+  Excel: =(K72-J72)*I72/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T72
+  Excel: =F72-S72
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X72
+  Excel: =IF((W72-V72)*1440=0,"",(W72-V72)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X73
+  Excel: =IF((W73-V73)*1440=0,"",(W73-V73)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D74
+  Excel: =IFERROR((VLOOKUP(C74,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E74
+  Excel: =IFERROR((VLOOKUP(C74,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Trg Run Time (min), Cell: F74
+  Excel: =IFERROR(720-F72,"")
+  Human: =IFERROR(720-(Trg Run Time (min)),"")
+
+Header: Part Wt (gm), Cell: G74
+  Excel: =IFERROR((VLOOKUP(C74,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L74
+  Excel: =IFERROR(F74*60/E74*D74,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M74
+  Excel: =IFERROR((K74-J74)*D74,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O74
+  Excel: =IFERROR(N74*(G74/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P74
+  Excel: =IFERROR(N74/L74,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q74
+  Excel: =IFERROR((M74-N74)*G74/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S74
+  Excel: =(K74-J74)*I74/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T74
+  Excel: =F74-S74
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X74
+  Excel: =IF((W74-V74)*1440=0,"",(W74-V74)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X75
+  Excel: =IF((W75-V75)*1440=0,"",(W75-V75)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D76
+  Excel: =IFERROR((VLOOKUP(C76,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E76
+  Excel: =IFERROR((VLOOKUP(C76,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Part Wt (gm), Cell: G76
+  Excel: =IFERROR((VLOOKUP(C76,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: No of Shots → Start, Cell: J76
+  Excel: =14501+8436
+  Human: =14501+8436
+
+Header: End, Cell: K76
+  Excel: =22937+8352
+  Human: =22937+8352
+
+Header: Target Qty (Nos), Cell: L76
+  Excel: =IFERROR(F76*60/E76*D76,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M76
+  Excel: =IFERROR((K76-J76)*D76,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O76
+  Excel: =IFERROR(N76*(G76/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P76
+  Excel: =IFERROR(N76/L76,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q76
+  Excel: =IFERROR((M76-N76)*G76/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S76
+  Excel: =(K76-J76)*I76/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T76
+  Excel: =F76-S76
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X76
+  Excel: =IF((W76-V76)*1440=0,"",(W76-V76)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X77
+  Excel: =IF((W77-V77)*1440=0,"",(W77-V77)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Cavity, Cell: D78
+  Excel: =IFERROR((VLOOKUP(C78,Master!$C$2:$F$64,2,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),2,FALSE)),"")
+
+Header: Trg Cycle (sec), Cell: E78
+  Excel: =IFERROR((VLOOKUP(C78,Master!$C$2:$F$64,3,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),3,FALSE)),"")
+
+Header: Trg Run Time (min), Cell: F78
+  Excel: =IFERROR(720-F76,"")
+  Human: =IFERROR(720-(Trg Run Time (min)),"")
+
+Header: Part Wt (gm), Cell: G78
+  Excel: =IFERROR((VLOOKUP(C78,Master!$C$2:$F$64,4,FALSE)),"")
+  Human: =IFERROR((VLOOKUP((Product),Master!((Ro)-T-C → (Ro)-12-L):(12.5 → 8.4),4,FALSE)),"")
+
+Header: Target Qty (Nos), Cell: L78
+  Excel: =IFERROR(F78*60/E78*D78,0)
+  Human: =IFERROR((Trg Run Time (min))*60/(Trg Cycle (sec))*(Cavity),0)
+
+Header: Actual Qty (Nos), Cell: M78
+  Excel: =IFERROR((K78-J78)*D78,0)
+  Human: =IFERROR(((End)-(No of Shots → Start))*(Cavity),0)
+
+Header: Ok Prod (Kgs), Cell: O78
+  Excel: =IFERROR(N78*(G78/1000),0)
+  Human: =IFERROR((Ok Prod Qty (Nos))*((Part Wt (gm))/1000),0)
+
+Header: Ok Prod (%), Cell: P78
+  Excel: =IFERROR(N78/L78,"")
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),"")
+
+Header: Rej (Kgs), Cell: Q78
+  Excel: =IFERROR((M78-N78)*G78/1000,"")
+  Human: =IFERROR(((Actual Qty (Nos))-(Ok Prod Qty (Nos)))*(Part Wt (gm))/1000,"")
+
+Header: Run Time (mins), Cell: S78
+  Excel: =(K78-J78)*I78/60
+  Human: =((End)-(No of Shots → Start))*(Act Cycle (sec))/60
+
+Header: Down time (min), Cell: T78
+  Excel: =F78-S78
+  Human: =(Trg Run Time (min))-(Run Time (mins))
+
+Header: Total Time (min), Cell: X78
+  Excel: =IF((W78-V78)*1440=0,"",(W78-V78)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Total Time (min), Cell: X79
+  Excel: =IF((W79-V79)*1440=0,"",(W79-V79)*1440)
+  Human: =IF(((End Time)-(Start Time))*1440=0,"",((End Time)-(Start Time))*1440)
+
+Header: Target Qty (Nos), Cell: L81
+  Excel: =SUM(L8:L79)
+  Human: =SUM((Target Qty (Nos)):(Target Qty (Nos)))
+
+Header: Actual Qty (Nos), Cell: M81
+  Excel: =SUM(M8:M79)
+  Human: =SUM((Actual Qty (Nos)):(Actual Qty (Nos)))
+
+Header: Ok Prod Qty (Nos), Cell: N81
+  Excel: =SUM(N8:N79)
+  Human: =SUM((Ok Prod Qty (Nos)):(Ok Prod Qty (Nos)))
+
+Header: Ok Prod (Kgs), Cell: O81
+  Excel: =SUM(O8:O79)
+  Human: =SUM((Ok Prod (Kgs)):(Ok Prod (Kgs)))
+
+Header: Ok Prod (%), Cell: P81
+  Excel: =IFERROR(O81/L83,0)
+  Human: =IFERROR((Ok Prod (Kgs))/(Target Qty (Nos)),0)
+
+Header: Rej (Kgs), Cell: Q81
+  Excel: =SUM(Q8:Q79)
+  Human: =SUM((Rej (Kgs)):(Rej (Kgs)))
+
+Header: lumps (KG), Cell: R81
+  Excel: =SUM(R8:R79)
+  Human: =SUM((lumps (KG)):(lumps (KG)))
+
+Header: Run Time (mins), Cell: S81
+  Excel: =SUM(S8:S79)
+  Human: =SUM((Run Time (mins)):(Run Time (mins)))
+
+Header: Down time (min), Cell: T81
+  Excel: =SUM(T8:T79)
+  Human: =SUM((Down time (min)):(Down time (min)))
+
+Header: Total Time (min), Cell: X81
+  Excel: =SUM(X8:X79)
+  Human: =SUM((Total Time (min)):(Total Time (min)))
+
+Header: Target Qty (Nos), Cell: L83
+  Excel: =SUMPRODUCT(L8:L79,G8:G79)/1000
+  Human: =SUMPRODUCT((Target Qty (Nos)):(Target Qty (Nos)),(Part Wt (gm)):(Part Wt (gm)))/1000
+
+Header: Ok Prod Qty (Nos), Cell: N83
+  Excel: =IFERROR(N81/L81,0)
+  Human: =IFERROR((Ok Prod Qty (Nos))/(Target Qty (Nos)),0)
+
+Header: Rej (Kgs), Cell: Q83
+  Excel: =IFERROR(((Q81+R81)/O81),0)
+  Human: =IFERROR((((Rej (Kgs))+(lumps (KG)))/(Ok Prod (Kgs))),0)
+
+Header: Run Time (mins), Cell: S83
+  Excel: =S81/11520
+  Human: =(Run Time (mins))/11520
+
+Header: Down time (min), Cell: T83
+  Excel: =T81/11520
+  Human: =(Down time (min))/11520
+
+Header: Act part wt (gm), Cell: H85
+  Excel: =IF(OR((G60-H60)>0.5,(G28-H28)>0.5,(G24-H24)>0.5,(G20-H20)>0.5,(G16-H16)>0.5,(G12-H12)>0.5,(G8-H8)>0.5,(G32-H32)>0.5,(G36-H36)>0.5,(G40-H40)>0.5,(G44-H44)>0.5,(G48-H48)>0.5,(G52-H52)>0.5,(G56-H56)>0.5,(G64-H64)>0.5,(G68-H68)>0.5,(G72-H72)>0.5,(G76-H76)>0.5),"NOT OK","OK")
+  Human: =IF(OR(((Part Wt (gm))-(Act part wt (gm)))>0.5,((Part Wt (gm))-(Act part wt (gm)))>0.5,((Part Wt (gm))-(Act part wt (gm)))>0.5,((Part Wt (gm))-(Act part wt (gm)))>0.5,((Part Wt (gm))-(Act part wt (gm)))>0.5,((Part Wt (gm))-(Act part wt (gm)))>0.5,((Part Wt (gm))-(Act part wt (gm)))>0.5,((Part Wt (gm))-(Act part wt (gm)))>0.5,((Part Wt (gm))-(Act part wt (gm)))>0.5,((Part Wt (gm))-(Act part wt (gm)))>0.5,((Part Wt (gm))-(Act part wt (gm)))>0.5,((Part Wt (gm))-(Act part wt (gm)))>0.5,((Part Wt (gm))-(Act part wt (gm)))>0.5,((Part Wt (gm))-(Act part wt (gm)))>0.5,((Part Wt (gm))-(Act part wt (gm)))>0.5,((Part Wt (gm))-(Act part wt (gm)))>0.5,((Part Wt (gm))-(Act part wt (gm)))>0.5,((Part Wt (gm))-(Act part wt (gm)))>0.5),"NOT OK","OK")
+
+Header: Act Cycle (sec), Cell: I85
+  Excel: =IF(OR((E60-I60)>0.5,(E28-I28)>0.5,(E24-I24)>0.5,(E20-I20)>0.5,(E16-I16)>0.5,(E12-I12)>0.5,(E8-I8)>0.5,(E32-I32)>0.5,(E36-I36)>0.5,(E40-I40)>0.5,(E44-I44)>0.5,(E48-I48)>0.5,(E52-I52)>0.5,(E64-I64)>0.5,(E68-I68)>0.5,(E72-I72)>0.5,(E76-I76)>0.5,(E56-I56)>0.5),"NOT OK","OK")
+  Human: =IF(OR(((Trg Cycle (sec))-(Act Cycle (sec)))>0.5,((Trg Cycle (sec))-(Act Cycle (sec)))>0.5,((Trg Cycle (sec))-(Act Cycle (sec)))>0.5,((Trg Cycle (sec))-(Act Cycle (sec)))>0.5,((Trg Cycle (sec))-(Act Cycle (sec)))>0.5,((Trg Cycle (sec))-(Act Cycle (sec)))>0.5,((Trg Cycle (sec))-(Act Cycle (sec)))>0.5,((Trg Cycle (sec))-(Act Cycle (sec)))>0.5,((Trg Cycle (sec))-(Act Cycle (sec)))>0.5,((Trg Cycle (sec))-(Act Cycle (sec)))>0.5,((Trg Cycle (sec))-(Act Cycle (sec)))>0.5,((Trg Cycle (sec))-(Act Cycle (sec)))>0.5,((Trg Cycle (sec))-(Act Cycle (sec)))>0.5,((Trg Cycle (sec))-(Act Cycle (sec)))>0.5,((Trg Cycle (sec))-(Act Cycle (sec)))>0.5,((Trg Cycle (sec))-(Act Cycle (sec)))>0.5,((Trg Cycle (sec))-(Act Cycle (sec)))>0.5,((Trg Cycle (sec))-(Act Cycle (sec)))>0.5),"NOT OK","OK")

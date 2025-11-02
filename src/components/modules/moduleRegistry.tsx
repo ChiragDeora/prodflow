@@ -10,6 +10,11 @@ import OperatorPanel from './operator-panel';
 import UserProfileModule from './profile';
 import MaintenanceManagementModule from './maintenance-management';
 import QualityControlModule from './quality-control';
+import ProdPlanner from './prod-planner';
+import ProductionModule from './production';
+import StoreDispatchModule from './store-dispatch';
+
+
 
 // Import all module configs
 import { moduleConfig as productionScheduleConfig } from './production-schedule/moduleConfig';
@@ -20,6 +25,11 @@ import { moduleConfig as operatorPanelConfig } from './operator-panel/moduleConf
 import { moduleConfig as profileConfig } from './profile/moduleConfig';
 import { moduleConfig as maintenanceConfig } from './maintenance-management/moduleConfig';
 import { moduleConfig as qualityConfig } from './quality-control/moduleConfig';
+import { moduleConfig as prodPlannerConfig } from './prod-planner/moduleConfig';
+import { moduleConfig as productionConfig } from './production/moduleConfig';
+import { moduleConfig as storeDispatchConfig } from './store-dispatch/moduleConfig';
+
+
 
 export interface ModuleConfig {
   id: string;
@@ -66,7 +76,19 @@ export const moduleRegistry: Record<string, ModuleDefinition> = {
   'profile': {
     config: profileConfig,
     component: UserProfileModule
-  }
+  },
+  'prod-planner': {
+    config: prodPlannerConfig,
+    component: ProdPlanner
+  },
+  'production': {
+    config: productionConfig,
+    component: ProductionModule
+  },
+  'store-dispatch': {
+    config: storeDispatchConfig,
+    component: StoreDispatchModule
+  },
 };
 
 // Get all available modules

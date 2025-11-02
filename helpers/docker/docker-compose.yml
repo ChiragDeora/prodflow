@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # Production Scheduler Application
+  app:
+    build:
+      context: ../..
+      dockerfile: helpers/docker/Dockerfile
+    env_file:
+      - ../../.env
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - supabase
+    restart: unless-stopped
+    networks:
+      - production-scheduler-network
+
+  # Supabase Local Development
+  supabase:
+    image: supabase/postgres:15.1.0.117
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - supabase_data:/var/lib/postgresql/data
+      - ../../supabase/migrations:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+    networks:
+      - production-scheduler-network
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - production-scheduler-network
+
+  # Nginx reverse proxy (optional)
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../../ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - production-scheduler-network
+
+volumes:
+  supabase_data:
+  redis_data:
+
+networks:
+  production-scheduler-network:
+    driver: bridge
+

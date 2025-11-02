@@ -1,134 +1,116 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
 import { useAuth } from './AuthProvider';
-import { UserProfile } from '../../lib/auth';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 interface RouteGuardProps {
   children: React.ReactNode;
   requireAuth?: boolean;
-  requiredRole?: 'user' | 'admin' | 'operator' | ('user' | 'admin' | 'operator')[];
-  fallback?: React.ReactNode;
+  requireRootAdmin?: boolean;
   redirectTo?: string;
 }
 
-export const RouteGuard: React.FC<RouteGuardProps> = ({
-  children,
-  requireAuth = true,
-  requiredRole,
-  fallback,
-  redirectTo
-}) => {
-  const { user, profile, loading, hasRole } = useAuth();
-  const [shouldRender, setShouldRender] = useState(false);
-  const [loadingTimeout, setLoadingTimeout] = useState(false);
-
-  // Add timeout for loading state
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (loading) {
-        console.log('RouteGuard loading timeout, forcing render');
-        setLoadingTimeout(true);
-      }
-    }, 5000); // 5 second timeout
-
-    return () => clearTimeout(timeout);
-  }, [loading]);
+export default function RouteGuard({ 
+  children, 
+  requireAuth = false, 
+  requireRootAdmin = false,
+  redirectTo = '/auth/login'
+}: RouteGuardProps) {
+  const { user, isLoading, error, clearError } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
-    console.log('RouteGuard state:', { loading, user: !!user, profile: !!profile, shouldRender });
-    
-    if (loading && !loadingTimeout) {
-      return;
+    // Always check setup status first, regardless of loading state
+    if (window.location.pathname !== '/setup') {
+      checkSetupStatus();
     }
 
-    // Check authentication requirement
-    if (requireAuth && !user) {
-      console.log('No user found, redirecting to login');
-      // Clear any stale session data
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('currentUserId');
-        localStorage.removeItem('lastUserEmail');
+    // Check for logout timestamp to prevent back button access
+    if (typeof window !== 'undefined') {
+      const logoutTimestamp = localStorage.getItem('logoutTimestamp');
+      if (logoutTimestamp) {
+        const logoutTime = parseInt(logoutTimestamp);
+        const currentTime = Date.now();
+        const timeSinceLogout = currentTime - logoutTime;
+        
+        // If logout was less than 24 hours ago, force re-authentication
+        if (timeSinceLogout < 24 * 60 * 60 * 1000) {
+          console.log('🚫 RouteGuard: User has logged out, preventing back button access');
+          localStorage.removeItem('logoutTimestamp');
+          router.replace('/auth/login');
+          return;
+        } else {
+          // Clear old logout timestamp
+          localStorage.removeItem('logoutTimestamp');
+        }
       }
-      if (redirectTo) {
-        window.location.href = redirectTo;
-      } else {
-        window.location.href = `/auth/login?redirect=${encodeURIComponent(window.location.pathname)}`;
-      }
-      return;
     }
 
-    // Check role requirement
-    if (requiredRole && !hasRole(requiredRole)) {
-      console.log('User does not have required role, redirecting to unauthorized');
-      if (redirectTo) {
-        window.location.href = redirectTo;
-      } else {
-        window.location.href = '/unauthorized';
+    if (!isLoading) {
+      // Handle authentication requirements
+      if (requireAuth && !user) {
+        router.push(redirectTo);
+        return;
       }
-      return;
+
+      if (requireRootAdmin && (!user || !user.isRootAdmin)) {
+        router.push('/unauthorized');
+        return;
+      }
+
+      // Handle password reset requirement
+      if (user?.requiresPasswordReset && window.location.pathname !== '/auth/change-password') {
+        router.push('/auth/change-password');
+        return;
+      }
     }
+  }, [user, isLoading, requireAuth, requireRootAdmin, redirectTo, router]);
 
-    console.log('Setting shouldRender to true');
-    setShouldRender(true);
-  }, [user, profile, loading, loadingTimeout, requireAuth, requiredRole, hasRole, redirectTo]);
+  const checkSetupStatus = async () => {
+    try {
+      const response = await fetch('/api/setup/root-admin');
+      const data = await response.json();
+      
+      if (data.needsSetup && window.location.pathname !== '/setup') {
+        router.push('/setup');
+      }
+    } catch (error) {
+      console.error('Setup check error:', error);
+    }
+  };
 
-  // Show loading state
-  if (loading && !loadingTimeout) {
+  // Show loading while checking authentication
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="text-gray-600 mt-4">Loading...</p>
+          {error && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-red-700 text-sm">{error}</p>
+              <button 
+                onClick={clearError}
+                className="mt-2 text-xs text-red-600 hover:text-red-800 underline"
+              >
+                Clear Error
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
-  // Show fallback if access denied
-  if (!shouldRender) {
-    return fallback || (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Access Denied</p>
-          <p className="text-sm text-gray-400 mt-2">Redirecting...</p>
-        </div>
-      </div>
-    );
+  // Show unauthorized if requirements not met
+  if (requireAuth && !user) {
+    return null; // Will redirect
+  }
+
+  if (requireRootAdmin && (!user || !user.isRootAdmin)) {
+    return null; // Will redirect
   }
 
   return <>{children}</>;
-};
-
-// Higher-order component for role-based route protection
-export const withRoleGuard = <P extends object>(
-  Component: React.ComponentType<P>,
-  requiredRole?: UserProfile['role'] | UserProfile['role'][],
-  redirectTo?: string
-) => {
-  return (props: P) => (
-    <RouteGuard requiredRole={requiredRole} redirectTo={redirectTo}>
-      <Component {...props} />
-    </RouteGuard>
-  );
-};
-
-// Specific role guard components
-export const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <RouteGuard requiredRole="admin">
-    {children}
-  </RouteGuard>
-);
-
-export const OperatorRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <RouteGuard requiredRole={['admin', 'operator']}>
-    {children}
-  </RouteGuard>
-);
-
-export const UserRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <RouteGuard requiredRole={['admin', 'operator', 'user']}>
-    {children}
-  </RouteGuard>
-); 
+}

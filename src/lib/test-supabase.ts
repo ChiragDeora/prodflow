@@ -36,7 +36,7 @@ export async function testMachineUpdate() {
     // Test 4: Revert the test update
     console.log('🔄 Test 4: Reverting test update...');
     await machineAPI.update('JSW-1', { 
-      line: null,
+      line: undefined,
       updated_at: new Date().toISOString()
     });
     console.log('✅ Test update reverted');

@@ -3,21 +3,21 @@
 import React, { useState, useEffect } from 'react';
 import { User, Edit, Save, X, LogOut, Plus, Trash2, Building, Settings, Shield, Users } from 'lucide-react';
 import { useAuth } from '../../auth/AuthProvider';
-import { userProfileAPI } from '../../../lib/auth';
 import { unitAPI, unitManagementSettingsAPI, Unit } from '../../../lib/supabase';
-import UserManagement from '../../admin/UserManagement';
+import AdminDashboard from '../../admin/AdminDashboard';
 
-type TabType = 'profile' | 'unit-management' | 'account-actions' | 'user-management';
+
+type TabType = 'profile' | 'user-management' | 'unit-management' | 'account-actions';
 
 const UserProfileModule: React.FC = () => {
-  const { user, profile, signOut, refreshProfile } = useAuth();
+  const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
-    full_name: profile?.full_name || '',
+    full_name: user?.fullName || '',
     email: user?.email || '',
-    department: profile?.department || '',
-    role: profile?.role || 'user'
+    department: '',
+    role: user?.isRootAdmin ? 'admin' : 'user'
   });
 
   // Unit management state
@@ -39,26 +39,26 @@ const UserProfileModule: React.FC = () => {
   useEffect(() => {
     console.log('Profile debug:', {
       user: user?.email,
-      profile: profile ? {
-        id: profile.id,
-        full_name: profile.full_name,
-        email: profile.email,
-        role: profile.role,
-        department: profile.department,
-        phone_number: profile.phone_number,
-        is_active: profile.is_active
+      profile: user ? {
+        id: user.id,
+        full_name: user.fullName,
+        email: user.email,
+        role: user.isRootAdmin ? 'admin' : 'user',
+        department: '',
+        phone_number: user.phone || '',
+        is_active: user.status === 'active'
       } : null,
-      isAdmin: profile?.role === 'admin'
+      isAdmin: user?.isRootAdmin || false
     });
-  }, [user, profile]);
+  }, [user]);
 
   // Load units and settings on component mount
   useEffect(() => {
-    if (profile?.role === 'admin') {
+    if (user?.isRootAdmin) {
       loadUnits();
       loadUnitManagementSettings();
     }
-  }, [profile?.role]);
+  }, [user?.isRootAdmin]);
 
   const loadUnitManagementSettings = async () => {
     try {
@@ -87,15 +87,9 @@ const UserProfileModule: React.FC = () => {
     // TODO: Implement profile update functionality
   };
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      // The signOut function now handles the redirect
-    } catch (error) {
-      console.error('Error signing out:', error);
-      // Fallback redirect
-      window.location.href = '/auth/login';
-    }
+  const handleSignOut = () => {
+    // No authentication system - just log the action
+    console.log('Sign out requested (no authentication system)');
   };
 
   // Unit management functions
@@ -155,17 +149,17 @@ const UserProfileModule: React.FC = () => {
       description: 'Manage your personal information and account details'
     },
     {
+      id: 'user-management' as TabType,
+      label: 'User Management',
+      icon: Users,
+      description: 'Approve users, reset passwords, and manage accounts',
+      adminOnly: true
+    },
+    {
       id: 'unit-management' as TabType,
       label: 'Unit Management',
       icon: Building,
       description: 'Configure units and unit management settings',
-      adminOnly: true
-    },
-    {
-      id: 'user-management' as TabType,
-      label: 'User Management',
-      icon: Users,
-      description: 'Manage users and permissions',
       adminOnly: true
     },
     {
@@ -188,10 +182,10 @@ const UserProfileModule: React.FC = () => {
                   <User className="w-12 h-12 text-blue-600" />
                 </div>
                 <h2 className="text-xl font-bold text-gray-800">
-                  {profile?.full_name || user?.email || 'Current User'}
+                  {user?.fullName || user?.email || 'Current User'}
                 </h2>
                 <p className="text-sm text-gray-500 capitalize">
-                  {profile?.role || 'User'}
+                  {user?.isRootAdmin ? 'Root Admin' : 'User'}
                 </p>
               </div>
               
@@ -202,100 +196,24 @@ const UserProfileModule: React.FC = () => {
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                   <span className="text-sm font-medium text-gray-600">Department</span>
-                  <span className="text-sm text-gray-800">{profile?.department || 'Not specified'}</span>
+                  <span className="text-sm text-gray-800">Not specified</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                   <span className="text-sm font-medium text-gray-600">Member Since</span>
                   <span className="text-sm text-gray-800">
-                    {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'Unknown'}
+                    {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-2">
                   <span className="text-sm font-medium text-gray-600">Last Updated</span>
                   <span className="text-sm text-gray-800">
-                    {profile?.updated_at ? new Date(profile.updated_at).toLocaleDateString() : 'Unknown'}
+                    {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
                   </span>
                 </div>
                 
 
                 
-                {/* Profile Fix Button for Yogesh */}
-                {user?.email === 'yogesh@polypacks.in' && (
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <button
-                      onClick={async () => {
-                        try {
-                          const { authAPI } = await import('../../../lib/auth');
-                          const result = await authAPI.fixYogeshProfile();
-                          alert(`Profile fix: ${result.message}`);
-                          if (result.success) {
-                            await refreshProfile();
-                            window.location.reload(); // Force page reload
-                          }
-                        } catch (err) {
-                          console.error('Profile fix error:', err);
-                          alert('Failed to fix profile');
-                        }
-                      }}
-                      className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
-                    >
-                      🔧 Fix Profile Connection
-                    </button>
-                    <p className="text-xs text-gray-500 mt-1 text-center">
-                      Click to fix profile connection issues
-                    </p>
-                  </div>
-                )}
 
-                {/* Temporary Admin Role Update Button */}
-                {user?.email === 'yogesh@polypacks.in' && profile?.role !== 'admin' && (
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <button
-                      onClick={async () => {
-                        try {
-                          if (!user?.email) {
-                            alert('User email not found');
-                            return;
-                          }
-                          
-                          console.log('Attempting to update role to admin for:', user.email);
-                          
-                          // Try the direct SQL method first
-                          const { error: directError } = await userProfileAPI.updateUserRoleDirect(user.email, 'admin');
-                          
-                          if (directError) {
-                            console.log('Direct method failed, trying regular method:', directError);
-                            
-                            // Fallback to regular method
-                            const { error: regularError } = await userProfileAPI.updateUserRole(user.id, 'admin');
-                            
-                            if (regularError) {
-                              console.error('Both methods failed:', regularError);
-                              alert('Failed to update role: ' + regularError.message);
-                              return;
-                            }
-                          }
-                          
-                          console.log('Role updated to admin successfully');
-                          alert('Role updated to admin! Please refresh the page.');
-                          
-                          // Force refresh the profile
-                          await refreshProfile();
-                          
-                        } catch (err) {
-                          console.error('Exception updating role:', err);
-                          alert('Failed to update role: ' + (err instanceof Error ? err.message : 'Unknown error'));
-                        }
-                      }}
-                      className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium"
-                    >
-                      🔧 Make Admin (Temporary)
-                    </button>
-                    <p className="text-xs text-gray-500 mt-1 text-center">
-                      Click to update role to admin
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -381,7 +299,7 @@ const UserProfileModule: React.FC = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                     <div className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50">
-                      {profile?.full_name || 'Not specified'}
+                      {user?.fullName || 'Not specified'}
                     </div>
                   </div>
                   <div>
@@ -393,13 +311,13 @@ const UserProfileModule: React.FC = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
                     <div className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50">
-                      {profile?.department || 'Not specified'}
+                      Not specified
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
                     <div className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 capitalize">
-                      {profile?.role || 'User'}
+                      {user?.isRootAdmin ? 'Root Admin' : 'User'}
                     </div>
                   </div>
                 </div>
@@ -408,8 +326,27 @@ const UserProfileModule: React.FC = () => {
           </div>
         );
 
+      case 'user-management':
+        if (!user?.isRootAdmin) {
+          return (
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="text-center py-12">
+                <Shield className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">Access Restricted</h3>
+                <p className="text-gray-600">User management is only available to administrators.</p>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="space-y-6">
+            <AdminDashboard />
+          </div>
+        );
+
       case 'unit-management':
-        if (profile?.role !== 'admin') {
+        if (!user?.isRootAdmin) {
           return (
             <div className="bg-white rounded-lg shadow p-6">
               <div className="text-center py-12">
@@ -560,15 +497,7 @@ const UserProfileModule: React.FC = () => {
           </div>
         );
 
-      case 'user-management':
-        return (
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">User Management</h3>
-              <UserManagement />
-            </div>
-          </div>
-        );
+
 
       case 'account-actions':
         return (
@@ -603,7 +532,7 @@ const UserProfileModule: React.FC = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Role:</span>
-                      <span className="text-gray-800 capitalize">{profile?.role || 'User'}</span>
+                      <span className="text-gray-800 capitalize">{user?.isRootAdmin ? 'Root Admin' : 'User'}</span>
                     </div>
                     
                   </div>
@@ -642,7 +571,7 @@ const UserProfileModule: React.FC = () => {
           <div className="w-80 bg-gray-50 border-r border-gray-200 p-6">
             <div className="space-y-2">
               {tabs.map((tab) => {
-                if (tab.adminOnly && profile?.role !== 'admin') return null;
+                if (tab.adminOnly && !user?.isRootAdmin) return null;
                 
                 const IconComponent = tab.icon;
                 return (

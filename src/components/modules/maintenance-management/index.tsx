@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Wrench, Clock, AlertTriangle, CheckCircle, Plus, Search, Filter, FileText, Calendar, Settings } from 'lucide-react';
-import { Machine } from '../../../lib/supabase';
+import { Machine, Line } from '../../../lib/supabase';
 import MachineChecklist from './MachineChecklist';
+import LineMaintenance from './LineMaintenance';
+import LineChecklists from './LineChecklists';
 
 interface MaintenanceTask {
   id: string;
@@ -19,10 +21,18 @@ interface MaintenanceTask {
 
 interface MaintenanceManagementModuleProps {
   machinesMaster: Machine[];
+  linesMaster: Line[];
+  unitManagementEnabled: boolean;
+  defaultUnit: string;
+  units: { id: string; name: string; description?: string; location?: string; status: 'Active' | 'Inactive' | 'Maintenance'; created_at?: string; updated_at?: string; }[];
 }
 
 const MaintenanceManagementModule: React.FC<MaintenanceManagementModuleProps> = ({
   machinesMaster,
+  linesMaster,
+  unitManagementEnabled,
+  defaultUnit,
+  units
 }) => {
   const [activeTab, setActiveTab] = useState('preventive');
   const [tasks, setTasks] = useState<MaintenanceTask[]>([]);
@@ -164,17 +174,13 @@ const MaintenanceManagementModule: React.FC<MaintenanceManagementModuleProps> = 
       <div className="flex-1 overflow-auto p-6">
         {activeTab === 'preventive' && (
           <div className="space-y-6">
-            {selectedMachine ? (
-              <MachineChecklist 
-                machine={selectedMachine} 
-                frequency={selectedFrequency}
-                onBack={() => setSelectedMachine(null)} 
-              />
-            ) : (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <p className="text-yellow-800">Line maintenance functionality has been removed. Use machine-based maintenance instead.</p>
-              </div>
-            )}
+            <LineMaintenance
+              linesMaster={linesMaster}
+              machinesMaster={machinesMaster}
+              unitManagementEnabled={unitManagementEnabled}
+              defaultUnit={defaultUnit}
+              units={units}
+            />
           </div>
         )}
 
