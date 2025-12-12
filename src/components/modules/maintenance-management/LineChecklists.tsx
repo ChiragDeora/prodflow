@@ -7,7 +7,7 @@ import {
   Plus, Edit, Trash2, Eye, Settings, Link, Package
 } from 'lucide-react';
 import { Line, Machine, MaintenanceChecklist, MaintenanceTask } from '../../../lib/supabase';
-import { maintenanceChecklistAPI, maintenanceTaskAPI } from '../../../lib/supabase';
+import { maintenanceChecklistAPI, breakdownMaintenanceAPI, preventiveMaintenanceAPI } from '../../../lib/supabase';
 import ExcelFileReader from '../../ExcelFileReader';
 import RobotChecklistExecutor from './RobotChecklistExecutor';
 
@@ -198,38 +198,61 @@ const LineChecklists: React.FC<LineChecklistsProps> = ({
 
   const loadMaintenanceTasks = async () => {
     try {
-      // Try to load from database first
-      const tasksData = await maintenanceTaskAPI.getAll();
+      // Load from both new APIs
+      const [breakdownTasks, preventiveTasks] = await Promise.all([
+        breakdownMaintenanceAPI.getAll().catch(() => []),
+        preventiveMaintenanceAPI.getAll().catch(() => [])
+      ]);
       
-      // Also load from local storage as fallback
-      const localTasks = JSON.parse(localStorage.getItem('maintenance_tasks_local') || '[]');
+      // Convert to MaintenanceTask format for compatibility
+      const allTasks: MaintenanceTask[] = [
+        ...breakdownTasks.map(task => ({
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          task_type: task.breakdown_type === 'emergency' ? 'emergency' : 'corrective',
+          priority: task.priority,
+          status: task.status,
+          machine_id: task.machine_id,
+          line_id: task.line_id,
+          unit: task.unit,
+          assigned_to: task.assigned_to,
+          due_date: task.due_date,
+          created_at: task.created_at,
+          updated_at: task.updated_at,
+          completed_at: task.completed_at,
+          notes: task.notes
+        })),
+        ...preventiveTasks.map(task => ({
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          task_type: 'preventive' as const,
+          priority: task.priority,
+          status: task.status,
+          machine_id: task.machine_id,
+          line_id: task.line_id,
+          unit: task.unit,
+          assigned_to: task.assigned_to,
+          due_date: task.due_date,
+          created_at: task.created_at,
+          updated_at: task.updated_at,
+          completed_at: task.completed_at,
+          checklist_items: task.checklist_items,
+          notes: task.notes
+        }))
+      ];
       
-      // Filter out placeholder data and combine both sources
-      const realTasksData = tasksData.filter(task => 
-        task.title && 
-        !task.title.includes('Sample') && 
-        !task.title.includes('Placeholder') &&
-        !task.title.includes('Daily Maintenance - JSW-1') &&
-        !task.title.includes('Line Maintenance - LINE-001') &&
-        !task.title.includes('Emergency Repair - Hydraulic System')
-      );
-      const allTasks = [...realTasksData, ...localTasks];
       setMaintenanceTasks(allTasks);
       
       console.log('📊 Loaded maintenance tasks:', {
-        database: tasksData.length,
-        real_database: realTasksData.length,
-        local: localTasks.length,
+        breakdown: breakdownTasks.length,
+        preventive: preventiveTasks.length,
         total: allTasks.length
       });
     } catch (error) {
       console.error('Failed to load maintenance tasks from database:', error);
-      
-      // Fallback to local storage only
-      const localTasks = JSON.parse(localStorage.getItem('maintenance_tasks_local') || '[]');
-      setMaintenanceTasks(localTasks);
-      
-      console.log('📊 Loaded maintenance tasks from local storage only:', localTasks.length);
+      setMaintenanceTasks([]);
     }
   };
 
@@ -242,29 +265,54 @@ const LineChecklists: React.FC<LineChecklistsProps> = ({
       });
 
       const selectedMaintenanceType = maintenanceTypes[selectedFrequency as keyof typeof maintenanceTypes];
-      const maintenanceTask: Omit<MaintenanceTask, 'id' | 'created_at' | 'updated_at'> = {
-        title: `${selectedMaintenanceType?.name || selectedFrequency} - ${selectedMachine?.machine.machine_id}`,
-        description: `${selectedMaintenanceType?.description || 'Maintenance performed'} on ${selectedMachine?.machine.machine_id} in ${selectedMachine?.line.line_id}`,
-        task_type: selectedFrequency === 'emergency' ? 'emergency' : 'preventive',
-        priority: selectedFrequency === 'emergency' ? 'critical' : 
-                 selectedFrequency === 'annual' ? 'high' : 'medium',
-        status: 'completed',
-        machine_id: selectedMachine?.machine.machine_id || undefined,
-        line_id: selectedMachine?.line.line_id || undefined,
-        unit: 'Unit 1',
-        assigned_to: formData.performedBy,
-        assigned_by: 'System',
-        due_date: formData.date,
-        completed_at: new Date().toISOString(),
-        checklist_items: formData.completedTasks,
-        notes: formData.notes
-      };
-
-      console.log('📝 Maintenance task object to save:', maintenanceTask);
-
-      // Try to save to database first
+      const isEmergency = selectedFrequency === 'emergency';
+      
+      // Try to save to database using appropriate API
       try {
-        const savedTask = await maintenanceTaskAPI.create(maintenanceTask);
+        let savedTask = null;
+        
+        if (isEmergency) {
+          // Use breakdown maintenance API for emergency tasks
+          const breakdownTask = {
+            title: `${selectedMaintenanceType?.name || selectedFrequency} - ${selectedMachine?.machine.machine_id}`,
+            description: `${selectedMaintenanceType?.description || 'Maintenance performed'} on ${selectedMachine?.machine.machine_id} in ${selectedMachine?.line.line_id}`,
+            breakdown_type: 'emergency',
+            priority: 'critical',
+            status: 'completed' as const,
+            machine_id: selectedMachine?.machine.machine_id || undefined,
+            line_id: selectedMachine?.line.line_id || undefined,
+            unit: 'Unit 1',
+            assigned_to: formData.performedBy,
+            due_date: formData.date,
+            completed_at: new Date().toISOString(),
+            notes: formData.notes
+          };
+          
+          savedTask = await breakdownMaintenanceAPI.create(breakdownTask);
+        } else {
+          // Use preventive maintenance API for routine/preventive tasks
+          const preventiveTask = {
+            title: `${selectedMaintenanceType?.name || selectedFrequency} - ${selectedMachine?.machine.machine_id}`,
+            description: `${selectedMaintenanceType?.description || 'Maintenance performed'} on ${selectedMachine?.machine.machine_id} in ${selectedMachine?.line.line_id}`,
+            maintenance_type: 'routine' as const,
+            schedule_frequency: selectedFrequency.toLowerCase(),
+            priority: selectedFrequency === 'annual' ? 'high' : 'medium',
+            status: 'completed' as const,
+            machine_id: selectedMachine?.machine.machine_id || undefined,
+            line_id: selectedMachine?.line.line_id || undefined,
+            unit: 'Unit 1',
+            assigned_to: formData.performedBy,
+            due_date: formData.date,
+            scheduled_date: formData.date,
+            completed_at: new Date().toISOString(),
+            checklist_items: formData.completedTasks,
+            checklist_completed: true,
+            notes: formData.notes
+          };
+          
+          savedTask = await preventiveMaintenanceAPI.create(preventiveTask);
+        }
+        
         if (savedTask) {
           console.log('✅ Maintenance log saved successfully to database:', savedTask);
           // Reload maintenance tasks to show the new entry
@@ -272,26 +320,8 @@ const LineChecklists: React.FC<LineChecklistsProps> = ({
           return true;
         }
       } catch (dbError) {
-        console.warn('⚠️ Database save failed, trying fallback approach:', dbError);
-        
-        // Fallback: Save to local storage as backup
-        const fallbackTask = {
-          ...maintenanceTask,
-          id: `local_${Date.now()}`,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        
-        // Get existing local tasks
-        const existingLocalTasks = JSON.parse(localStorage.getItem('maintenance_tasks_local') || '[]');
-        existingLocalTasks.push(fallbackTask);
-        localStorage.setItem('maintenance_tasks_local', JSON.stringify(existingLocalTasks));
-        
-        console.log('✅ Maintenance log saved to local storage as fallback:', fallbackTask);
-        
-        // Update local state to show the new entry
-        setMaintenanceTasks(prev => [...prev, fallbackTask as MaintenanceTask]);
-        return true;
+        console.warn('⚠️ Database save failed:', dbError);
+        return false;
       }
       
       return false;
@@ -528,12 +558,23 @@ const LineChecklists: React.FC<LineChecklistsProps> = ({
     if (!confirmed) return;
 
     try {
-      // Clear from database
+      // Clear from database using new APIs
       try {
-        const allTasks = await maintenanceTaskAPI.getAll();
-        for (const task of allTasks) {
-          await maintenanceTaskAPI.delete(task.id);
+        const [breakdownTasks, preventiveTasks] = await Promise.all([
+          breakdownMaintenanceAPI.getAll().catch(() => []),
+          preventiveMaintenanceAPI.getAll().catch(() => [])
+        ]);
+        
+        // Delete all breakdown tasks
+        for (const task of breakdownTasks) {
+          await breakdownMaintenanceAPI.delete(task.id).catch(() => {});
         }
+        
+        // Delete all preventive tasks
+        for (const task of preventiveTasks) {
+          await preventiveMaintenanceAPI.delete(task.id).catch(() => {});
+        }
+        
         console.log('✅ Cleared maintenance tasks from database');
       } catch (dbError) {
         console.warn('⚠️ Could not clear database records:', dbError);

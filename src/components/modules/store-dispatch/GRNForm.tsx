@@ -1,52 +1,84 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, Printer } from 'lucide-react';
-import { grnAPI } from '../../../lib/supabase';
+import { Plus, Trash2, Save, Printer, Search, Link } from 'lucide-react';
+import { grnAPI, materialIndentSlipAPI, purchaseOrderAPI, MaterialIndentSlip, MaterialIndentSlipItem, PurchaseOrder } from '../../../lib/supabase';
+import PrintHeader from '../../shared/PrintHeader';
 
 interface GRNItem {
   id: string;
-  itemDescription: string;
-  boxBag: string;
-  perBoxBagQty: string;
-  totalQty: string;
-  uom: string;
-  remarks: string;
+  description: string;
+  poQty: string;
+  grnQty: string;
+  rate: string;
+  totalPrice: string;
 }
 
 interface GRNFormData {
-  supplierName: string;
+  grnNo: string;
+  grnDate: string;
   poNo: string;
   poDate: string;
   invoiceNo: string;
   invoiceDate: string;
-  typeOfMaterial: 'RM' | 'PM' | 'STORE' | '';
-  grnNo: string;
-  grnDate: string;
-  receivedBy: string;
-  verifiedBy: string;
+  partyName: string;
+  address: string;
+  state: string;
+  gstNo: string;
+  totalAmount: string;
+  freightOthers: string;
+  igstPercentage: string;
+  cgstPercentage: string;
+  utgstPercentage: string;
+  roundOff: string;
+  finalAmount: string;
+  amountInWords: string;
   items: GRNItem[];
 }
 
 const GRNForm: React.FC = () => {
   const [formData, setFormData] = useState<GRNFormData>({
-    supplierName: '',
+    grnNo: '',
+    grnDate: new Date().toISOString().split('T')[0],
     poNo: '',
     poDate: '',
     invoiceNo: '',
     invoiceDate: '',
-    typeOfMaterial: '',
-    grnNo: '',
-    grnDate: new Date().toISOString().split('T')[0],
-    receivedBy: '',
-    verifiedBy: '',
+    partyName: '',
+    address: '',
+    state: '',
+    gstNo: '',
+    totalAmount: '',
+    freightOthers: '',
+    igstPercentage: '',
+    cgstPercentage: '',
+    utgstPercentage: '',
+    roundOff: '',
+    finalAmount: '',
+    amountInWords: '',
     items: [
-      { id: '1', itemDescription: '', boxBag: '', perBoxBagQty: '', totalQty: '', uom: '', remarks: '' }
+      { id: '1', description: '', poQty: '', grnQty: '', rate: '', totalPrice: '' }
     ]
   });
 
   const [docNo, setDocNo] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [indentSlips, setIndentSlips] = useState<MaterialIndentSlip[]>([]);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [selectedIndentSlip, setSelectedIndentSlip] = useState<MaterialIndentSlip | null>(null);
+  const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
+  const [indentItems, setIndentItems] = useState<MaterialIndentSlipItem[]>([]);
+  const [showIndentSearch, setShowIndentSearch] = useState(false);
+  const [indentSearchTerm, setIndentSearchTerm] = useState('');
+  const [showPOSearch, setShowPOSearch] = useState(false);
+  const [poSearchTerm, setPOSearchTerm] = useState('');
+
+  // Calculate totals
+  const [calculatedTotal, setCalculatedTotal] = useState(0);
+  const [calculatedIGST, setCalculatedIGST] = useState(0);
+  const [calculatedCGST, setCalculatedCGST] = useState(0);
+  const [calculatedUTGST, setCalculatedUTGST] = useState(0);
+  const [calculatedFinal, setCalculatedFinal] = useState(0);
 
   // Generate document number
   useEffect(() => {
@@ -54,10 +86,139 @@ const GRNForm: React.FC = () => {
       const year = new Date(date || new Date()).getFullYear();
       const month = String(new Date(date || new Date()).getMonth() + 1).padStart(2, '0');
       const random = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
-      return `DPPL-COM-${year}${month}-${random}/R00`;
+      return `DPPL-GRN-${year}${month}-${random}/R00`;
     };
     setDocNo(generateDocNo());
   }, [date]);
+
+  // Fetch indent slips and purchase orders
+  useEffect(() => {
+    fetchIndentSlips();
+    fetchPurchaseOrders();
+  }, []);
+
+  const fetchIndentSlips = async () => {
+    try {
+      const slips = await materialIndentSlipAPI.getAll();
+      setIndentSlips(slips);
+    } catch (error) {
+      console.error('Error fetching indent slips:', error);
+    }
+  };
+
+  const fetchPurchaseOrders = async () => {
+    try {
+      const orders = await purchaseOrderAPI.getAll();
+      setPurchaseOrders(orders);
+    } catch (error) {
+      console.error('Error fetching purchase orders:', error);
+    }
+  };
+
+  const handleIndentSlipSelect = async (indentSlip: MaterialIndentSlip) => {
+    try {
+      setSelectedIndentSlip(indentSlip);
+      
+      // Fetch indent slip details with items
+      const indentDetails = await materialIndentSlipAPI.getById(indentSlip.id);
+      if (indentDetails) {
+        setIndentItems(indentDetails.items);
+        
+        // Auto-fill form data from indent slip
+        setFormData(prev => ({
+          ...prev,
+          partyName: indentSlip.party_name || prev.partyName,
+          address: indentSlip.address || prev.address,
+          state: indentSlip.state || prev.state,
+          gstNo: indentSlip.gst_no || prev.gstNo,
+          items: indentDetails.items.map((item, index) => ({
+            id: (index + 1).toString(),
+            description: item.item_name || item.description_specification || '',
+            poQty: item.qty?.toString() || '',
+            grnQty: '',
+            rate: '',
+            totalPrice: ''
+          }))
+        }));
+      }
+      
+      setShowIndentSearch(false);
+      setIndentSearchTerm('');
+    } catch (error) {
+      console.error('Error fetching indent slip details:', error);
+    }
+  };
+
+  const handlePOSelect = async (po: PurchaseOrder) => {
+    try {
+      setSelectedPO(po);
+      
+      // Fetch PO details with items
+      const poDetails = await purchaseOrderAPI.getById(po.id);
+      if (poDetails) {
+        // Auto-fill form data from PO
+        setFormData(prev => ({
+          ...prev,
+          poNo: po.po_no || prev.poNo,
+          poDate: po.date || prev.poDate,
+          partyName: po.party_name || prev.partyName,
+          address: po.address || prev.address,
+          state: po.state || prev.state,
+          gstNo: po.gst_no || prev.gstNo,
+          items: poDetails.items.map((item, index) => ({
+            id: (index + 1).toString(),
+            description: item.description,
+            poQty: item.qty?.toString() || '',
+            grnQty: '',
+            rate: (item.rate || item.unit_price)?.toString() || '',
+            totalPrice: ''
+          }))
+        }));
+      }
+      
+      setShowPOSearch(false);
+      setPOSearchTerm('');
+    } catch (error) {
+      console.error('Error fetching PO details:', error);
+    }
+  };
+
+  // Calculate totals when items change
+  useEffect(() => {
+    const total = formData.items.reduce((sum, item) => {
+      const grnQty = parseFloat(item.grnQty) || 0;
+      const rate = parseFloat(item.rate) || 0;
+      return sum + (grnQty * rate);
+    }, 0);
+    
+    setCalculatedTotal(total);
+    
+    const freight = parseFloat(formData.freightOthers) || 0;
+    const subtotal = total + freight;
+    
+    const igstPercent = parseFloat(formData.igstPercentage) || 0;
+    const cgstPercent = parseFloat(formData.cgstPercentage) || 0;
+    const utgstPercent = parseFloat(formData.utgstPercentage) || 0;
+    
+    const igst = (subtotal * igstPercent) / 100;
+    const cgst = (subtotal * cgstPercent) / 100;
+    const utgst = (subtotal * utgstPercent) / 100;
+    
+    setCalculatedIGST(igst);
+    setCalculatedCGST(cgst);
+    setCalculatedUTGST(utgst);
+    
+    const roundOff = parseFloat(formData.roundOff) || 0;
+    const final = subtotal + igst + cgst + utgst + roundOff;
+    
+    setCalculatedFinal(final);
+    
+    setFormData(prev => ({
+      ...prev,
+      totalAmount: total.toFixed(2),
+      finalAmount: final.toFixed(2)
+    }));
+  }, [formData.items, formData.freightOthers, formData.igstPercentage, formData.cgstPercentage, formData.utgstPercentage, formData.roundOff]);
 
   const handleInputChange = (field: keyof Omit<GRNFormData, 'items'>, value: string) => {
     setFormData(prev => ({
@@ -72,11 +233,11 @@ const GRNForm: React.FC = () => {
       items: prev.items.map(item => {
         if (item.id === id) {
           const updatedItem = { ...item, [field]: value };
-          // Auto-calculate total qty if per box/bag qty and box/bag are provided
-          if ((field === 'boxBag' || field === 'perBoxBagQty') && updatedItem.boxBag && updatedItem.perBoxBagQty) {
-            const boxes = parseFloat(updatedItem.boxBag) || 0;
-            const qtyPerBox = parseFloat(updatedItem.perBoxBagQty) || 0;
-            updatedItem.totalQty = (boxes * qtyPerBox).toString();
+          // Auto-calculate total price
+          if (field === 'grnQty' || field === 'rate') {
+            const grnQty = parseFloat(updatedItem.grnQty) || 0;
+            const rate = parseFloat(updatedItem.rate) || 0;
+            updatedItem.totalPrice = (grnQty * rate).toFixed(2);
           }
           return updatedItem;
         }
@@ -88,12 +249,11 @@ const GRNForm: React.FC = () => {
   const addItemRow = () => {
     const newItem: GRNItem = {
       id: Date.now().toString(),
-      itemDescription: '',
-      boxBag: '',
-      perBoxBagQty: '',
-      totalQty: '',
-      uom: '',
-      remarks: ''
+      description: '',
+      poQty: '',
+      grnQty: '',
+      rate: '',
+      totalPrice: ''
     };
     setFormData(prev => ({
       ...prev,
@@ -116,27 +276,36 @@ const GRNForm: React.FC = () => {
       const grnData = {
         doc_no: docNo,
         date: date,
-        supplier_name: formData.supplierName,
+        grn_no: formData.grnNo || undefined,
+        grn_date: formData.grnDate || undefined,
         po_no: formData.poNo || undefined,
         po_date: formData.poDate || undefined,
         invoice_no: formData.invoiceNo || undefined,
         invoice_date: formData.invoiceDate || undefined,
-        type_of_material: formData.typeOfMaterial as 'RM' | 'PM' | 'STORE' | undefined,
-        grn_no: formData.grnNo || undefined,
-        grn_date: formData.grnDate || undefined,
-        received_by: formData.receivedBy || undefined,
-        verified_by: formData.verifiedBy || undefined
+        party_name: formData.partyName || undefined,
+        address: formData.address || undefined,
+        state: formData.state || undefined,
+        gst_no: formData.gstNo || undefined,
+        total_amount: calculatedTotal,
+        freight_others: parseFloat(formData.freightOthers) || 0,
+        igst_percentage: parseFloat(formData.igstPercentage) || 0,
+        cgst_percentage: parseFloat(formData.cgstPercentage) || 0,
+        utgst_percentage: parseFloat(formData.utgstPercentage) || 0,
+        round_off: parseFloat(formData.roundOff) || 0,
+        final_amount: calculatedFinal,
+        amount_in_words: formData.amountInWords || undefined,
+        indent_slip_id: selectedIndentSlip?.id || undefined,
+        grn_type: 'NORMAL' as const
       };
 
       const itemsData = formData.items
-        .filter(item => item.itemDescription.trim() !== '')
+        .filter(item => item.description.trim() !== '')
         .map(item => ({
-          item_description: item.itemDescription,
-          box_bag: item.boxBag || undefined,
-          per_box_bag_qty: item.perBoxBagQty ? parseFloat(item.perBoxBagQty) : undefined,
-          total_qty: item.totalQty ? parseFloat(item.totalQty) : undefined,
-          uom: item.uom || undefined,
-          remarks: item.remarks || undefined
+          item_description: item.description,
+          po_qty: item.poQty ? parseFloat(item.poQty) : undefined,
+          grn_qty: item.grnQty ? parseFloat(item.grnQty) : undefined,
+          rate: item.rate ? parseFloat(item.rate) : undefined,
+          total_price: item.totalPrice ? parseFloat(item.totalPrice) : undefined
         }));
 
       await grnAPI.create(grnData, itemsData);
@@ -144,19 +313,30 @@ const GRNForm: React.FC = () => {
       
       // Reset form
       setFormData({
-        supplierName: '',
+        grnNo: '',
+        grnDate: new Date().toISOString().split('T')[0],
         poNo: '',
         poDate: '',
         invoiceNo: '',
         invoiceDate: '',
-        typeOfMaterial: '',
-        grnNo: '',
-        grnDate: new Date().toISOString().split('T')[0],
-        receivedBy: '',
-        verifiedBy: '',
-        items: [{ id: '1', itemDescription: '', boxBag: '', perBoxBagQty: '', totalQty: '', uom: '', remarks: '' }]
+        partyName: '',
+        address: '',
+        state: '',
+        gstNo: '',
+        totalAmount: '',
+        freightOthers: '',
+        igstPercentage: '',
+        cgstPercentage: '',
+        utgstPercentage: '',
+        roundOff: '',
+        finalAmount: '',
+        amountInWords: '',
+        items: [{ id: '1', description: '', poQty: '', grnQty: '', rate: '', totalPrice: '' }]
       });
       setDate(new Date().toISOString().split('T')[0]);
+      setSelectedIndentSlip(null);
+      setSelectedPO(null);
+      setIndentItems([]);
     } catch (error) {
       console.error('Error saving GRN:', error);
       alert('Error saving GRN. Please try again.');
@@ -168,191 +348,310 @@ const GRNForm: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-8 max-w-5xl mx-auto">
+    <div className="bg-white rounded-lg shadow p-8 max-w-6xl mx-auto">
+      <PrintHeader docNo={docNo} date={date} />
+      
       <form onSubmit={handleSubmit} className="print:p-8">
-        {/* Header Section */}
-        <div className="flex justify-between items-start mb-6">
-          <div className="flex items-center gap-4">
-            <img
-              src="/dppl_logo.png"
-              alt="DEORA POLYPLAST LLP Logo"
-              width={380}
-              height={180}
-              className="object-contain"
-              onError={(e) => {
-                console.error('Failed to load logo:', e);
-              }}
-            />
-          </div>
-          <div className="text-right text-sm">
-            <div className="mb-1">
-              <span className="font-semibold">Doc. No.:</span>{' '}
-              <span>{docNo}</span>
+        {/* Main Title */}
+        <div className="text-center mb-6 print:mb-4">
+          <h2 className="text-3xl font-bold text-gray-900">Good Receipt Note (GRN)</h2>
+        </div>
+
+        {/* Material Indent Slip and PO Linking Section */}
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg print:hidden">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold text-blue-900 flex items-center gap-2">
+                  <Link className="w-5 h-5" />
+                  Link to Material Indent Slip
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowIndentSearch(!showIndentSearch)}
+                  className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 text-sm"
+                >
+                  <Search className="w-4 h-4" />
+                  {selectedIndentSlip ? 'Change' : 'Select'}
+                </button>
+              </div>
+              {selectedIndentSlip && (
+                <div className="bg-white p-2 rounded border border-blue-200 text-sm">
+                  <p className="font-semibold text-blue-700">{selectedIndentSlip.ident_no || selectedIndentSlip.doc_no}</p>
+                </div>
+              )}
             </div>
             <div>
-              <span className="font-semibold">Date :</span>{' '}
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold text-blue-900 flex items-center gap-2">
+                  <Link className="w-5 h-5" />
+                  Link to Purchase Order
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowPOSearch(!showPOSearch)}
+                  className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 text-sm"
+                >
+                  <Search className="w-4 h-4" />
+                  {selectedPO ? 'Change' : 'Select'}
+                </button>
+              </div>
+              {selectedPO && (
+                <div className="bg-white p-2 rounded border border-blue-200 text-sm">
+                  <p className="font-semibold text-blue-700">{selectedPO.po_no}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {showIndentSearch && (
+            <div className="mt-4 bg-white p-4 rounded-lg border border-blue-200">
+              <input
+                type="text"
+                placeholder="Search indent slips..."
+                value={indentSearchTerm}
+                onChange={(e) => setIndentSearchTerm(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-3"
+              />
+              <div className="max-h-40 overflow-y-auto space-y-2">
+                {indentSlips
+                  .filter(slip =>
+                    (slip.ident_no || slip.doc_no || '').toLowerCase().includes(indentSearchTerm.toLowerCase()) ||
+                    (slip.party_name || '').toLowerCase().includes(indentSearchTerm.toLowerCase())
+                  )
+                  .map(slip => (
+                    <div
+                      key={slip.id}
+                      onClick={() => handleIndentSlipSelect(slip)}
+                      className="p-2 border border-gray-200 rounded hover:bg-blue-50 cursor-pointer text-sm"
+                    >
+                      {slip.ident_no || slip.doc_no}
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {showPOSearch && (
+            <div className="mt-4 bg-white p-4 rounded-lg border border-blue-200">
+              <input
+                type="text"
+                placeholder="Search purchase orders..."
+                value={poSearchTerm}
+                onChange={(e) => setPOSearchTerm(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-3"
+              />
+              <div className="max-h-40 overflow-y-auto space-y-2">
+                {purchaseOrders
+                  .filter(po =>
+                    (po.po_no || '').toLowerCase().includes(poSearchTerm.toLowerCase()) ||
+                    (po.party_name || '').toLowerCase().includes(poSearchTerm.toLowerCase())
+                  )
+                  .map(po => (
+                    <div
+                      key={po.id}
+                      onClick={() => handlePOSelect(po)}
+                      className="p-2 border border-gray-200 rounded hover:bg-blue-50 cursor-pointer text-sm"
+                    >
+                      {po.po_no} - {po.party_name || 'N/A'}
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Party Details and GRN Details Section */}
+        <div className="grid grid-cols-2 gap-6 mb-6 print:mb-4">
+          {/* Left: Party Details */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-gray-900 mb-3">Party Details</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Party Name:
+              </label>
+              <input
+                type="text"
+                value={formData.partyName}
+                onChange={(e) => handleInputChange('partyName', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Address:
+              </label>
+              <textarea
+                value={formData.address}
+                onChange={(e) => handleInputChange('address', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-20"
+                rows={3}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  State:
+                </label>
+                <input
+                  type="text"
+                  value={formData.state}
+                  onChange={(e) => handleInputChange('state', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  GST No:
+                </label>
+                <input
+                  type="text"
+                  value={formData.gstNo}
+                  onChange={(e) => handleInputChange('gstNo', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Right: GRN Details */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-gray-900 mb-3">GRN & PO Details</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                GRN No:
+              </label>
+              <input
+                type="text"
+                value={formData.grnNo}
+                onChange={(e) => handleInputChange('grnNo', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                GRN Date:
+              </label>
               <input
                 type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="border-b border-gray-300 focus:outline-none focus:border-blue-500"
+                value={formData.grnDate}
+                onChange={(e) => handleInputChange('grnDate', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                PO No:
+              </label>
+              <input
+                type="text"
+                value={formData.poNo}
+                onChange={(e) => handleInputChange('poNo', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                PO Date:
+              </label>
+              <input
+                type="date"
+                value={formData.poDate}
+                onChange={(e) => handleInputChange('poDate', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Invoice No:
+              </label>
+              <input
+                type="text"
+                value={formData.invoiceNo}
+                onChange={(e) => handleInputChange('invoiceNo', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Date:
+              </label>
+              <input
+                type="date"
+                value={formData.invoiceDate}
+                onChange={(e) => handleInputChange('invoiceDate', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
           </div>
         </div>
 
-        {/* Main Title */}
-        <div className="text-center mb-6">
-          <h2 className="text-3xl font-bold text-gray-900">GOODS RECEIVED NOTE (GRN)</h2>
-        </div>
-
-        {/* Supplier and Invoice Details Section */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Supplier Name :-
-            </label>
-            <input
-              type="text"
-              value={formData.supplierName}
-              onChange={(e) => handleInputChange('supplierName', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              PO No. :-
-            </label>
-            <input
-              type="text"
-              value={formData.poNo}
-              onChange={(e) => handleInputChange('poNo', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              PO Date :-
-            </label>
-            <input
-              type="date"
-              value={formData.poDate}
-              onChange={(e) => handleInputChange('poDate', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Invoice No. :-
-            </label>
-            <input
-              type="text"
-              value={formData.invoiceNo}
-              onChange={(e) => handleInputChange('invoiceNo', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Invoice Date. :-
-            </label>
-            <input
-              type="date"
-              value={formData.invoiceDate}
-              onChange={(e) => handleInputChange('invoiceDate', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Type of Material :-
-            </label>
-            <select
-              value={formData.typeOfMaterial}
-              onChange={(e) => handleInputChange('typeOfMaterial', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-            >
-              <option value="">Select...</option>
-              <option value="RM">RM</option>
-              <option value="PM">PM</option>
-              <option value="STORE">STORE</option>
-            </select>
-          </div>
-        </div>
-
         {/* Items Table */}
-        <div className="mb-6 overflow-x-auto">
+        <div className="mb-6 print:mb-4 overflow-x-auto">
           <table className="w-full border-collapse border border-gray-300">
             <thead>
               <tr className="bg-gray-100">
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold w-16">SR. No.</th>
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold">ITEM DECRIPTION</th>
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold w-24">Box / Bag</th>
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold w-32">Per Box / Bag Qty.</th>
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold w-32">Total Qty.</th>
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold w-24">UOM</th>
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold">REMARKS</th>
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold w-16">Action</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-12">Sl.</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Description</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-24">PO Qty</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-24">GRN Qty</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Rate</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Total Price</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-16 print:hidden">Action</th>
               </tr>
             </thead>
             <tbody>
               {formData.items.map((item, index) => (
                 <tr key={item.id}>
-                  <td className="border border-gray-300 px-4 py-2 text-center">{index + 1}</td>
-                  <td className="border border-gray-300 px-4 py-2">
+                  <td className="border border-gray-300 px-2 py-2 text-center">{index + 1}</td>
+                  <td className="border border-gray-300 px-2 py-2">
                     <input
                       type="text"
-                      value={item.itemDescription}
-                      onChange={(e) => handleItemChange(item.id, 'itemDescription', e.target.value)}
+                      value={item.description}
+                      onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
                       className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
                       required
                     />
                   </td>
-                  <td className="border border-gray-300 px-4 py-2">
-                    <input
-                      type="text"
-                      value={item.boxBag}
-                      onChange={(e) => handleItemChange(item.id, 'boxBag', e.target.value)}
-                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                    />
-                  </td>
-                  <td className="border border-gray-300 px-4 py-2">
+                  <td className="border border-gray-300 px-2 py-2">
                     <input
                       type="number"
-                      value={item.perBoxBagQty}
-                      onChange={(e) => handleItemChange(item.id, 'perBoxBagQty', e.target.value)}
+                      value={item.poQty}
+                      onChange={(e) => handleItemChange(item.id, 'poQty', e.target.value)}
                       className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
                       step="0.01"
                       min="0"
                     />
                   </td>
-                  <td className="border border-gray-300 px-4 py-2">
+                  <td className="border border-gray-300 px-2 py-2">
+                    <input
+                      type="number"
+                      value={item.grnQty}
+                      onChange={(e) => handleItemChange(item.id, 'grnQty', e.target.value)}
+                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                      step="0.01"
+                      min="0"
+                    />
+                  </td>
+                  <td className="border border-gray-300 px-2 py-2">
+                    <input
+                      type="number"
+                      value={item.rate}
+                      onChange={(e) => handleItemChange(item.id, 'rate', e.target.value)}
+                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                      step="0.01"
+                      min="0"
+                    />
+                  </td>
+                  <td className="border border-gray-300 px-2 py-2">
                     <input
                       type="text"
-                      value={item.totalQty}
+                      value={item.totalPrice || '-'}
                       readOnly
                       className="w-full px-2 py-1 border-none bg-gray-50"
                     />
                   </td>
-                  <td className="border border-gray-300 px-4 py-2">
-                    <input
-                      type="text"
-                      value={item.uom}
-                      onChange={(e) => handleItemChange(item.id, 'uom', e.target.value)}
-                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                    />
-                  </td>
-                  <td className="border border-gray-300 px-4 py-2">
-                    <input
-                      type="text"
-                      value={item.remarks}
-                      onChange={(e) => handleItemChange(item.id, 'remarks', e.target.value)}
-                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                    />
-                  </td>
-                  <td className="border border-gray-300 px-4 py-2 text-center">
+                  <td className="border border-gray-300 px-2 py-2 text-center print:hidden">
                     {formData.items.length > 1 && (
                       <button
                         type="button"
@@ -370,58 +669,109 @@ const GRNForm: React.FC = () => {
           <button
             type="button"
             onClick={addItemRow}
-            className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 print:hidden"
           >
             <Plus className="w-4 h-4" />
             Add Row
           </button>
         </div>
 
-        {/* Footer Section */}
-        <div className="grid grid-cols-2 gap-6 mt-8 border-t border-gray-300 pt-4">
-          <div>
+        {/* Summary Section */}
+        <div className="flex justify-between items-start mb-6 print:mb-4">
+          {/* Left: Amount in Words */}
+          <div className="flex-1 mr-6">
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Received By
+              Amount in Word :-
             </label>
             <input
               type="text"
-              value={formData.receivedBy}
-              onChange={(e) => handleInputChange('receivedBy', e.target.value)}
+              value={formData.amountInWords}
+              onChange={(e) => handleInputChange('amountInWords', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Verified By
-            </label>
-            <input
-              type="text"
-              value={formData.verifiedBy}
-              onChange={(e) => handleInputChange('verifiedBy', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              GRN NO. :-
-            </label>
-            <input
-              type="text"
-              value={formData.grnNo}
-              onChange={(e) => handleInputChange('grnNo', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              DATE :-
-            </label>
-            <input
-              type="date"
-              value={formData.grnDate}
-              onChange={(e) => handleInputChange('grnDate', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
+
+          {/* Right: Financial Summary */}
+          <div className="w-64">
+            <table className="w-full border-collapse border border-gray-300">
+              <tbody>
+                <tr>
+                  <td className="border border-gray-300 px-4 py-2 font-semibold bg-gray-100">Total Amount</td>
+                  <td className="border border-gray-300 px-4 py-2 text-right">{calculatedTotal.toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td className="border border-gray-300 px-4 py-2 font-semibold bg-gray-100">Freight & Others</td>
+                  <td className="border border-gray-300 px-4 py-2">
+                    <input
+                      type="number"
+                      value={formData.freightOthers}
+                      onChange={(e) => handleInputChange('freightOthers', e.target.value)}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-right"
+                      step="0.01"
+                      min="0"
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <td className="border border-gray-300 px-4 py-2 font-semibold bg-gray-100">IGST %</td>
+                  <td className="border border-gray-300 px-4 py-2">
+                    <input
+                      type="number"
+                      value={formData.igstPercentage}
+                      onChange={(e) => handleInputChange('igstPercentage', e.target.value)}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-right"
+                      step="0.01"
+                      min="0"
+                    />
+                    <div className="text-right mt-1 text-sm">{calculatedIGST.toFixed(2)}</div>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="border border-gray-300 px-4 py-2 font-semibold bg-gray-100">CGST %</td>
+                  <td className="border border-gray-300 px-4 py-2">
+                    <input
+                      type="number"
+                      value={formData.cgstPercentage}
+                      onChange={(e) => handleInputChange('cgstPercentage', e.target.value)}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-right"
+                      step="0.01"
+                      min="0"
+                    />
+                    <div className="text-right mt-1 text-sm">{calculatedCGST.toFixed(2)}</div>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="border border-gray-300 px-4 py-2 font-semibold bg-gray-100">UTGST%</td>
+                  <td className="border border-gray-300 px-4 py-2">
+                    <input
+                      type="number"
+                      value={formData.utgstPercentage}
+                      onChange={(e) => handleInputChange('utgstPercentage', e.target.value)}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-right"
+                      step="0.01"
+                      min="0"
+                    />
+                    <div className="text-right mt-1 text-sm">{calculatedUTGST.toFixed(2)}</div>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="border border-gray-300 px-4 py-2 font-semibold bg-gray-100">Round Off</td>
+                  <td className="border border-gray-300 px-4 py-2">
+                    <input
+                      type="number"
+                      value={formData.roundOff}
+                      onChange={(e) => handleInputChange('roundOff', e.target.value)}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-right"
+                      step="0.01"
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <td className="border border-gray-300 px-4 py-2 font-semibold bg-gray-100">Final Amount</td>
+                  <td className="border border-gray-300 px-4 py-2 text-right font-bold">{calculatedFinal.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -449,4 +799,3 @@ const GRNForm: React.FC = () => {
 };
 
 export default GRNForm;
-

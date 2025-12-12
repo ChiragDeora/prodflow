@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Save } from 'lucide-react';
+import { Save, Printer } from 'lucide-react';
 import { vendorRegistrationAPI } from '../../../lib/supabase';
+import PrintHeader from '../../shared/PrintHeader';
 
 interface VendorRegistrationFormData {
   customerName: string;
@@ -11,6 +12,9 @@ interface VendorRegistrationFormData {
   emailId: string;
   gstNo: string;
   panNo: string;
+  bankName: string;
+  bankAccountNumber: string;
+  ifscCode: string;
   customerSupplier: 'Customer' | 'Supplier' | '';
 }
 
@@ -22,6 +26,9 @@ const VendorRegistrationForm: React.FC = () => {
     emailId: '',
     gstNo: '',
     panNo: '',
+    bankName: '',
+    bankAccountNumber: '',
+    ifscCode: '',
     customerSupplier: ''
   });
 
@@ -42,6 +49,9 @@ const VendorRegistrationForm: React.FC = () => {
         email_id: formData.emailId || undefined,
         gst_no: formData.gstNo || undefined,
         pan_no: formData.panNo || undefined,
+        bank_name: formData.bankName || undefined,
+        bank_account_number: formData.bankAccountNumber || undefined,
+        ifsc_code: formData.ifscCode || undefined,
         customer_supplier: formData.customerSupplier as 'Customer' | 'Supplier' | undefined
       };
 
@@ -56,6 +66,9 @@ const VendorRegistrationForm: React.FC = () => {
         emailId: '',
         gstNo: '',
         panNo: '',
+        bankName: '',
+        bankAccountNumber: '',
+        ifscCode: '',
         customerSupplier: ''
       });
     } catch (error) {
@@ -64,10 +77,17 @@ const VendorRegistrationForm: React.FC = () => {
     }
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
     <div className="bg-white rounded-lg shadow p-8 max-w-3xl mx-auto">
-      <form onSubmit={handleSubmit}>
-        {/* Header */}
+      <form onSubmit={handleSubmit} className="print:p-8">
+        {/* Print Header - Only visible when printing/exporting */}
+        <PrintHeader />
+        
+        {/* Main Title */}
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold text-gray-900">Customer / Vendor Registration Form</h2>
         </div>
@@ -146,7 +166,55 @@ const VendorRegistrationForm: React.FC = () => {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
+        </div>
 
+        {/* Bank Details Section */}
+        <div className="mt-8 pt-8 border-t border-gray-200">
+          <h3 className="text-xl font-semibold text-gray-900 mb-6">Bank Details</h3>
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Bank Name :
+                </label>
+                <input
+                  type="text"
+                  value={formData.bankName}
+                  onChange={(e) => handleInputChange('bankName', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Bank A/c No :
+                </label>
+                <input
+                  type="text"
+                  value={formData.bankAccountNumber}
+                  onChange={(e) => handleInputChange('bankAccountNumber', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  IFSC No. :
+                </label>
+                <input
+                  type="text"
+                  value={formData.ifscCode}
+                  onChange={(e) => handleInputChange('ifscCode', e.target.value.toUpperCase())}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  maxLength={11}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Customer/Supplier Field */}
+        <div className="mt-8 pt-8 border-t border-gray-200">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Customer/Supplier :-
@@ -164,8 +232,16 @@ const VendorRegistrationForm: React.FC = () => {
           </div>
         </div>
 
-        {/* Action Button */}
-        <div className="flex justify-end mt-8 print:hidden">
+        {/* Action Buttons */}
+        <div className="flex justify-end gap-3 mt-8 print:hidden">
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
+          >
+            <Printer className="w-4 h-4" />
+            Print / Export
+          </button>
           <button
             type="submit"
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"

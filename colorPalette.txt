@@ -1,0 +1,80 @@
+Barley White - #FFF4CE
+Stark White - #D6CAB8
+Snow White - #FFFAFA
+White - #FFFFFF
+Floral White - #FFFAF0
+Cornsilk - #FFF8DC
+Antique White - #FAEBD7
+Papaya Whip - #FFEFD5
+Peach Puff - #FFDAB9
+Bone White - #F9F6EE
+Pearl - #E2DFD2
+Vanilla - #F3E5AB
+Parchment - #FCF5E5
+Dutch White - #EFDFBB
+White Smoke - #F5F5F5
+Linen - #FAF0E6
+Platinum - #E5E4E2
+Honeydew - #F0FFF0
+Seashell - #FFF5EE
+Vanilla White - #FFFAFA
+Chiffon - #FFFACD
+Old Lace - #FFF8F0
+Off-White - #F2F0EF
+Misty Rose - #FFE4E1
+Ghost - #F8F8FF
+Merino - #F2EBDD
+Cup Cake - #EBF6F7
+Link Water - #ECF3F9
+Soft Peach - #F6F1F4
+Island Spice - #FFFCEC
+Audience Anger - #EAF4FC
+Ivory - #FDFFF5
+Old Wood - #F0EEE4
+Spring - #F3F0E8
+Happy Tan - #EBF5F0
+Peppermint - #F1F9EC
+Unresolved Problem - #F3F2ED
+
+Minimal White - #FFFFFF
+Minimal Light - #F7F7F7
+Minimal Gray - #EDEDED
+Soft Silver - #D2D2D2
+Medium Gray - #A5A5A5
+Slate Gray - #6E6E6E
+Charcoal - #2A2A2A
+
+Warm Cream - #FFF9F0
+Soft Sand - #FCEFD9
+Pale Oat - #F4E8CC
+Warm Linen - #EDE1C0
+Muted Khaki - #D7CBB0
+Olive Beige - #B8AE95
+Deep Taupe - #8D8471
+
+Cool White - #FAFBFF
+Fog Gray - #F2F4F8
+Cloud Gray - #E5E8EE
+Steel Mist - #D0D5DD
+Dusty Blue - #98A1B3
+Urban Slate - #6C7380
+Midnight Graphite - #3B3F46
+
+Blush White - #FFE4E8
+Soft Cream - #FFF7F0
+Mint White - #F0FFF8
+
+Earth Mist - #E8E3D8
+Claystone - #D8D2C3
+Warm Pebble - #C3BBAB
+Muted Fawn - #A89F90
+Smoked Umber - #7A7366
+Deep Earth - #4C4742
+
+Ice White - #F8FAFF
+Pale Sky - #EDF3FF
+Frost Blue - #DCE7F8
+Clear Lake - #C3D6F1
+Sky Steel - #9FBDE2
+Harbor Blue - #6C8BB1
+Deep Ocean - #2D4660

@@ -12,9 +12,11 @@ import {
 } from 'lucide-react';
 import {
   machineAPI, moldAPI, scheduleAPI, rawMaterialAPI, packingMaterialAPI, lineAPI, maintenanceChecklistAPI, bomMasterAPI,
-  Machine, Mold, ScheduleJob, PackingMaterial, Line, MaintenanceChecklist, BOMMaster
+  colorLabelAPI, partyNameAPI,
+  Machine, Mold, ScheduleJob, PackingMaterial, Line, MaintenanceChecklist, BOMMaster, ColorLabel, PartyName
 } from '../lib/supabase';
 import { useAuth } from './auth/AuthProvider';
+import { removeOldPrefix, updateItemNameWithRPOrCK } from '../utils/bomCodeUtils';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -76,7 +78,7 @@ interface MultiSheetConfig {
   validateImport?: (combinedData: any[]) => { valid: boolean; errors: string[] };
 }
 
-type DataType = 'machines' | 'molds' | 'schedules' | 'raw_materials' | 'packing_materials' | 'lines' | 'maintenance_checklists' | 'bom_masters' | 'sfg_bom' | 'fg_bom' | 'local_bom' | 'dpr';
+type DataType = 'machines' | 'molds' | 'schedules' | 'raw_materials' | 'packing_materials' | 'lines' | 'maintenance_checklists' | 'bom_masters' | 'sfg_bom' | 'fg_bom' | 'local_bom' | 'dpr' | 'color_labels' | 'party_names';
 
 interface ImportData {
   machines: Machine[];
@@ -91,6 +93,8 @@ interface ImportData {
   fg_bom: any[];
   local_bom: any[];
   dpr?: any; // DPR data structure (will be defined based on your headers)
+  color_labels: ColorLabel[];
+  party_names: PartyName[];
 }
 
 interface ExcelFileReaderProps {
@@ -141,7 +145,13 @@ const CANONICAL_HEADERS: Record<DataType, string[]> = {
         local_bom: [
           'Sl', 'Item Code', 'Pack Size', 'SFG-1', 'SFG-1 Qty', 'SFG-2', 'SFG-2 Qty', 'CNT Code', 'CNT QTY', 'Polybag Code', 'Poly Qty', 'BOPP 1', 'Qty/Meter', 'BOPP 2', 'Qty/Meter 2'
         ],
-  dpr: [] // DPR will be configured with multi-sheet structure - headers defined in sheet mappings
+  dpr: [], // DPR will be configured with multi-sheet structure - headers defined in sheet mappings
+  color_labels: [
+    'Sr. No.', 'Color / Label'
+  ],
+  party_names: [
+    'Sr. No.', 'Name'
+  ]
 };
 
 // ============================================================================
@@ -325,6 +335,27 @@ const TEMPLATE_MAPPINGS = {
     'GPPS %': 'gpps_percentage',
         'MB %': 'mb_percentage'
   },
+  color_labels: {
+    'Sr. No.': 'sr_no',
+    'Sr. No': 'sr_no',
+    'Sr.no.': 'sr_no',
+    'Sr.no': 'sr_no',
+    'Color / Label': 'color_label',
+    'Color': 'color_label',
+    'Color/Label': 'color_label',
+    'colour': 'color_label',
+    'Colour': 'color_label',
+    'Name': 'color_label'
+  },
+  party_names: {
+    'Sr. No.': 'sl_no',
+    'Sr. No': 'sl_no',
+    'Sr.no.': 'sl_no',
+    'Sr.no': 'sl_no',
+    'Name': 'name',
+    'Party Name': 'name',
+    'PartyName': 'name'
+  },
   fg_bom: {
     'Sl': 'sl_no',
     'Item Code': 'item_code',
@@ -498,7 +529,9 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
     bom_masters: [],
     sfg_bom: [],
     fg_bom: [],
-    local_bom: []
+    local_bom: [],
+    color_labels: [],
+    party_names: []
   });
 
   // UI/UX
@@ -687,7 +720,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
         }
 
         // Read sheet data (both raw and formatted)
-        // For DPR sheets, we need better handling of merged cells
+        // For DPR sheets, extract data from unmerged cells
         const rawData = XLSX.utils.sheet_to_json(targetSheet, { 
           header: 1, 
           raw: true, 
@@ -700,47 +733,257 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           defval: null
         }) as any[][];
         
-        // Direct worksheet access for merged cells
-        // XLSX stores merged cell values in the top-left cell of the merge
-        // We'll use this for machine numbers and operator names
+        // Direct worksheet access for cell values
         const worksheetCells = targetSheet;
 
         // Determine header row and data start row
         const headerRowIdx = mapping.headerRow ?? 0;
-        const dataStartIdx = mapping.dataStartRow ?? (headerRowIdx + 1);
+        let dataStartIdx = mapping.dataStartRow ?? (headerRowIdx + 1);
+        
+        // Special handling for DPR: Check if header row (rows 6-7) actually contains data
+        // Sometimes the first machine's data is in the header row
+        if (mapping.headerRow === 6 && rawData.length > 7) {
+          const headerRowData = rawData[6] || [];
+          const headerRow2Data = rawData[7] || [];
+          // Check if row 6 has a machine number (it's actually data, not headers)
+          if (headerRowData.length > 0) {
+            const firstCell = String(headerRowData[0] || '').trim();
+            if (parseMachineNumber(firstCell)) {
+              // Row 6 contains actual data, not headers - adjust data start
+              dataStartIdx = 6; // Start from row 6 instead of 8
+              console.log(`⚠️ Detected data in header row - adjusting dataStartIdx to ${dataStartIdx} for sheet ${sheetName}`);
+            }
+          }
+        }
 
         if (headerRowIdx >= rawData.length) {
           errors.push(`Sheet "${sheetName}": Header row ${headerRowIdx} doesn't exist`);
           continue;
         }
 
-        // Extract headers - for DPR, headers might be in rows 6 and 7 (merged)
-        // Combine headers from both rows to get complete header info
-        const headerRow1 = (rawData[headerRowIdx] || []).map((h, idx) => {
-          const textH = textData[headerRowIdx]?.[idx];
-          return String(textH !== null && textH !== undefined ? textH : h ?? '').trim();
-        });
+        // Extract headers - for DPR, headers are in rows 6 and 7
+        // BUT: Sometimes row 6-7 contain actual data, not headers
+        // Check if row 6 has a machine number - if so, it's data, not headers
+        let actualHeaderRowIdx = headerRowIdx;
+        let actualDataStartIdx = dataStartIdx;
+        let headers: string[] = [];
         
-        // Also check row 7 for merged headers (DPR structure)
-        let headerRow2: string[] = [];
         if (headerRowIdx === 6 && rawData.length > 7) {
-          headerRow2 = (rawData[7] || []).map((h, idx) => {
-            const textH = textData[7]?.[idx];
+          const row6FirstCell = String(rawData[6]?.[0] || '').trim();
+          const row7FirstCell = String(rawData[7]?.[0] || '').trim();
+          
+          // Check if row 6 or row 7 has machine numbers (they're data, not headers)
+          const row6IsData = parseMachineNumber(row6FirstCell);
+          const row7IsData = parseMachineNumber(row7FirstCell);
+          
+          // If row 6 has a machine number, it's actually data, headers are in row 5
+          if (row6IsData) {
+            // Row 6 is data, so headers must be in row 5 (or earlier)
+            actualHeaderRowIdx = 5;
+            actualDataStartIdx = 6; // Data starts at row 6
+            console.log(`⚠️ Row 6 contains data (${row6FirstCell}), not headers. Adjusting header row to ${actualHeaderRowIdx}, data start to ${actualDataStartIdx}`);
+            
+            // Extract headers from row 5 (or use default header names)
+            if (rawData.length > 5) {
+              const headerRow = (rawData[5] || []).map((h, idx) => {
+                const textH = textData[5]?.[idx];
             return String(textH !== null && textH !== undefined ? textH : h ?? '').trim();
           });
+              headers = headerRow;
+            } else {
+              // Use default column names if no header row found
+              headers = Array(26).fill('').map((_, i) => {
+                const col = String.fromCharCode(65 + i); // A, B, C, etc.
+                return `Column ${col}`;
+              });
+            }
+          } else if (row7IsData) {
+            // Row 7 contains data (IMM-01, etc.), so row 6 has the actual headers
+            console.log(`⚠️ Row 7 contains data (${row7FirstCell}), using row 6 headers only`);
+            
+            // Get merged cell ranges from worksheet
+            const mergedRanges = targetSheet['!merges'] || [];
+            
+            // Extract row 6 headers (with merged cell values spread)
+            const row6HeadersOnly: string[] = [];
+            const maxCols = Math.max(
+              rawData[6]?.length || 0,
+              rawData[7]?.length || 0,
+              26
+            );
+            
+            // Initialize all columns
+            for (let col = 0; col < maxCols; col++) {
+              row6HeadersOnly[col] = '';
+            }
+            
+            // Process merged cells for row 6
+            mergedRanges.forEach((merge: any) => {
+              const startRow = merge.s.r;
+              const endRow = merge.e.r;
+              const startCol = merge.s.c;
+              const endCol = merge.e.c;
+              
+              // Only process merges that include row 6 (index 6)
+              if (startRow <= 6 && endRow >= 6) {
+                const cellRef = XLSX.utils.encode_cell({ r: startRow, c: startCol });
+                const cell = targetSheet[cellRef];
+                const cellValue = cell ? (cell.w || cell.v || '') : '';
+                const headerValue = String(cellValue).trim();
+                
+                // Spread the header value across all columns in the merge
+                for (let col = startCol; col <= endCol && col < maxCols; col++) {
+                  if (!row6HeadersOnly[col] || row6HeadersOnly[col] === '') {
+                    row6HeadersOnly[col] = headerValue;
+                  }
+                }
+              }
+            });
+            
+            // Fill in any remaining cells from row 6 (non-merged cells)
+            if (rawData[6]) {
+              rawData[6].forEach((cell, col) => {
+                if (col < maxCols && (!row6HeadersOnly[col] || row6HeadersOnly[col] === '')) {
+                  const textH = textData[6]?.[col];
+                  const value = String(textH !== null && textH !== undefined ? textH : cell ?? '').trim();
+                  if (value) {
+                    row6HeadersOnly[col] = value;
+                  }
+                }
+              });
+            }
+            
+            headers = row6HeadersOnly;
+            // Data starts at row 7 (index 7) since row 7 contains the first machine's data
+            actualDataStartIdx = 7;
+            console.log(`📋 Using row 6 headers (row 7 is data):`, headers.slice(0, 26));
+          } else {
+            // Normal case: row 6-7 are headers with merged cells
+            // Structure:
+            // - A6-I6: Merged header, row 7 has individual sub-headers
+            // - J6-K6: Merged "No of Shots", row 7 has "Start" and "End"
+            // - L6-T6: Merged header, row 7 has individual sub-headers
+            // - U6-X6: Merged "Stoppage Time", row 7 has "Reason", "Start Time", "End Time", "Total Time"
+            // - Y6-Z6: Merged headers (Mould change, REMARK)
+            
+            // Get merged cell ranges from worksheet
+            const mergedRanges = targetSheet['!merges'] || [];
+            
+            // Extract row 6 headers (with merged cell values spread)
+            const row6Headers: string[] = [];
+            const maxCols = Math.max(
+              rawData[6]?.length || 0,
+              rawData[7]?.length || 0,
+              textData[6]?.length || 0,
+              textData[7]?.length || 0,
+              26 // At least 26 columns (A-Z)
+            );
+            
+            // Initialize all columns
+            for (let col = 0; col < maxCols; col++) {
+              row6Headers[col] = '';
+            }
+            
+            // Process merged cells for row 6
+            mergedRanges.forEach((merge: any) => {
+              const startRow = merge.s.r; // Start row (0-based)
+              const endRow = merge.e.r;   // End row
+              const startCol = merge.s.c; // Start column (0-based)
+              const endCol = merge.e.c;   // End column
+              
+              // Only process merges that include row 6 (index 6)
+              if (startRow <= 6 && endRow >= 6) {
+                // Get the value from the top-left cell of the merge
+                const cellRef = XLSX.utils.encode_cell({ r: startRow, c: startCol });
+                const cell = targetSheet[cellRef];
+                const cellValue = cell ? (cell.w || cell.v || '') : '';
+                const headerValue = String(cellValue).trim();
+                
+                // Spread the header value across all columns in the merge
+                for (let col = startCol; col <= endCol && col < maxCols; col++) {
+                  if (!row6Headers[col] || row6Headers[col] === '') {
+                    row6Headers[col] = headerValue;
+                  }
+                }
+              }
+            });
+            
+            // Fill in any remaining cells from row 6 (non-merged cells)
+            if (rawData[6]) {
+              rawData[6].forEach((cell, col) => {
+                if (col < maxCols && (!row6Headers[col] || row6Headers[col] === '')) {
+                  const textH = textData[6]?.[col];
+                  const value = String(textH !== null && textH !== undefined ? textH : cell ?? '').trim();
+                  if (value) {
+                    row6Headers[col] = value;
+                  }
+                }
+              });
+            }
+            
+            // Extract row 7 sub-headers
+            const row7Headers: string[] = [];
+            if (rawData.length > 7 && rawData[7]) {
+              rawData[7].forEach((cell, col) => {
+                if (col < maxCols) {
+                  const textH = textData[7]?.[col];
+                  const value = String(textH !== null && textH !== undefined ? textH : cell ?? '').trim();
+                  row7Headers[col] = value;
+                }
+              });
+            }
+            
+            // Combine headers: Use row 7 sub-headers as primary (they're the actual column names)
+            // BUT: Row 7 might contain DATA for the first machine, not headers
+            // Check if row 7 contains data (machine number pattern) vs headers (text labels)
+            headers = Array(maxCols).fill('').map((_, col) => {
+              const row7Header = row7Headers[col] || '';
+              const row6Header = row6Headers[col] || '';
+              
+              // Check if row 7 cell contains a machine number (it's data, not a header)
+              const isRow7Data = /(IMM|MM)[-\s]?\d+/i.test(row7Header);
+              
+              // If row 7 has data (machine number), use row 6 header instead
+              if (isRow7Data && row6Header) {
+                return row6Header;
+              }
+              
+              // For columns J-K (No of Shots) and U-X (Stoppage Time), combine main + sub-header for clarity
+              if (row7Header && row6Header && row6Header !== row7Header && !isRow7Data) {
+                // J-K: "No of Shots" + "Start"/"End" -> "No of Shots Start" / "No of Shots End"
+                if (col >= 9 && col <= 10) {
+                  return `${row6Header} ${row7Header}`.trim();
+                }
+                // U-X: "Stoppage Time" + "Reason"/"Start Time"/etc -> "Stoppage Time Reason" / etc
+                if (col >= 20 && col <= 23) {
+                  return `${row6Header} ${row7Header}`.trim();
+                }
+              }
+              
+              // For all other columns, use row 7 sub-header if it's not data (it's the actual column name)
+              // Examples: M/c No., Product, Target Qty, etc.
+              if (row7Header && !isRow7Data) {
+                return row7Header;
+              }
+              
+              // Fallback to row 6 header if row 7 is empty or contains data
+              return row6Header;
+            });
+            
+            console.log(`📋 Row 6 merged headers:`, row6Headers.slice(0, 26));
+            console.log(`📋 Row 7 sub-headers:`, row7Headers.slice(0, 26));
+          }
+        } else {
+          // Standard header extraction
+          const headerRow1 = (rawData[headerRowIdx] || []).map((h, idx) => {
+            const textH = textData[headerRowIdx]?.[idx];
+            return String(textH !== null && textH !== undefined ? textH : h ?? '').trim();
+          });
+          headers = headerRow1;
         }
-        
-        // Combine headers - prefer non-empty values from either row
-        const headers = headerRow1.map((h1, idx) => {
-          const h2 = headerRow2[idx] || '';
-          // If row 1 header is empty but row 2 has value, use row 2
-          if (!h1 && h2) return h2;
-          // If row 2 has a more specific value, prefer it
-          if (h1 && h2 && h2.length > h1.length) return h2;
-          return h1;
-        });
 
-        console.log(`📋 Headers from ${sheetName} (rows ${headerRowIdx}-${headerRowIdx === 6 ? 7 : headerRowIdx}):`, headers);
+        console.log(`📋 Headers from ${sheetName} (row ${actualHeaderRowIdx}):`, headers);
+        console.log(`📊 Data will start from row index ${actualDataStartIdx}`);
 
         // Build column index map for header-based fields
         const headerIndexMap = new Map<string, number>();
@@ -754,14 +997,56 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
 
         // Extract field data
         const extractedRows: any[] = [];
+        let shiftTotalRow: any = null;
+        let achievementRow: any = null;
 
-        for (let rowIdx = dataStartIdx; rowIdx < rawData.length; rowIdx++) {
+        // Use the adjusted data start index
+        const finalDataStartIdx = actualDataStartIdx !== undefined ? actualDataStartIdx : dataStartIdx;
+        
+        for (let rowIdx = finalDataStartIdx; rowIdx < rawData.length; rowIdx++) {
           const rawRow = rawData[rowIdx] || [];
           const textRowData = textData[rowIdx] || [];
           
           // Skip empty rows
           if (rawRow.every(cell => cell === null || cell === undefined || cell === '')) {
             continue;
+          }
+
+          // Check if this is a SHIFT TOTAL or Achievement row BEFORE validation
+          const firstCell = String(textRowData[0] ?? rawRow[0] ?? '').trim();
+          const isShiftTotal = firstCell.toUpperCase().includes('SHIFT TOTAL') || firstCell.toUpperCase() === 'SHIFT TOTAL';
+          const isAchievement = firstCell.toUpperCase().includes('ACHIEVEMENT') || firstCell.toUpperCase() === 'ACHIEVEMENT';
+          
+          // Handle SHIFT TOTAL and Achievement rows separately (extract before validation)
+          if (isShiftTotal || isAchievement) {
+            // Extract all production data using same column structure as machine rows
+            // Headers are in same position, so use column indices
+            const summaryRowData: any = {
+              type: isShiftTotal ? 'shiftTotal' : 'achievement',
+              label: firstCell,
+              // Extract using same column indices as machine data fields
+              targetQty: parseFloat(textRowData[11] ?? rawRow[11] ?? 0) || 0, // Column L (Target Qty)
+              actualQty: parseFloat(textRowData[12] ?? rawRow[12] ?? 0) || 0, // Column M (Actual Qty)
+              okProdQty: parseFloat(textRowData[13] ?? rawRow[13] ?? 0) || 0, // Column N (Ok Prod Qty)
+              okProdKgs: parseFloat(textRowData[14] ?? rawRow[14] ?? 0) || 0, // Column O (Ok Prod Kgs)
+              okProdPercent: parseFloat(textRowData[15] ?? rawRow[15] ?? 0) || 0, // Column P (Ok Prod %)
+              rejKgs: parseFloat(textRowData[16] ?? rawRow[16] ?? 0) || 0, // Column Q (Rej Kgs)
+              lumps: parseFloat(textRowData[17] ?? rawRow[17] ?? 0) || 0, // Column R (lumps)
+              runTime: parseFloat(textRowData[18] ?? rawRow[18] ?? 0) || 0, // Column S (Run Time)
+              downTime: parseFloat(textRowData[19] ?? rawRow[19] ?? 0) || 0, // Column T (Down time)
+              totalTime: parseFloat(textRowData[23] ?? rawRow[23] ?? 0) || 0, // Column X (Total Time in Stoppage section)
+            };
+            
+            if (isShiftTotal) {
+              shiftTotalRow = summaryRowData;
+              console.log(`✅ Extracted SHIFT TOTAL from row ${rowIdx + 1} in sheet ${sheetName}:`, summaryRowData);
+              console.log(`🔍 Total Time raw value from column X (index 23):`, textRowData[23] ?? rawRow[23], 'parsed:', summaryRowData.totalTime);
+                } else {
+              achievementRow = summaryRowData;
+              console.log(`✅ Extracted Achievement from row ${rowIdx + 1} in sheet ${sheetName}:`, summaryRowData);
+              console.log(`🔍 Achievement Target Qty:`, summaryRowData.targetQty);
+            }
+            continue; // Skip normal processing for summary rows
           }
 
           // Validate row if validator provided
@@ -771,73 +1056,36 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
 
           const rowData: any = {};
 
-          // For DPR machine sheets, ALWAYS extract machine number and operator from first row of 4-row block
-          // Machine numbers are in merged cells A8:A11, A12:A15, etc. (4 rows per machine)
-          // Operator names are in merged cells B8:B11, B12:B15, etc.
-          if (rowIdx >= 8) {
-            const blockRow = (rowIdx - 8) % 4; // 0, 1, 2, or 3 within the 4-row block
-            const firstRowOfBlock = rowIdx - blockRow; // First row of this 4-row block (8, 12, 16, etc.)
-            const firstRowExcelRow = firstRowOfBlock + 1; // Excel rows are 1-indexed
-            
-            // Use direct worksheet cell access for merged cells (better than array access)
-            const machineCellRef = XLSX.utils.encode_cell({ r: firstRowOfBlock, c: 0 }); // Column A
-            const operatorCellRef = XLSX.utils.encode_cell({ r: firstRowOfBlock, c: 1 }); // Column B
-            
-            const machineCell = worksheetCells[machineCellRef];
-            const operatorCell = worksheetCells[operatorCellRef];
-            
-            // Extract machine number - merged cells store value in top-left cell
-            if (machineCell) {
-              const machineNoRaw = String(machineCell.w ?? machineCell.v ?? '').trim();
-              // Match IMM-01, IMM-1, IMM 01, IMM 05 (with space), etc.
-              if (machineNoRaw && /^IMM[-\s]?0?(\d+)/i.test(machineNoRaw)) {
-                const match = machineNoRaw.match(/IMM[-\s]?0?(\d+)/i);
-                if (match) {
-                  const num = parseInt(match[1]);
-                  rowData.machineNo = num < 10 ? `IMM-0${num}` : `IMM-${num}`;
-                } else {
-                  rowData.machineNo = machineNoRaw;
-                }
-              }
-            }
-            
-            // Fallback: try array access if direct cell access didn't work
-            if (!rowData.machineNo && firstRowOfBlock >= 0 && firstRowOfBlock < rawData.length) {
-              const firstRow = rawData[firstRowOfBlock];
-              const firstRowText = textData[firstRowOfBlock];
-              
-              if (firstRow && firstRow.length > 0) {
-                const machineNoRaw = String(firstRowText?.[0] ?? firstRow[0] ?? '').trim();
-                if (machineNoRaw && /^IMM[-\s]?0?(\d+)/i.test(machineNoRaw)) {
-                  const match = machineNoRaw.match(/IMM[-\s]?0?(\d+)/i);
-                  if (match) {
-                    const num = parseInt(match[1]);
-                    rowData.machineNo = num < 10 ? `IMM-0${num}` : `IMM-${num}`;
+          // Simple extraction: Get machine number and operator from current row
+          // Column A (index 0): Machine number
+          const machineNoRaw = textRowData[0] ?? rawRow[0] ?? '';
+          if (machineNoRaw) {
+            // Clean up machine number - just use as is, normalize format
+            let machineNo = String(machineNoRaw).trim();
+            // Normalize common formats: IMM-01, IMM 01, IMM01 -> IMM-01
+            machineNo = machineNo.replace(/\s+/g, '-').replace(/(IMM|MM)(\d)/i, '$1-$2');
+            rowData.machineNo = machineNo;
                   } else {
-                    rowData.machineNo = machineNoRaw;
-                  }
-                }
+            // If no machine number in current row, check previous row (for changeover rows)
+            if (rowIdx > 8 && rawData[rowIdx - 1]) {
+              const prevMachineNoRaw = textData[rowIdx - 1]?.[0] ?? rawData[rowIdx - 1]?.[0] ?? '';
+              if (prevMachineNoRaw) {
+                let machineNo = String(prevMachineNoRaw).trim();
+                machineNo = machineNo.replace(/\s+/g, '-').replace(/(IMM|MM)(\d)/i, '$1-$2');
+                rowData.machineNo = machineNo;
               }
             }
-            
-            // Extract operator name - also merged across 4 rows
-            if (operatorCell) {
-              const operatorName = String(operatorCell.w ?? operatorCell.v ?? '').trim();
+          }
+          
+          // Column B (index 1): Operator name
+          const operatorName = String(textRowData[1] ?? rawRow[1] ?? '').trim();
               if (operatorName && operatorName !== '' && operatorName !== '0' && !/^\d+$/.test(operatorName)) {
                 rowData.operatorName = operatorName;
-              }
-            }
-            
-            // Fallback for operator
-            if (!rowData.operatorName && firstRowOfBlock >= 0 && firstRowOfBlock < rawData.length) {
-              const firstRow = rawData[firstRowOfBlock];
-              const firstRowText = textData[firstRowOfBlock];
-              if (firstRow && firstRow.length > 1) {
-                const operatorName = String(firstRowText?.[1] ?? firstRow[1] ?? '').trim();
-                if (operatorName && operatorName !== '' && operatorName !== '0' && !/^\d+$/.test(operatorName)) {
-                  rowData.operatorName = operatorName;
-                }
-              }
+          } else if (rowIdx > 7 && rawData[rowIdx - 1]) {
+            // Check previous row for operator
+            const prevOperatorName = String(textData[rowIdx - 1]?.[1] ?? rawData[rowIdx - 1]?.[1] ?? '').trim();
+            if (prevOperatorName && prevOperatorName !== '' && prevOperatorName !== '0' && !/^\d+$/.test(prevOperatorName)) {
+              rowData.operatorName = prevOperatorName;
             }
           }
 
@@ -882,58 +1130,10 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
                 if (colIdx !== undefined && colIdx >= 0 && colIdx < rawRow.length) {
                   // Prefer text version, fallback to raw
                   value = textRowData[colIdx] ?? rawRow[colIdx] ?? null;
-                  
-                  // Handle merged cells: for DPR, check appropriate rows based on block structure
-                  // Production data merges: C8:C9, D8:D9, etc. (rows 0-1 of block)
-                  // Changeover data merges: C10:C11, etc. (rows 2-3 of block)
-                  // Machine/Operator merges: A8:A11, B8:B11 (all 4 rows)
-                  if ((value === null || value === undefined || value === '') && rowIdx >= 8) {
-                    const blockRow = (rowIdx - 8) % 4;
-                    const firstRowOfBlock = rowIdx - blockRow;
-                    
-                    // For production data columns (C-Z typically), check merged row pattern
-                    // Rows 0-1 of block share merged cells (e.g., C8:C9)
-                    // Rows 2-3 of block share merged cells (e.g., C10:C11)
-                    if (colIdx >= 2) { // Production/changeover data columns
-                      if (blockRow === 1 || blockRow === 3) {
-                        // Check previous row (row 0 or row 2 of block) for merged value
-                        const prevRowInBlock = firstRowOfBlock + (blockRow === 1 ? 0 : 2);
-                        if (prevRowInBlock >= 0 && prevRowInBlock < rawData.length) {
-                          const prevRowData = rawData[prevRowInBlock];
-                          const prevRowText = textData[prevRowInBlock];
-                          if (prevRowData && colIdx < prevRowData.length) {
-                            const prevValue = prevRowText?.[colIdx] ?? prevRowData[colIdx];
-                            if (prevValue !== null && prevValue !== undefined && prevValue !== '') {
-                              value = prevValue;
-                            }
-                          }
-                        }
-                      }
-                    }
-                    
-                    // Always check first row of block (for cells merged across all 4 rows)
-                    if ((value === null || value === undefined || value === '') && firstRowOfBlock >= 0 && firstRowOfBlock < rawData.length && firstRowOfBlock !== rowIdx) {
-                      const firstRow = rawData[firstRowOfBlock];
-                      const firstRowText = textData[firstRowOfBlock];
-                      if (firstRow && colIdx < firstRow.length) {
-                        const firstRowValue = firstRowText?.[colIdx] ?? firstRow[colIdx];
-                        if (firstRowValue !== null && firstRowValue !== undefined && firstRowValue !== '') {
-                          value = firstRowValue;
-                        }
-                      }
-                    }
-                  }
-                  
-                  // Also check previous row (for adjacent merges)
-                  if ((value === null || value === undefined || value === '') && rowIdx > 0) {
-                    const prevRow = rawData[rowIdx - 1];
-                    const prevTextRow = textData[rowIdx - 1];
-                    if (prevRow && colIdx < prevRow.length) {
-                      const prevValue = prevTextRow?.[colIdx] ?? prevRow[colIdx];
-                      if (prevValue !== null && prevValue !== undefined && prevValue !== '') {
-                        value = prevValue;
-                      }
-                    }
+                } else {
+                  // Debug: log when header not found
+                  if (rowIdx < 50 && field.targetField !== 'machineNo' && field.targetField !== 'operatorName') {
+                    console.log(`⚠️ Header not found for field "${field.targetField}" in row ${rowIdx + 1}. Looking for:`, field.headerName);
                   }
                 }
               }
@@ -941,53 +1141,6 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
               else if (field.columnIndex !== undefined) {
                 if (field.columnIndex < rawRow.length) {
                   value = textRowData[field.columnIndex] ?? rawRow[field.columnIndex] ?? null;
-                  
-                  // Method 5: Handle merged cells - same logic as headerName method
-                  if ((value === null || value === undefined || value === '') && rowIdx >= 8) {
-                    const blockRow = (rowIdx - 8) % 4;
-                    const firstRowOfBlock = rowIdx - blockRow;
-                    
-                    // For production data columns, check merged row pattern
-                    if (field.columnIndex >= 2) {
-                      if (blockRow === 1 || blockRow === 3) {
-                        const prevRowInBlock = firstRowOfBlock + (blockRow === 1 ? 0 : 2);
-                        if (prevRowInBlock >= 0 && prevRowInBlock < rawData.length) {
-                          const prevRowData = rawData[prevRowInBlock];
-                          const prevRowText = textData[prevRowInBlock];
-                          if (prevRowData && field.columnIndex < prevRowData.length) {
-                            const prevValue = prevRowText?.[field.columnIndex] ?? prevRowData[field.columnIndex];
-                            if (prevValue !== null && prevValue !== undefined && prevValue !== '') {
-                              value = prevValue;
-                            }
-                          }
-                        }
-                      }
-                    }
-                    
-                    // Always check first row of block
-                    if ((value === null || value === undefined || value === '') && firstRowOfBlock >= 0 && firstRowOfBlock < rawData.length && firstRowOfBlock !== rowIdx) {
-                      const firstRow = rawData[firstRowOfBlock];
-                      const firstRowText = textData[firstRowOfBlock];
-                      if (firstRow && field.columnIndex < firstRow.length) {
-                        const firstRowValue = firstRowText?.[field.columnIndex] ?? firstRow[field.columnIndex];
-                        if (firstRowValue !== null && firstRowValue !== undefined && firstRowValue !== '') {
-                          value = firstRowValue;
-                        }
-                      }
-                    }
-                    
-                    // Also check previous row
-                    if ((value === null || value === undefined || value === '') && rowIdx > 0) {
-                      const prevRow = rawData[rowIdx - 1];
-                      const prevTextRow = textData[rowIdx - 1];
-                      if (prevRow && field.columnIndex < prevRow.length) {
-                        const prevValue = prevTextRow?.[field.columnIndex] ?? prevRow[field.columnIndex];
-                        if (prevValue !== null && prevValue !== undefined && prevValue !== '') {
-                          value = prevValue;
-                        }
-                      }
-                    }
-                  }
                 }
               }
 
@@ -1011,55 +1164,50 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           // Only add row if it has at least one non-null value
           // For DPR, ensure we have machine number before adding
           const hasValidData = Object.values(rowData).some(v => v !== null && v !== undefined && v !== '');
-          const hasMachineNo = rowData.machineNo && /^IMM[-\s]?\d+/i.test(String(rowData.machineNo));
+          const hasMachineNo = isValidMachineNumber(rowData.machineNo);
           
           if (hasValidData && hasMachineNo) {
             extractedRows.push(rowData);
+            // Debug: log sample of extracted data for first few rows
+            if (rowIdx < 15) {
+              console.log(`✅ Added row ${rowIdx + 1} for machine ${rowData.machineNo}:`, {
+                product: rowData.product,
+                shotsStart: rowData.shotsStart,
+                shotsEnd: rowData.shotsEnd,
+                targetQty: rowData.targetQty,
+                actualQty: rowData.actualQty,
+                okProdQty: rowData.okProdQty,
+                runTime: rowData.runTime,
+                downTime: rowData.downTime
+              });
+            } else {
             console.log(`✅ Added row ${rowIdx + 1} for machine ${rowData.machineNo} from sheet ${sheetName}`);
+            }
           } else if (hasValidData && !hasMachineNo) {
-            // Try one more time to get machine number from first row of block using direct cell access
+            // Try to get machine number from previous rows (for changeover rows)
             if (rowIdx >= 8) {
-              const blockRow = (rowIdx - 8) % 4;
-              const firstRowOfBlock = rowIdx - blockRow;
-              
-              // Try direct worksheet cell access first
-              const machineCellRef = XLSX.utils.encode_cell({ r: firstRowOfBlock, c: 0 });
-              const machineCell = worksheetCells[machineCellRef];
-              
-              if (machineCell) {
-                const machineNoRaw = String(machineCell.w ?? machineCell.v ?? '').trim();
-                if (machineNoRaw && /^IMM[-\s]?0?(\d+)/i.test(machineNoRaw)) {
-                  const match = machineNoRaw.match(/IMM[-\s]?0?(\d+)/i);
-                  if (match) {
-                    const num = parseInt(match[1]);
-                    rowData.machineNo = num < 10 ? `IMM-0${num}` : `IMM-${num}`;
+              // Look back up to 3 rows to find machine number
+              for (let lookBack = 1; lookBack <= 3 && lookBack <= rowIdx - 8; lookBack++) {
+                const prevRowIdx = rowIdx - lookBack;
+                const prevRow = rawData[prevRowIdx];
+                const prevTextRow = textData[prevRowIdx];
+                
+                if (prevRow && prevRow.length > 0) {
+                  const machineNoRaw = prevTextRow?.[0] ?? prevRow[0] ?? null;
+                  const parsedMachineNo = parseMachineNumber(machineNoRaw);
+                  if (parsedMachineNo) {
+                    rowData.machineNo = parsedMachineNo;
                     extractedRows.push(rowData);
-                    console.log(`✅ Added row ${rowIdx + 1} for machine ${rowData.machineNo} (extracted on retry via direct cell) from sheet ${sheetName}`);
+                    console.log(`✅ Added row ${rowIdx + 1} for machine ${rowData.machineNo} (extracted from previous row ${prevRowIdx + 1}) from sheet ${sheetName}`);
+                    break;
                   }
                 }
               }
               
-              // Fallback to array access
-              if (!rowData.machineNo && firstRowOfBlock >= 0 && firstRowOfBlock < rawData.length) {
-                const firstRow = rawData[firstRowOfBlock];
-                const firstRowText = textData[firstRowOfBlock];
-                const machineNoRaw = String(firstRowText?.[0] ?? firstRow[0] ?? '').trim();
-                
-                if (machineNoRaw && /^IMM[-\s]?0?(\d+)/i.test(machineNoRaw)) {
-                  const match = machineNoRaw.match(/IMM[-\s]?0?(\d+)/i);
-                  if (match) {
-                    const num = parseInt(match[1]);
-                    rowData.machineNo = num < 10 ? `IMM-0${num}` : `IMM-${num}`;
-                    extractedRows.push(rowData);
-                    console.log(`✅ Added row ${rowIdx + 1} for machine ${rowData.machineNo} (extracted on retry via array) from sheet ${sheetName}`);
-                  } else {
-                    console.log(`⚠️ Row ${rowIdx + 1} (blockRow ${blockRow}, firstRow ${firstRowOfBlock}) has data but couldn't parse machine number. First row col A: "${machineNoRaw}". Row data keys:`, Object.keys(rowData));
-                  }
-                } else {
-                  console.log(`⚠️ Row ${rowIdx + 1} (blockRow ${blockRow}, firstRow ${firstRowOfBlock}) has data but no valid machine number. First row col A: "${machineNoRaw}". Row data keys:`, Object.keys(rowData));
-                }
-              } else if (!rowData.machineNo) {
-                console.log(`⚠️ Row ${rowIdx + 1} has data but no valid machine number. First row of block ${firstRowOfBlock} is out of range. Row data keys:`, Object.keys(rowData));
+              if (!rowData.machineNo) {
+                const rawMachineValue = textRowData[0] ?? rawRow[0] ?? '';
+                const product = textRowData[2] ?? rawRow[2] ?? '';
+                console.log(`⚠️ Row ${rowIdx + 1} has data but no valid machine number. Raw machine value: "${rawMachineValue}", Product: "${product}", Row data keys:`, Object.keys(rowData).filter(k => rowData[k] !== null && rowData[k] !== undefined && rowData[k] !== ''));
               }
             } else {
               console.log(`⚠️ Row ${rowIdx + 1} has data but no valid machine number (row < 8). Row data keys:`, Object.keys(rowData));
@@ -1069,6 +1217,16 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
 
         console.log(`✅ Extracted ${extractedRows.length} rows from sheet "${sheetName}"`);
         extractedData.set(sheetName, extractedRows);
+        
+        // Store shift total and achievement separately with sheet name as key
+        if (shiftTotalRow) {
+          extractedData.set(`${sheetName}_shiftTotal`, [shiftTotalRow]);
+          console.log(`✅ Stored SHIFT TOTAL for sheet ${sheetName}`);
+        }
+        if (achievementRow) {
+          extractedData.set(`${sheetName}_achievement`, [achievementRow]);
+          console.log(`✅ Stored Achievement for sheet ${sheetName}`);
+        }
       } catch (err) {
         errors.push(`Error processing sheet mapping: ${err}`);
         console.error(`❌ Error processing sheet:`, err);
@@ -1098,6 +1256,49 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
 
     console.log(`📊 Multi-sheet parsing complete: ${combinedData.length} records, ${errors.length} errors`);
     return { data: combinedData, metadata, errors };
+  };
+
+  // ============================================================================
+  // HELPER FUNCTIONS FOR MACHINE NUMBER PARSING
+  // ============================================================================
+  // Helper function to parse and normalize machine numbers
+  // Handles formats like: IMM-02, IMM-03, IMM-11, MM-01, MM-02, MM 05, IMM 02, IMM02, imm-02, etc.
+  const parseMachineNumber = (value: any): string | null => {
+    if (!value) return null;
+    const str = String(value).trim();
+    if (!str) return null;
+    
+    // Match IMM or MM followed by optional separator (- or space) and digits
+    // Pattern: (IMM|MM) (case insensitive) + optional separator + optional leading zeros + digits
+    const match = str.match(/(IMM|MM)[-\s]?0*(\d+)/i);
+    if (match) {
+      const prefix = match[1].toUpperCase(); // IMM or MM
+      const num = parseInt(match[2], 10);
+      if (!isNaN(num) && num > 0) {
+        // Normalize to PREFIX-XX format (with leading zero for numbers < 10)
+        return num < 10 ? `${prefix}-0${num}` : `${prefix}-${num}`;
+      }
+    }
+    
+    // If no match, return original string if it looks like a machine number
+    if (/(IMM|MM)/i.test(str)) {
+      return str.toUpperCase();
+    }
+    
+    return null;
+  };
+
+  // Helper function to check if a string is a valid machine number
+  const isValidMachineNumber = (value: any): boolean => {
+    const parsed = parseMachineNumber(value);
+    return parsed !== null && /^(IMM|MM)-\d{1,}$/i.test(parsed);
+  };
+
+  // Helper function to compare machine numbers (normalized)
+  const compareMachineNumbers = (machine1: any, machine2: any): boolean => {
+    const parsed1 = parseMachineNumber(machine1);
+    const parsed2 = parseMachineNumber(machine2);
+    return parsed1 !== null && parsed2 !== null && parsed1 === parsed2;
   };
 
   // ============================================================================
@@ -1202,36 +1403,34 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
 
     // 2. MACHINE SHEETS - Extract production data for each machine
     // Each machine sheet (1a, 1b, etc.) has the same structure
+    // 'a' = DAY shift data, 'b' = NIGHT shift data
     machineSheets.forEach(sheetName => {
       const match = sheetName.match(/^(\d+)([ab])$/i);
       if (!match) return;
       
       const machineNum = parseInt(match[1]);
-      const sheetType = match[2].toLowerCase(); // 'a' = current production, 'b' = changeover
+      const sheetType = match[2].toLowerCase(); // 'a' = DAY shift, 'b' = NIGHT shift
       
       sheetMappings.push({
         sheetName: sheetName,
-        headerRow: 6, // Headers in rows 6-7 (merged)
+        headerRow: 6, // Headers in rows 6-7
         dataStartRow: 8, // Data starts at row 8
         fields: [
-          // Machine number from column A (row 8, 12, 16, etc. - every 4 rows)
-          // This field will be extracted from the first row of each 4-row block
+          // Machine number from column A
+          // Extracted from current row or previous row for changeover rows
           {
             targetField: 'machineNo',
             columnIndex: 0, // Column A
             transform: (value: any) => {
+              // Simple: just return the value as-is, normalize format
               const str = String(value || '').trim();
-              // Normalize format (IMM-01, IMM-1, IMM 01, etc. -> IMM-01)
-              const match = str.match(/IMM[-\s]?0?(\d+)/i);
-              if (match) {
-                const num = parseInt(match[1]);
-                return num < 10 ? `IMM-0${num}` : `IMM-${num}`;
-              }
-              return str || '';
+              if (!str) return '';
+              // Normalize: IMM 01 -> IMM-01, IMM01 -> IMM-01
+              return str.replace(/\s+/g, '-').replace(/(IMM|MM)(\d)/i, '$1-$2');
             },
-            required: false // Not required at field level - we extract it from first row of block
+            required: false // Not required at field level - we extract it from current or previous row
           },
-          // Operator name from column B (merged across 4 rows)
+          // Operator name from column B
           {
             targetField: 'operatorName',
             columnIndex: 1, // Column B
@@ -1300,19 +1499,23 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           // No of Shots - Start from column J
           {
             targetField: 'shotsStart',
-            columnIndex: 9, // Column J
-            transform: (value: any) => {
+            columnIndex: 9, // Column J (0-based, so J = 9)
+            transform: (value: any, rawRow: any[]) => {
+              console.log('🔍 shotsStart raw value from column J (index 9):', value, 'type:', typeof value);
+              if (!value || value === '' || value === '-') return 0;
               const num = parseFloat(value);
-              return isNaN(num) ? 0 : num;
+              return isNaN(num) ? 0 : Math.round(num);
             }
           },
           // No of Shots - End from column K
           {
             targetField: 'shotsEnd',
-            columnIndex: 10, // Column K
-            transform: (value: any) => {
+            columnIndex: 10, // Column K (0-based, so K = 10)
+            transform: (value: any, rawRow: any[]) => {
+              console.log('🔍 shotsEnd raw value from column K (index 10):', value, 'type:', typeof value);
+              if (!value || value === '' || value === '-') return 0;
               const num = parseFloat(value);
-              return isNaN(num) ? 0 : num;
+              return isNaN(num) ? 0 : Math.round(num);
             }
           },
           // Target Qty (Nos) from column L
@@ -1321,7 +1524,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             headerName: /Target Qty/i,
             transform: (value: any) => {
               const num = parseFloat(value);
-              return isNaN(num) ? 0 : num;
+              return isNaN(num) ? 0 : Math.round(num);
             }
           },
           // Actual Qty (Nos) from column M
@@ -1330,7 +1533,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             headerName: /Actual Qty/i,
             transform: (value: any) => {
               const num = parseFloat(value);
-              return isNaN(num) ? 0 : num;
+              return isNaN(num) ? 0 : Math.round(num);
             }
           },
           // Ok Prod Qty (Nos) from column N
@@ -1339,7 +1542,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             headerName: /Ok Prod Qty/i,
             transform: (value: any) => {
               const num = parseFloat(value);
-              return isNaN(num) ? 0 : num;
+              return isNaN(num) ? 0 : Math.round(num);
             }
           },
           // Ok Prod (Kgs) from column O
@@ -1348,7 +1551,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             headerName: /Ok Prod \(Kgs\)/i,
             transform: (value: any) => {
               const num = parseFloat(value);
-              return isNaN(num) ? 0 : num;
+              return isNaN(num) ? 0 : Math.round(num * 100) / 100; // Round to 2 decimal places
             }
           },
           // Ok Prod (%) from column P
@@ -1357,7 +1560,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             headerName: /Ok Prod \(%\)/i,
             transform: (value: any) => {
               const num = parseFloat(value);
-              return isNaN(num) ? 0 : num;
+              return isNaN(num) ? 0 : Math.round(num);
             }
           },
           // Rej (Kgs) from column Q
@@ -1366,7 +1569,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             headerName: /Rej \(Kgs\)/i,
             transform: (value: any) => {
               const num = parseFloat(value);
-              return isNaN(num) ? 0 : num;
+              return isNaN(num) ? 0 : Math.round(num * 100) / 100; // Round to 2 decimal places
             }
           },
           // lumps (KG) from column R (usually empty)
@@ -1384,7 +1587,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             headerName: /Run Time \(mins\)/i,
             transform: (value: any) => {
               const num = parseFloat(value);
-              return isNaN(num) ? 0 : num;
+              return isNaN(num) ? 0 : Math.round(num);
             }
           },
           // Down time (min) from column T
@@ -1393,10 +1596,10 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             headerName: /Down time \(min\)/i,
             transform: (value: any) => {
               const num = parseFloat(value);
-              return isNaN(num) ? 0 : Math.abs(num); // Abs to handle negative values
+              return isNaN(num) ? 0 : Math.round(Math.abs(num)); // Standard rounding and abs to handle negative values
             }
           },
-          // Stoppage Time - Reason, Start, End, Total from columns U-X (need to parse merged header)
+          // Stoppage Time - Reason, Start, End, Total from columns U-X
           {
             targetField: 'stoppageReason',
             columnIndex: 20, // Column U (approximate)
@@ -1405,19 +1608,49 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           {
             targetField: 'stoppageStartTime',
             columnIndex: 21, // Column V
-            transform: (value: any) => String(value || '').trim()
+            transform: (value: any) => {
+              // Excel stores times as decimal fractions of a day (e.g., 0.5138 = 12:20)
+              // Convert to HH:MM format
+              if (!value || value === '') return '';
+              const num = parseFloat(value);
+              if (isNaN(num)) return String(value).trim();
+              
+              // If value is between 0 and 1, it's an Excel time decimal
+              if (num > 0 && num < 1) {
+                const totalMinutes = Math.round(num * 24 * 60);
+                const hours = Math.floor(totalMinutes / 60);
+                const minutes = totalMinutes % 60;
+                return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+              }
+              return String(value).trim();
+            }
           },
           {
             targetField: 'stoppageEndTime',
             columnIndex: 22, // Column W
-            transform: (value: any) => String(value || '').trim()
+            transform: (value: any) => {
+              // Excel stores times as decimal fractions of a day (e.g., 0.5743 = 13:47)
+              // Convert to HH:MM format
+              if (!value || value === '') return '';
+              const num = parseFloat(value);
+              if (isNaN(num)) return String(value).trim();
+              
+              // If value is between 0 and 1, it's an Excel time decimal
+              if (num > 0 && num < 1) {
+                const totalMinutes = Math.round(num * 24 * 60);
+                const hours = Math.floor(totalMinutes / 60);
+                const minutes = totalMinutes % 60;
+                return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+              }
+              return String(value).trim();
+            }
           },
           {
             targetField: 'stoppageTotalTime',
             columnIndex: 23, // Column X
             transform: (value: any) => {
               const num = parseFloat(value);
-              return isNaN(num) ? 0 : num;
+              return isNaN(num) ? 0 : Math.round(num);
             }
           },
           // Mould change from column Y
@@ -1433,79 +1666,48 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             transform: (value: any) => String(value || '').trim()
           }
         ],
-        // Row validation: handle 4-row blocks per machine
-        // Each machine has a 4-row block: rows 8-11 (machine 1), 12-15 (machine 2), etc.
-        // Rows 0-1 of block (rows 8-9, 12-13, etc.) = current production
-        // Rows 2-3 of block (rows 10-11, 14-15, etc.) = changeover
+        // Simple row validation: accept rows with machine numbers or data
         validateRow: (row: any[], rowIndex: number, allRows?: any[][]) => {
-          // Skip rows before data starts
-          if (rowIndex < 8) return false;
+          // Skip header rows (rows 0-6)
+          // Row 7 might be the first data row, so check if it has a machine number
+          if (rowIndex < 7) return false;
           
-          const blockRow = (rowIndex - 8) % 4; // 0, 1, 2, or 3 within a 4-row block
-          const firstRowOfBlock = rowIndex - blockRow;
-          
-          // Validate rows based on sheet type
-          // Sheet 'a': process rows 0-1 (production data)
-          // Sheet 'b': process rows 2-3 (changeover data)
-          
-          if (sheetType === 'a') {
-            // Sheet 'a' (current production): process rows 0-1 of each 4-row block
-            if (blockRow === 0 || blockRow === 1) {
-              // Check if first row of block has a valid machine number
-              if (allRows && firstRowOfBlock >= 0 && firstRowOfBlock < allRows.length) {
-                const firstRow = allRows[firstRowOfBlock];
-                if (firstRow && firstRow.length > 0) {
-                  const firstRowMachineNo = String(firstRow[0] || '').trim();
-                  // If first row has machine number, accept these rows
-                  if (/^IMM[-\s]?0?(\d+)/i.test(firstRowMachineNo)) {
-                    // Row 0 must have machine number, row 1 can be continuation
-                    if (blockRow === 0) {
-                      return true; // Always accept first row if it has machine number
-                    } else {
-                      // Row 1: accept if it has any data beyond machine/operator columns
-                      return row.slice(2).some(cell => {
-                        const val = String(cell || '').trim();
-                        return val !== '' && val !== '0' && val !== '0.00';
-                      });
-                    }
-                  }
-                }
-              }
-              return false;
-            } else {
-              return false; // Skip rows 2-3 (changeover rows for sheet 'a')
-            }
-          } else {
-            // Sheet 'b' (changeover): process rows 2-3 of each 4-row block
-            if (blockRow === 2 || blockRow === 3) {
-              // Verify this block has a valid machine number in first row
-              if (allRows && firstRowOfBlock >= 0 && firstRowOfBlock < allRows.length) {
-                const firstRow = allRows[firstRowOfBlock];
-                if (firstRow && firstRow.length > 0) {
-                  const firstRowMachineNo = String(firstRow[0] || '').trim();
-                  if (/^IMM[-\s]?0?(\d+)/i.test(firstRowMachineNo)) {
-                    // Check if this changeover row has any data
-                    if (blockRow === 2) {
-                      // Row 2 should have product data in column C (index 2)
-                      const product = String(row[2] || '').trim();
-                      if (product && product !== '') {
-                        return true;
-                      }
-                    }
-                    // Row 3 or row 2 without product - check for any meaningful data
-                    return row.some((cell, idx) => {
-                      if (idx < 2) return false; // Skip machine/operator columns
-                      const val = String(cell || '').trim();
-                      return val !== '' && val !== '0' && val !== '0.00';
-                    });
-                  }
-                }
-              }
-              return false;
-            } else {
-              return false; // Skip rows 0-1 (current production rows for sheet 'b')
-            }
+          // Row 7 might be data (first machine row) - check if it has machine number
+          if (rowIndex === 7) {
+            const firstCell = String(row[0] || '').trim();
+            const hasMachineNo = /(IMM|MM)[-\s]?\d+/i.test(firstCell);
+            if (hasMachineNo) return true; // Accept row 7 if it has machine number
+            return false; // Reject row 7 if no machine number (it's a header row)
           }
+          
+          // Skip empty rows
+          if (!row || row.length === 0) return false;
+          if (row.every(cell => cell === null || cell === undefined || cell === '')) return false;
+          
+          // Check if this is a summary row
+          const firstCell = String(row[0] || '').trim().toUpperCase();
+          if (firstCell.includes('SHIFT TOTAL') || 
+              firstCell.includes('ACHIEVEMENT') ||
+              firstCell.includes('PREPARED BY') ||
+              firstCell === '') {
+              return false;
+          }
+          
+          // Accept if has machine number pattern (IMM-01, MM-05, etc.) OR any data
+          const hasMachineNo = /(IMM|MM)[-\s]?\d+/i.test(firstCell);
+          
+          // If has machine number, always accept it (even if no numeric data - user wants ALL data)
+          if (hasMachineNo) return true;
+          
+          // Otherwise check for any numeric data
+          const hasNumericData = row.slice(2).some(cell => {
+                      const val = String(cell || '').trim();
+            if (!val || val === '' || val === '-' || val === '0' || val === '0.00') return false;
+            const num = parseFloat(val);
+            return !isNaN(num) && num !== 0;
+          });
+          
+          return hasNumericData;
         }
       });
     });
@@ -1530,7 +1732,8 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           console.log(`📊 Processing sheet ${sheetName}: ${rows.length} rows extracted`);
           
           // For each machine in this sheet, group by machine number
-          // Each sheet might have multiple machines (multiple 4-row blocks)
+          // Each sheet might have multiple machines
+          // When same machine appears twice, first = currentProduction, second = changeover
           const sheetMachineMap = new Map<number, any>();
           
           rows.forEach((row, idx) => {
@@ -1539,52 +1742,101 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
               return;
             }
             
-            // Extract machine number from machineNo (e.g., "IMM-01" -> 1)
-            const machineNoMatch = String(row.machineNo).match(/IMM[-\s]?0?(\d+)/i);
-            if (!machineNoMatch) {
-              console.log(`⚠️ Could not parse machine number from: ${row.machineNo}`);
+            // Simple extraction: get machine number from row.machineNo
+            // Extract numeric part from formats like: IMM-01, IMM-1, IMM 01, IMM01, MM-01, etc.
+            if (!row.machineNo) {
+              console.log(`⚠️ Row has no machine number`);
               return;
             }
             
-            const rowMachineNum = parseInt(machineNoMatch[1]);
+            const machineNoStr = String(row.machineNo).trim();
+            // Extract digits from machine number (matches IMM-01, IMM-1, MM-05, etc.)
+            const machineNoMatch = machineNoStr.match(/(\d+)/);
+            if (!machineNoMatch) {
+              console.log(`⚠️ Could not extract number from machine number: ${machineNoStr}`);
+              return;
+            }
+            
+            const rowMachineNum = parseInt(machineNoMatch[1], 10);
             
             // Group rows by machine number within this sheet
             if (!sheetMachineMap.has(rowMachineNum)) {
-              sheetMachineMap.set(rowMachineNum, {});
+              sheetMachineMap.set(rowMachineNum, { rows: [] });
             }
             
             const machineData = sheetMachineMap.get(rowMachineNum);
-            
-            // Store data by type (a or b)
-            if (type === 'a') {
-              // For sheet 'a', combine data from multiple rows if needed
-              if (!machineData.a) {
-                machineData.a = { ...row };
-              } else {
-                // Merge data - prefer non-empty values
-                Object.keys(row).forEach(key => {
-                  if (row[key] !== null && row[key] !== undefined && row[key] !== '') {
-                    machineData.a[key] = row[key];
-                  }
-                });
-              }
-            } else {
-              // For sheet 'b', combine changeover data
-              if (!machineData.b) {
-                machineData.b = { ...row };
-              } else {
-                // Merge data - prefer non-empty values
-                Object.keys(row).forEach(key => {
-                  if (row[key] !== null && row[key] !== undefined && row[key] !== '') {
-                    machineData.b[key] = row[key];
-                  }
-                });
-              }
-            }
+            // Store all rows for this machine (to detect changeover)
+            machineData.rows.push(row);
             
             // Store operator name if available
             if (row.operatorName && !machineData.operatorName) {
               machineData.operatorName = row.operatorName;
+            }
+          });
+          
+          // Debug: log machines with their row counts
+          console.log(`📊 Sheet ${sheetName} machine row counts:`, 
+            Array.from(sheetMachineMap.entries()).map(([num, data]) => 
+              `IMM-${num.toString().padStart(2, '0')}: ${data.rows.length} row(s)`
+            ).join(', ')
+          );
+          
+          // Now process each machine's rows to separate currentProduction and changeover
+          sheetMachineMap.forEach((machineData, rowMachineNum) => {
+            const rows = machineData.rows;
+            
+            if (rows.length === 0) return;
+            
+            // First row = current production
+            const firstRow = rows[0];
+            // Second row (if exists and has product) = changeover
+            const secondRow = rows.length > 1 && rows[1].product ? rows[1] : null;
+            
+            // Debug logging for machines with multiple rows
+            if (rows.length > 1) {
+              console.log(`🔄 Machine ${rowMachineNum} has ${rows.length} rows (potential changeover):`, {
+                firstProduct: firstRow.product,
+                secondProduct: rows[1]?.product || 'no product',
+                firstRowData: { targetQty: firstRow.targetQty, actualQty: firstRow.actualQty, okProdQty: firstRow.okProdQty },
+                secondRowData: rows[1] ? { targetQty: rows[1].targetQty, actualQty: rows[1].actualQty, okProdQty: rows[1].okProdQty } : 'no data'
+              });
+            }
+            
+            // Store data by shift type (a = DAY shift, b = NIGHT shift)
+            if (type === 'a') {
+              // Current production from first row
+              machineData.a = { ...firstRow };
+              
+              // If there's a second row with product, it's a changeover
+              if (secondRow && secondRow.product) {
+                // Store changeover data separately
+                machineData.aChangeover = { ...secondRow };
+                
+                // Merge product names: "OriginalProduct / ChangeoverProduct"
+                const originalProduct = firstRow.product || '';
+                const changeoverProduct = secondRow.product || '';
+                console.log(`🔄 Merging products for IMM-${rowMachineNum.toString().padStart(2, '0')}: "${originalProduct}" + "${changeoverProduct}"`);
+                if (originalProduct && changeoverProduct && originalProduct !== changeoverProduct) {
+                  machineData.a.product = `${originalProduct} / ${changeoverProduct}`;
+                  console.log(`✅ Merged product name: "${machineData.a.product}"`);
+                }
+              }
+            } else {
+              // Current production from first row
+              machineData.b = { ...firstRow };
+              
+              // If there's a second row with product, it's a changeover
+              if (secondRow && secondRow.product) {
+                // Store changeover data separately
+                machineData.bChangeover = { ...secondRow };
+                
+                // Merge product names: "OriginalProduct / ChangeoverProduct"
+                const originalProduct = firstRow.product || '';
+                const changeoverProduct = secondRow.product || '';
+                if (originalProduct && changeoverProduct && originalProduct !== changeoverProduct) {
+                  machineData.b.product = `${originalProduct} / ${changeoverProduct}`;
+                }
+              }
             }
           });
           
@@ -1598,29 +1850,17 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             
             // Merge data from this sheet into the group
             if (machineData.a) {
-              if (!group.a) {
                 group.a = machineData.a;
-              } else {
-                // Merge - prefer non-empty values from new data
-                Object.keys(machineData.a).forEach(key => {
-                  if (machineData.a[key] !== null && machineData.a[key] !== undefined && machineData.a[key] !== '') {
-                    group.a[key] = machineData.a[key];
                   }
-                });
-              }
+            if (machineData.aChangeover) {
+              (group as any).aChangeover = machineData.aChangeover;
             }
             
             if (machineData.b) {
-              if (!group.b) {
                 group.b = machineData.b;
-              } else {
-                // Merge - prefer non-empty values from new data
-                Object.keys(machineData.b).forEach(key => {
-                  if (machineData.b[key] !== null && machineData.b[key] !== undefined && machineData.b[key] !== '') {
-                    group.b[key] = machineData.b[key];
                   }
-                });
-              }
+            if (machineData.bChangeover) {
+              (group as any).bChangeover = machineData.bChangeover;
             }
             
             if (machineData.operatorName && !group.operatorName) {
@@ -1633,94 +1873,223 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
         
         console.log(`📊 Total machine groups after processing all sheets: ${machineGroups.size}`);
         
-        // Transform to final structure
-        const machines: any[] = [];
-        machineGroups.forEach((group, machineNum) => {
-          // Skip machines 9 and 10
-          if (machineNum === 9 || machineNum === 10) return;
+        // Extract SHIFT TOTAL and Achievement separately for DAY (a sheets) and NIGHT (b sheets)
+        let dayShiftTotalData: any = null;
+        let dayAchievementData: any = null;
+        let nightShiftTotalData: any = null;
+        let nightAchievementData: any = null;
+        
+        extractedData.forEach((rows, key) => {
+          // Check if this is from an 'a' sheet (DAY) or 'b' sheet (NIGHT)
+          const isDaySheet = key.match(/^\d+a_/i);
+          const isNightSheet = key.match(/^\d+b_/i);
           
-          const machineNo = machineNum < 10 ? `IMM-0${machineNum}` : `IMM-${machineNum}`;
-          
-          // Transform current production (sheet a)
-          const currentProd = group.a ? {
-            product: group.a.product || '',
-            cavity: group.a.cavity || 0,
-            targetCycle: group.a.targetCycle || 0,
-            targetRunTime: group.a.targetRunTime || 720,
-            partWeight: group.a.partWeight || 0,
-            actualPartWeight: group.a.actualPartWeight || 0,
-            actualCycle: group.a.actualCycle || 0,
-            targetQty: group.a.targetQty || 0,
-            actualQty: group.a.actualQty || 0,
-            okProdQty: group.a.okProdQty || 0,
-            okProdKgs: group.a.okProdKgs || 0,
-            okProdPercent: group.a.okProdPercent || 0,
-            rejKgs: group.a.rejKgs || 0,
-            runTime: group.a.runTime || 0,
-            downTime: group.a.downTime || 0,
-            stoppageReason: group.a.stoppageReason || '',
-            startTime: String(group.a.shotsStart || ''),
-            endTime: String(group.a.shotsEnd || ''),
-            totalTime: group.a.stoppageTotalTime || 0,
-            mouldChange: group.a.mouldChange || '',
-            remark: group.a.remark || ''
-          } : {
-            product: '', cavity: 0, targetCycle: 0, targetRunTime: 720,
-            partWeight: 0, actualPartWeight: 0, actualCycle: 0,
-            targetQty: 0, actualQty: 0, okProdQty: 0, okProdKgs: 0, okProdPercent: 0,
-            rejKgs: 0, runTime: 0, downTime: 0, stoppageReason: '',
-            startTime: '', endTime: '', totalTime: 0, mouldChange: '', remark: ''
-          };
-          
-          // Transform changeover (sheet b)
-          const changeover = group.b ? {
-            product: group.b.product || '',
-            cavity: group.b.cavity || 0,
-            targetCycle: group.b.targetCycle || 0,
-            targetRunTime: group.b.targetRunTime || 0,
-            partWeight: group.b.partWeight || 0,
-            actualPartWeight: group.b.actualPartWeight || 0,
-            actualCycle: group.b.actualCycle || 0,
-            targetQty: group.b.targetQty || 0,
-            actualQty: group.b.actualQty || 0,
-            okProdQty: group.b.okProdQty || 0,
-            okProdKgs: group.b.okProdKgs || 0,
-            okProdPercent: group.b.okProdPercent || 0,
-            rejKgs: group.b.rejKgs || 0,
-            runTime: group.b.runTime || 0,
-            downTime: group.b.downTime || 0,
-            stoppageReason: group.b.stoppageReason || '',
-            startTime: String(group.b.shotsStart || ''),
-            endTime: String(group.b.shotsEnd || ''),
-            totalTime: group.b.stoppageTotalTime || 0,
-            mouldChange: group.b.mouldChange || '',
-            remark: group.b.remark || ''
-          } : {
-            product: '', cavity: 0, targetCycle: 0, targetRunTime: 0,
-            partWeight: 0, actualPartWeight: 0, actualCycle: 0,
-            targetQty: 0, actualQty: 0, okProdQty: 0, okProdKgs: 0, okProdPercent: 0,
-            rejKgs: 0, runTime: 0, downTime: 0, stoppageReason: '',
-            startTime: '', endTime: '', totalTime: 0, mouldChange: '', remark: ''
-          };
-          
-          machines.push({
-            machineNo,
-            operatorName: group.operatorName || `Operator ${machineNum}`,
-            currentProduction: currentProd,
-            changeover: changeover
-          });
+          if (key.endsWith('_shiftTotal') && rows.length > 0) {
+            if (isDaySheet) {
+              dayShiftTotalData = rows[0];
+              console.log(`✅ Found DAY SHIFT TOTAL data from ${key}:`, dayShiftTotalData);
+            } else if (isNightSheet) {
+              nightShiftTotalData = rows[0];
+              console.log(`✅ Found NIGHT SHIFT TOTAL data from ${key}:`, nightShiftTotalData);
+            }
+          }
+          if (key.endsWith('_achievement') && rows.length > 0) {
+            if (isDaySheet) {
+              dayAchievementData = rows[0];
+              console.log(`✅ Found DAY Achievement data from ${key}:`, dayAchievementData);
+            } else if (isNightSheet) {
+              nightAchievementData = rows[0];
+              console.log(`✅ Found NIGHT Achievement data from ${key}:`, nightAchievementData);
+            }
+          }
         });
         
-        return [{
-          date: summaryMeta.date || new Date().toISOString().split('T')[0],
-          shift: summaryMeta.shift || 'DAY',
-          shiftIncharge: summaryMeta.shiftIncharge || 'CHANDAN/DHIRAJ',
-          machines: machines.sort((a, b) => {
-            const numA = parseInt(a.machineNo.replace('IMM-', ''));
-            const numB = parseInt(b.machineNo.replace('IMM-', ''));
-            return numA - numB;
-          })
-        }];
+        // Create separate machine lists for DAY and NIGHT shifts
+        const dayMachines: any[] = [];
+        const nightMachines: any[] = [];
+        machineGroups.forEach((group, machineNum) => {
+          // Include all machines (no skipping)
+          const machineNo = machineNum < 10 ? `IMM-0${machineNum}` : `IMM-${machineNum}`;
+          
+          // Create DAY shift machine entry if 'a' data exists
+          if (group.a) {
+            const currentProd = {
+              product: group.a.product || '',
+              cavity: group.a.cavity || 0,
+              targetCycle: group.a.targetCycle || 0,
+              targetRunTime: group.a.targetRunTime || 720,
+              partWeight: group.a.partWeight || 0,
+              actualPartWeight: group.a.actualPartWeight || 0,
+              actualCycle: group.a.actualCycle || 0,
+              shotsStart: group.a.shotsStart || 0,
+              shotsEnd: group.a.shotsEnd || 0,
+              targetQty: group.a.targetQty || 0,
+              actualQty: group.a.actualQty || 0,
+              okProdQty: group.a.okProdQty || 0,
+              okProdKgs: group.a.okProdKgs || 0,
+              okProdPercent: group.a.okProdPercent || 0,
+              rejKgs: group.a.rejKgs || 0,
+              runTime: group.a.runTime || 0,
+              downTime: group.a.downTime || 0,
+              stoppageReason: group.a.stoppageReason || '',
+              startTime: String(group.a.stoppageStartTime || ''),
+              endTime: String(group.a.stoppageEndTime || ''),
+              totalTime: group.a.stoppageTotalTime || 0,
+              mouldChange: group.a.mouldChange || '',
+              remark: group.a.remark || ''
+            };
+            
+            // Changeover for DAY = second row from same 'a' sheet
+            const changeoverRow = (group as any).aChangeover;
+            const changeover = changeoverRow ? {
+              product: changeoverRow.product || '',
+              cavity: changeoverRow.cavity || 0,
+              targetCycle: changeoverRow.targetCycle || 0,
+              targetRunTime: changeoverRow.targetRunTime || 0,
+              partWeight: changeoverRow.partWeight || 0,
+              actualPartWeight: changeoverRow.actualPartWeight || 0,
+              actualCycle: changeoverRow.actualCycle || 0,
+              shotsStart: changeoverRow.shotsStart || 0,
+              shotsEnd: changeoverRow.shotsEnd || 0,
+              targetQty: changeoverRow.targetQty || 0,
+              actualQty: changeoverRow.actualQty || 0,
+              okProdQty: changeoverRow.okProdQty || 0,
+              okProdKgs: changeoverRow.okProdKgs || 0,
+              okProdPercent: changeoverRow.okProdPercent || 0,
+              rejKgs: changeoverRow.rejKgs || 0,
+              runTime: changeoverRow.runTime || 0,
+              downTime: changeoverRow.downTime || 0,
+              stoppageReason: changeoverRow.stoppageReason || '',
+              startTime: String(changeoverRow.stoppageStartTime || ''),
+              endTime: String(changeoverRow.stoppageEndTime || ''),
+              totalTime: changeoverRow.stoppageTotalTime || 0,
+              mouldChange: changeoverRow.mouldChange || '',
+              remark: changeoverRow.remark || ''
+            } : {
+              product: '', cavity: 0, targetCycle: 0, targetRunTime: 0,
+              partWeight: 0, actualPartWeight: 0, actualCycle: 0,
+              shotsStart: 0, shotsEnd: 0,
+              targetQty: 0, actualQty: 0, okProdQty: 0, okProdKgs: 0, okProdPercent: 0,
+              rejKgs: 0, runTime: 0, downTime: 0, stoppageReason: '',
+              startTime: '', endTime: '', totalTime: 0, mouldChange: '', remark: ''
+            };
+            
+            dayMachines.push({
+              machineNo,
+              operatorName: group.operatorName || `Operator ${machineNum}`,
+              currentProduction: currentProd,
+              changeover: changeover
+            });
+          }
+          
+          // Create NIGHT shift machine entry if 'b' data exists
+          if (group.b) {
+            const currentProd = {
+              product: group.b.product || '',
+              cavity: group.b.cavity || 0,
+              targetCycle: group.b.targetCycle || 0,
+              targetRunTime: group.b.targetRunTime || 720,
+              partWeight: group.b.partWeight || 0,
+              actualPartWeight: group.b.actualPartWeight || 0,
+              actualCycle: group.b.actualCycle || 0,
+              shotsStart: group.b.shotsStart || 0,
+              shotsEnd: group.b.shotsEnd || 0,
+              targetQty: group.b.targetQty || 0,
+              actualQty: group.b.actualQty || 0,
+              okProdQty: group.b.okProdQty || 0,
+              okProdKgs: group.b.okProdKgs || 0,
+              okProdPercent: group.b.okProdPercent || 0,
+              rejKgs: group.b.rejKgs || 0,
+              runTime: group.b.runTime || 0,
+              downTime: group.b.downTime || 0,
+              stoppageReason: group.b.stoppageReason || '',
+              startTime: String(group.b.stoppageStartTime || ''),
+              endTime: String(group.b.stoppageEndTime || ''),
+              totalTime: group.b.stoppageTotalTime || 0,
+              mouldChange: group.b.mouldChange || '',
+              remark: group.b.remark || ''
+            };
+            
+            // Changeover for NIGHT = second row from same 'b' sheet
+            const changeoverRow = (group as any).bChangeover;
+            const changeover = changeoverRow ? {
+              product: changeoverRow.product || '',
+              cavity: changeoverRow.cavity || 0,
+              targetCycle: changeoverRow.targetCycle || 0,
+              targetRunTime: changeoverRow.targetRunTime || 0,
+              partWeight: changeoverRow.partWeight || 0,
+              actualPartWeight: changeoverRow.actualPartWeight || 0,
+              actualCycle: changeoverRow.actualCycle || 0,
+              shotsStart: changeoverRow.shotsStart || 0,
+              shotsEnd: changeoverRow.shotsEnd || 0,
+              targetQty: changeoverRow.targetQty || 0,
+              actualQty: changeoverRow.actualQty || 0,
+              okProdQty: changeoverRow.okProdQty || 0,
+              okProdKgs: changeoverRow.okProdKgs || 0,
+              okProdPercent: changeoverRow.okProdPercent || 0,
+              rejKgs: changeoverRow.rejKgs || 0,
+              runTime: changeoverRow.runTime || 0,
+              downTime: changeoverRow.downTime || 0,
+              stoppageReason: changeoverRow.stoppageReason || '',
+              startTime: String(changeoverRow.stoppageStartTime || ''),
+              endTime: String(changeoverRow.stoppageEndTime || ''),
+              totalTime: changeoverRow.stoppageTotalTime || 0,
+              mouldChange: changeoverRow.mouldChange || '',
+              remark: changeoverRow.remark || ''
+            } : {
+              product: '', cavity: 0, targetCycle: 0, targetRunTime: 0,
+              partWeight: 0, actualPartWeight: 0, actualCycle: 0,
+              shotsStart: 0, shotsEnd: 0,
+              targetQty: 0, actualQty: 0, okProdQty: 0, okProdKgs: 0, okProdPercent: 0,
+              rejKgs: 0, runTime: 0, downTime: 0, stoppageReason: '',
+              startTime: '', endTime: '', totalTime: 0, mouldChange: '', remark: ''
+            };
+            
+            nightMachines.push({
+              machineNo,
+              operatorName: group.operatorName || `Operator ${machineNum}`,
+              currentProduction: currentProd,
+              changeover: changeover
+            });
+          }
+        });
+        
+        // Return separate DPR objects for DAY and NIGHT shifts
+        const results: any[] = [];
+        
+        // Add DAY shift DPR if we have day machines
+        if (dayMachines.length > 0) {
+          results.push({
+            date: summaryMeta.date || new Date().toISOString().split('T')[0],
+            shift: 'DAY',
+            shiftIncharge: summaryMeta.shiftIncharge || 'CHANDAN/DHIRAJ',
+            machines: dayMachines.sort((a, b) => {
+              const numA = parseInt(a.machineNo.replace(/^(IMM|MM)-/, ''));
+              const numB = parseInt(b.machineNo.replace(/^(IMM|MM)-/, ''));
+              return numA - numB;
+            }),
+            shiftTotal: dayShiftTotalData || null,
+            achievement: dayAchievementData || null
+          });
+        }
+        
+        // Add NIGHT shift DPR if we have night machines
+        if (nightMachines.length > 0) {
+          results.push({
+            date: summaryMeta.date || new Date().toISOString().split('T')[0],
+            shift: 'NIGHT',
+            shiftIncharge: summaryMeta.shiftIncharge || 'CHANDAN/DHIRAJ',
+            machines: nightMachines.sort((a, b) => {
+              const numA = parseInt(a.machineNo.replace(/^(IMM|MM)-/, ''));
+              const numB = parseInt(b.machineNo.replace(/^(IMM|MM)-/, ''));
+              return numA - numB;
+            }),
+            shiftTotal: nightShiftTotalData || null,
+            achievement: nightAchievementData || null
+          });
+        }
+        
+        return results;
       }
     };
   };
@@ -1729,10 +2098,34 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
   const transformDPRResults = (data: any[], metadata: Map<string, any>): any => {
     if (data.length === 0) return null;
     
-    const dprData = data[0]; // combineResults returns array with single DPR object
+    // Process all DPR objects (DAY and NIGHT shifts)
+    const transformedResults = data.map(dprData => {
+      // Use SHIFT TOTAL from Excel if available (exact snapshot), otherwise calculate from machine data
+      const machines = dprData.machines || [];
+    let summary: any;
     
-    // Calculate summary from machine data
-    const machines = dprData.machines || [];
+    if (dprData.shiftTotal) {
+      // Use SHIFT TOTAL data from Excel (exact snapshot)
+      // Apply rounding and percentage conversion
+      const rawDownTime = dprData.shiftTotal.downTime || 0;
+      const rawOkProdPercent = dprData.shiftTotal.okProdPercent || 0;
+      
+      summary = {
+        targetQty: dprData.shiftTotal.targetQty || 0,
+        actualQty: dprData.shiftTotal.actualQty || 0,
+        okProdQty: dprData.shiftTotal.okProdQty || 0,
+        okProdKgs: dprData.shiftTotal.okProdKgs || 0,
+        // Convert to percentage (multiply by 100) and round off
+        okProdPercent: Math.round(rawOkProdPercent * 100),
+        rejKgs: dprData.shiftTotal.rejKgs || 0,
+        lumps: dprData.shiftTotal.lumps || 0,
+        runTime: dprData.shiftTotal.runTime || 0,
+        // Round up downtime to nearest whole number
+        downTime: Math.ceil(rawDownTime)
+      };
+      console.log(`✅ Using SHIFT TOTAL from Excel (exact snapshot):`, summary);
+    } else {
+      // Fallback: Calculate summary from machine data
     const targetQty = machines.reduce((sum: number, m: any) => 
       sum + (m.currentProduction?.targetQty || 0) + (m.changeover?.targetQty || 0), 0);
     const actualQty = machines.reduce((sum: number, m: any) => 
@@ -1748,13 +2141,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
     const downTime = machines.reduce((sum: number, m: any) => 
       sum + (m.currentProduction?.downTime || 0) + (m.changeover?.downTime || 0), 0);
     
-    return {
-      id: `${dprData.date}-${dprData.shift}-${Date.now()}`,
-      date: dprData.date,
-      shift: dprData.shift,
-      shiftIncharge: dprData.shiftIncharge,
-      machines: dprData.machines,
-      summary: {
+      summary = {
         targetQty,
         actualQty,
         okProdQty,
@@ -1763,8 +2150,24 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
         rejKgs,
         runTime,
         downTime
-      }
-    };
+      };
+      console.log(`⚠️ SHIFT TOTAL not found, calculated from machine data:`, summary);
+    }
+    
+      return {
+        id: `${dprData.date}-${dprData.shift}-${Date.now()}`,
+        date: dprData.date,
+        shift: dprData.shift,
+        shiftIncharge: dprData.shiftIncharge,
+        machines: dprData.machines,
+        summary: summary,
+        shiftTotal: dprData.shiftTotal || null,
+        achievement: dprData.achievement || null
+      };
+    });
+    
+    // Return array of transformed DPR objects (DAY and NIGHT)
+    return transformedResults;
   };
 
   const parseExcelFile = async (file: File) => {
@@ -1812,13 +2215,21 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
         }
         
         if (result.data.length > 0) {
-          // Transform to DPR structure
-          const dprData = transformDPRResults(result.data, result.metadata);
-          setMappedData(prev => ({ ...prev, dpr: dprData }));
-          setImportStatus({ 
-            type: 'success', 
-            message: `✅ Parsed DPR: ${dprData.machines?.length || 0} machines, Date: ${dprData.date}, Shift: ${dprData.shift}` 
-          });
+          // Transform to DPR structure (returns array of DPR objects for DAY and NIGHT)
+          const dprDataArray = transformDPRResults(result.data, result.metadata);
+          
+          if (dprDataArray && dprDataArray.length > 0) {
+            // Store all DPR objects (DAY and NIGHT)
+            setMappedData(prev => ({ ...prev, dpr: dprDataArray }));
+            
+            const shiftsInfo = dprDataArray.map((d: any) => `${d.shift} (${d.machines?.length || 0} machines)`).join(', ');
+            setImportStatus({ 
+              type: 'success', 
+              message: `✅ Parsed DPR: ${shiftsInfo}, Date: ${dprDataArray[0].date}` 
+            });
+          } else {
+            setImportStatus({ type: 'error', message: 'No DPR data extracted. Check sheet structure.' });
+          }
         } else {
           setImportStatus({ type: 'error', message: 'No DPR data extracted. Check sheet structure.' });
         }
@@ -2112,6 +2523,253 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
     setMappedData(prev => ({ ...prev, packing_materials: mapped }));
   };
 
+  const mapColorLabelsData = (data: ExcelRow[]) => {
+    const mapped: ColorLabel[] = [];
+    console.log('🔍 mapColorLabelsData called with data:', data);
+    if (data.length > 0) {
+      console.log('🔍 First row keys:', Object.keys(data[0] || {}));
+      console.log('🔍 First row values:', data[0]);
+    }
+    
+    // Header patterns to skip
+    const headerPatterns = [
+      'sr. no.', 'sr no', 'sr.no.', 'srno', 'serial no', 'serial number',
+      'color', 'colour', 'name', 'color name', 'color/label', 'color / label',
+      'hex code', 'description'
+    ];
+    
+    data.forEach((row, index) => {
+      // Extract sr_no and color_label from row
+      const allKeys = Object.keys(row);
+      let srNo: number | null = null;
+      let colorValue = '';
+      
+      // Find Sr. No. column
+      for (const key of allKeys) {
+        const lowerKey = key.toLowerCase().trim();
+        if (lowerKey === 'sr. no.' || lowerKey === 'sr no' || 
+            lowerKey === 'sr.no.' || lowerKey === 'srno' ||
+            lowerKey === 'serial no' || lowerKey === 'serial number') {
+          const srNoValue = row[key];
+          if (srNoValue !== null && srNoValue !== undefined && srNoValue !== '') {
+            const parsed = parseInt(String(srNoValue), 10);
+            if (!isNaN(parsed)) {
+              srNo = parsed;
+            }
+          }
+          break;
+        }
+      }
+      
+      // Find Color / Label column
+      for (const key of allKeys) {
+        const lowerKey = key.toLowerCase().trim();
+        if (lowerKey === 'color / label' || lowerKey === 'color/label' || 
+            lowerKey === 'color' || lowerKey === 'colour' || 
+            lowerKey === 'color name') {
+          colorValue = row[key];
+          break;
+        }
+      }
+      
+      // If no exact match for color, try to find any non-empty value
+      if (!colorValue || String(colorValue).trim() === '') {
+        for (const key of allKeys) {
+          const value = row[key];
+          const valueStr = String(value || '').trim();
+          const lowerKey = key.toLowerCase().trim();
+          
+          // Skip if it's a header pattern or sr_no column
+          if (valueStr && 
+              !headerPatterns.includes(valueStr.toLowerCase()) &&
+              !headerPatterns.includes(lowerKey) &&
+              !valueStr.match(/^\d+$/) &&
+              lowerKey !== 'sr. no.' && lowerKey !== 'sr no' &&
+              lowerKey !== 'sr.no.' && lowerKey !== 'srno') {
+            colorValue = value;
+            break;
+          }
+        }
+      }
+      
+      console.log(`🔍 Row ${index}:`, row, 'Sr. No.:', srNo, 'Color value:', colorValue);
+      
+      // Skip if empty or if it looks like a header row
+      const colorStr = String(colorValue || '').trim();
+      const lowerColorStr = colorStr.toLowerCase();
+      
+      if (!colorStr || 
+          colorStr === '' || 
+          headerPatterns.includes(lowerColorStr) ||
+          lowerColorStr.startsWith('sr') ||
+          lowerColorStr.match(/^sr\.?\s*no/i)) {
+        return;
+      }
+
+      // If sr_no is not provided, calculate based on actual data rows (not including skipped rows)
+      // Count how many valid rows we've processed so far (excluding skipped header rows)
+      const validRowIndex = mapped.length;
+      const finalSrNo = srNo !== null ? srNo : validRowIndex + 1;
+
+      mapped.push({
+        id: '', // Will be generated by database
+        sr_no: finalSrNo,
+        color_label: colorStr,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as ColorLabel);
+    });
+    
+    console.log('🔍 Mapped color labels:', mapped, 'Total:', mapped.length);
+    setMappedData(prev => ({ ...prev, color_labels: mapped }));
+  };
+
+  const mapPartyNamesData = (data: ExcelRow[]) => {
+    const mapped: PartyName[] = [];
+    console.log('🔍 mapPartyNamesData called with data:', data);
+    if (data.length > 0) {
+      console.log('🔍 First row keys:', Object.keys(data[0] || {}));
+      console.log('🔍 First row values:', data[0]);
+    }
+    
+    // Header patterns to skip
+    const headerPatterns = [
+      'sr. no.', 'sr no', 'sr.no.', 'srno', 'serial no', 'serial number',
+      'name', 'party name', 'party', 'party name master'
+    ];
+    
+    // Serial number column patterns to explicitly exclude
+    const srNoPatterns = [
+      'sr. no.', 'sr no', 'sr.no.', 'srno', 'serial no', 'serial number'
+    ];
+    
+    data.forEach((row, index) => {
+      // Extract name from row - explicitly exclude serial number column
+      const allKeys = Object.keys(row);
+      let nameValue = '';
+      
+      // Strategy: Find the column that contains text (not numbers) and is not a serial number column
+      // Based on console logs: {Party Name: 1, "": 'Easy'} - empty key has names, "Party Name" has numbers
+      
+      // PRIORITY 1: Check empty key column first (this is where the actual names are)
+      // Based on console: {Party Name: 1, "": 'Easy'} - empty key "" has the names
+      const emptyKeyValue = row[''];
+      if (emptyKeyValue !== undefined && emptyKeyValue !== null && emptyKeyValue !== '') {
+        const emptyValueStr = String(emptyKeyValue).trim();
+        // Use empty column if it's not a number and not a header
+        if (emptyValueStr && 
+            !emptyValueStr.match(/^\d+$/) && 
+            emptyValueStr.toLowerCase() !== 'name' &&
+            emptyValueStr.toLowerCase() !== 'sr. no.') {
+          nameValue = emptyKeyValue;
+          console.log(`✅ Row ${index}: Using empty column value: "${nameValue}"`);
+        } else {
+          console.log(`⚠️ Row ${index}: Empty column value rejected: "${emptyValueStr}" (is number or header)`);
+        }
+      } else {
+        console.log(`⚠️ Row ${index}: No empty column value found`);
+      }
+      
+      // PRIORITY 2: If empty column didn't work, try named columns (but ONLY if value is NOT a number)
+      // IMPORTANT: Only check other columns if we don't have a valid nameValue yet
+      if (!nameValue || String(nameValue).trim() === '' || String(nameValue).trim().match(/^\d+$/)) {
+        for (const key of allKeys) {
+          if (key === '') continue; // Already checked
+          
+          const lowerKey = key.toLowerCase().trim();
+          const isSrNoColumn = srNoPatterns.some(pattern => lowerKey === pattern);
+          
+          // Skip serial number columns
+          if (isSrNoColumn) {
+            continue;
+          }
+          
+          const value = row[key];
+          const valueStr = String(value || '').trim();
+          
+          // For "name" or "party name" columns, ONLY use if value is NOT a number
+          if (lowerKey === 'name' || lowerKey === 'party name' || lowerKey === 'partyname') {
+            if (valueStr && !valueStr.match(/^\d+$/) && valueStr.toLowerCase() !== 'sr. no.' && valueStr.toLowerCase() !== 'name') {
+              nameValue = value;
+              console.log(`✅ Row ${index}: Using "${key}" column value: "${nameValue}"`);
+              break;
+            }
+          }
+        }
+      }
+      
+      // PRIORITY 3: Last resort - find any column with text (not numbers)
+      if (!nameValue || String(nameValue).trim() === '' || String(nameValue).trim().match(/^\d+$/)) {
+        for (const key of allKeys) {
+          if (key === '') continue; // Already checked
+          
+          const lowerKey = key.toLowerCase().trim();
+          const isSrNoColumn = srNoPatterns.some(pattern => lowerKey === pattern);
+          
+          // Skip serial number columns
+          if (isSrNoColumn) {
+            continue;
+          }
+          
+          const value = row[key];
+          const valueStr = String(value || '').trim();
+          
+          // Use this value if it's text (not a number) and not a header
+          if (valueStr && 
+              !valueStr.match(/^\d+$/) &&
+              !headerPatterns.includes(valueStr.toLowerCase()) &&
+              valueStr.toLowerCase() !== 'name' &&
+              valueStr.toLowerCase() !== 'party name' &&
+              valueStr.toLowerCase() !== 'sr. no.' &&
+              lowerKey !== 'sr. no.' &&
+              lowerKey !== 'name' &&
+              lowerKey !== 'party name') {
+            nameValue = value;
+            console.log(`✅ Row ${index}: Using fallback column "${key}": "${nameValue}"`);
+            break;
+          }
+        }
+      }
+      
+      console.log(`🔍 Row ${index}:`, row, 'Final name value found:', nameValue);
+      console.log(`🔍 Row ${index}: All keys:`, allKeys, 'Empty key value:', row['']);
+      
+      // Skip if empty or if it looks like a header row
+      const nameStr = String(nameValue || '').trim();
+      const lowerNameStr = nameStr.toLowerCase();
+      
+      // Final validation - skip if it's a number, header, or empty
+      if (!nameStr || 
+          nameStr === '' || 
+          headerPatterns.includes(lowerNameStr) ||
+          lowerNameStr.startsWith('sr') ||
+          lowerNameStr.match(/^sr\.?\s*no/i) ||
+          nameStr.match(/^\d+$/)) { // Skip if it's just a number
+        console.log(`⏭️ Skipping row ${index}: invalid name value "${nameStr}" (empty, header, or number)`);
+        return;
+      }
+      
+      console.log(`✅ Row ${index}: Valid name found: "${nameStr}"`);
+
+      mapped.push({
+        id: '', // Will be generated by database
+        name: nameStr,
+        code: undefined,
+        address: undefined,
+        contact_person: undefined,
+        phone: undefined,
+        email: undefined,
+        gstin: undefined,
+        description: undefined,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as PartyName);
+    });
+    
+    console.log('🔍 Mapped party names:', mapped, 'Total:', mapped.length);
+    setMappedData(prev => ({ ...prev, party_names: mapped }));
+  };
+
   const mapDataToFormat = async (data: ExcelRow[], type: DataType) => {
     const mapping = TEMPLATE_MAPPINGS[type as keyof typeof TEMPLATE_MAPPINGS] as Record<string, string>;
     const availableColumns = Object.keys(data[0] || {});
@@ -2135,6 +2793,14 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
     // Raw materials special
     if (type === 'raw_materials') return mapRawMaterialsData(data);
     if (type === 'packing_materials') return mapPackingMaterialsData(data);
+    if (type === 'color_labels') {
+      console.log('🔍 Calling mapColorLabelsData with', data.length, 'rows');
+      return mapColorLabelsData(data);
+    }
+    if (type === 'party_names') {
+      console.log('🔍 Calling mapPartyNamesData with', data.length, 'rows');
+      return mapPartyNamesData(data);
+    }
 
     const mappedItems = data.map((row, index) => {
       const mapped: any = {};
@@ -2243,6 +2909,31 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           }
         }
 
+        // SFG BOM: Remove 100 prefix from codes and update item names
+        if (type === 'sfg_bom') {
+          if (dbCol === 'sfg_code' && value) {
+            value = removeOldPrefix(String(value));
+          }
+        }
+
+        // FG BOM: Remove 200 prefix from codes and update item names
+        if (type === 'fg_bom') {
+          if (dbCol === 'item_code' && value) {
+            value = removeOldPrefix(String(value));
+          }
+          if (dbCol === 'item_code' && value) {
+            // Note: FG BOM doesn't have item_name field, but we can update party_name if needed
+            // For now, we just remove the prefix from item_code
+          }
+        }
+
+        // LOCAL BOM: Remove 200 prefix from codes
+        if (type === 'local_bom') {
+          if (dbCol === 'item_code' && value) {
+            value = removeOldPrefix(String(value));
+          }
+        }
+
         mapped[dbCol] = value;
       });
 
@@ -2303,6 +2994,33 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
         mapped.unit = mapped.unit || 'Unit 1';
       }
 
+      // Post-process BOM codes: Remove prefixes and update item names
+      if (type === 'sfg_bom') {
+        // Remove 100 prefix from sfg_code if present
+        if (mapped.sfg_code) {
+          mapped.sfg_code = removeOldPrefix(String(mapped.sfg_code));
+        }
+        // Update item_name: Remove 100 prefix and ensure RP/CK is displayed
+        if (mapped.item_name) {
+          const sfgCode = mapped.sfg_code ? String(mapped.sfg_code) : '';
+          mapped.item_name = updateItemNameWithRPOrCK(String(mapped.item_name), sfgCode);
+        }
+      }
+
+      if (type === 'fg_bom') {
+        // Remove 200 prefix from item_code if present
+        if (mapped.item_code) {
+          mapped.item_code = removeOldPrefix(String(mapped.item_code));
+        }
+      }
+
+      if (type === 'local_bom') {
+        // Remove 200 prefix from item_code if present
+        if (mapped.item_code) {
+          mapped.item_code = removeOldPrefix(String(mapped.item_code));
+        }
+      }
+
       return mapped;
     });
 
@@ -2341,6 +3059,12 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
       
         case 'sfg_bom':
           return !!(item.sl_no && item.sfg_code && String(item.sl_no).trim() && String(item.sfg_code).trim());
+      
+        case 'color_labels':
+          return !!(item.color_label && String(item.color_label).trim());
+      
+        case 'party_names':
+          return !!(item.name && String(item.name).trim());
       
         case 'schedules':
         default:
@@ -2472,6 +3196,84 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             return true;
           });
           result = toCreate.length ? await packingMaterialAPI.bulkCreate(toCreate) : [];
+          break;
+        }
+        case 'color_labels': {
+          const existing = await colorLabelAPI.getAll();
+          const existingSrNos = new Set(existing.map(c => c.sr_no));
+          const existingLabels = new Set(existing.map(c => c.color_label.toLowerCase()));
+          const toCreate = mappedData.color_labels.filter(c => {
+            // Check for duplicate by sr_no or color_label
+            if (c.sr_no && existingSrNos.has(c.sr_no)) { duplicateCount++; return false; }
+            if (c.color_label && existingLabels.has(c.color_label.toLowerCase())) { duplicateCount++; return false; }
+            return true;
+          });
+          // Create one by one since there's no bulkCreate
+          const successes: ColorLabel[] = [];
+          for (const item of toCreate) {
+            try {
+              const created = await colorLabelAPI.create(item);
+              if (created) successes.push(created);
+            } catch (err) {
+              console.error('Error creating color/label:', err);
+              duplicateCount++;
+            }
+          }
+          result = successes;
+          break;
+        }
+        case 'party_names': {
+          console.log('🔍 Starting party names import, mapped data:', mappedData.party_names);
+          if (!mappedData.party_names || mappedData.party_names.length === 0) {
+            throw new Error('No party names data found to import. Please check your Excel file format.');
+          }
+          const existing = await partyNameAPI.getAll();
+          const existingNames = new Set(existing.map(p => p.name.toLowerCase()));
+          const toCreate = mappedData.party_names.filter(p => {
+            if (!p.name || String(p.name).trim() === '') {
+              console.warn('Skipping party name with empty name:', p);
+              return false;
+            }
+            if (existingNames.has(p.name.toLowerCase())) { 
+              duplicateCount++; 
+              return false; 
+            }
+            return true;
+          });
+          console.log(`🔍 Found ${toCreate.length} party names to create (${duplicateCount} duplicates skipped)`);
+          
+          // Create one by one since there's no bulkCreate
+          const successes: PartyName[] = [];
+          const errors: string[] = [];
+          for (const item of toCreate) {
+            try {
+              console.log('🔍 Creating party name:', item);
+              const created = await partyNameAPI.create(item);
+              if (created) {
+                successes.push(created);
+                console.log('✅ Successfully created:', created.name);
+              } else {
+                errors.push(`Failed to create: ${item.name}`);
+              }
+            } catch (err: any) {
+              console.error('❌ Error creating party name:', err);
+              const errorMsg = err?.message || err?.code || 'Unknown error';
+              errors.push(`${item.name}: ${errorMsg}`);
+              duplicateCount++;
+            }
+          }
+          result = successes;
+          
+          if (errors.length > 0) {
+            console.error('❌ Import errors:', errors);
+            setImportStatus({ 
+              type: 'error', 
+              message: `Imported ${successes.length} party names. ${errors.length} failed: ${errors.slice(0, 3).join(', ')}${errors.length > 3 ? '...' : ''}` 
+            });
+          }
+          
+          // Trigger refresh event
+          window.dispatchEvent(new CustomEvent('refreshPartyNames'));
           break;
         }
         case 'lines': {
@@ -2811,13 +3613,17 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
         setFile(null);
         setPreview([]);
         setFullRows([]);
-        setMappedData({ machines: [], molds: [], schedules: [], raw_materials: [], packing_materials: [], lines: [], maintenance_checklists: [], bom_masters: [], sfg_bom: [], fg_bom: [], local_bom: [] });
+        setMappedData({ machines: [], molds: [], schedules: [], raw_materials: [], packing_materials: [], lines: [], maintenance_checklists: [], bom_masters: [], sfg_bom: [], fg_bom: [], local_bom: [], color_labels: [], party_names: [] });
         setHeaders([]);
         fileInputRef.current && (fileInputRef.current.value = '');
       }, 1000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Import error:', err);
-      setImportStatus({ type: 'error', message: 'Error importing data. Please check the format and try again.' });
+      const errorMessage = err?.message || err?.code || 'Unknown error occurred';
+      setImportStatus({ 
+        type: 'error', 
+        message: `Error importing data: ${errorMessage}. Please check the format and try again.` 
+      });
     } finally {
       setImporting(false);
     }
@@ -2887,6 +3693,10 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             [1, 'LOCAL-001', '250ml', 'SFG-001', 1, 'SFG-002', 0.5, 'CNT-003', 200, 'PB-250ML', 2000, 'BOPP-005', 25, 'BOPP-006', 15],
             [2, 'LOCAL-002', '100ml', 'SFG-003', 0.5, 'SFG-001', 0.25, 'CNT-004', 500, 'PB-100ML', 5000, 'BOPP-007', 10, 'BOPP-008', 5]
           ];
+        case 'color_labels':
+          return [];
+        case 'party_names':
+          return [];
         default:
           return [];
       }
@@ -3025,6 +3835,22 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           break;
         }
 
+        case 'color_labels': {
+          const rows = await colorLabelAPI.getAll();
+          data = rows.map((item) => ([
+            item.sr_no ?? '', // Sr. No.
+            item.color_label ?? '' // Color / Label
+          ]));
+          break;
+        }
+        case 'party_names': {
+          const rows = await partyNameAPI.getAll();
+          data = rows.map((item, index) => ([
+            index + 1, // Sr. No.
+            item.name ?? '' // Name
+          ]));
+          break;
+        }
         case 'fg_bom': {
           const rows = await bomMasterAPI.getByCategory('FG');
           data = rows.map(item => ([
@@ -3126,10 +3952,9 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="w-full h-full flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+        <div className="p-6 border-b border-gray-200 flex justify-between items-center flex-shrink-0">
           <div>
             <h2 className="text-2xl font-bold text-gray-800">Excel Data Import</h2>
             <p className="text-gray-600">Upload Excel files to populate your database</p>
@@ -3147,7 +3972,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">Select Data Type</label>
             <div className="flex flex-wrap gap-3">
-              {(['machines', 'molds', 'schedules', 'raw_materials', 'packing_materials', 'lines', 'bom_masters', 'sfg_bom', 'fg_bom', 'local_bom'] as DataType[]).map(type => (
+              {(['machines', 'molds', 'schedules', 'raw_materials', 'packing_materials', 'lines', 'bom_masters', 'sfg_bom', 'fg_bom', 'local_bom', 'color_labels', 'party_names'] as DataType[]).map(type => (
                 <button
                   key={type}
                   onClick={async () => {
@@ -3259,7 +4084,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
                         setAvailableSheets([]);
                         setSelectedSheets(new Set());
                         setSelectAllSheets(false);
-                        setMappedData({ machines: [], molds: [], schedules: [], raw_materials: [], packing_materials: [], lines: [], maintenance_checklists: [], bom_masters: [], sfg_bom: [], fg_bom: [], local_bom: [] });
+                        setMappedData({ machines: [], molds: [], schedules: [], raw_materials: [], packing_materials: [], lines: [], maintenance_checklists: [], bom_masters: [], sfg_bom: [], fg_bom: [], local_bom: [], color_labels: [], party_names: [] });
                         fileInputRef.current && (fileInputRef.current.value = '');
                         setHeaders([]);
                         setImportStatus({ type: '', message: '' });
@@ -3518,7 +4343,6 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
               </>
             )}
           </button>
-        </div>
       </div>
     </div>
   );

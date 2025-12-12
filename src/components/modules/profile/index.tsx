@@ -185,7 +185,7 @@ const UserProfileModule: React.FC = () => {
                   {user?.fullName || user?.email || 'Current User'}
                 </h2>
                 <p className="text-sm text-gray-500 capitalize">
-                  {user?.isRootAdmin ? 'Root Admin' : 'User'}
+                  {user?.email === 'yogesh@polypacks.in' ? 'Owner' : user?.isRootAdmin ? 'Root Admin' : 'User'}
                 </p>
               </div>
               
@@ -196,18 +196,21 @@ const UserProfileModule: React.FC = () => {
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                   <span className="text-sm font-medium text-gray-600">Department</span>
-                  <span className="text-sm text-gray-800">Not specified</span>
+                  <span className="text-sm text-gray-800 capitalize">
+                    {user?.email === 'yogesh@polypacks.in' ? 'Admin' : user?.department || 'Not specified'}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                   <span className="text-sm font-medium text-gray-600">Member Since</span>
                   <span className="text-sm text-gray-800">
-                    {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
+                    {user?.email === 'yogesh@polypacks.in' ? 'Founder' : 
+                     user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-2">
                   <span className="text-sm font-medium text-gray-600">Last Updated</span>
                   <span className="text-sm text-gray-800">
-                    {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
+                    {user?.updatedAt ? new Date(user.updatedAt).toLocaleDateString() : 'Recently'}
                   </span>
                 </div>
                 

@@ -1,18 +1,16 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, Search, Filter, FileText, ShoppingCart, Eye, Package } from 'lucide-react';
-import { grnAPI, misAPI, fgnAPI } from '../../../lib/supabase';
+import { Calendar, Search, Filter, FileText, Eye, Package, ArrowRightCircle } from 'lucide-react';
+import { grnAPI, jwAnnexureGRNAPI } from '../../../lib/supabase';
 
 interface StoreForm {
   id: string;
-  type: 'grn' | 'mis' | 'fgn';
+  type: 'normal-grn' | 'jw-annexure-grn';
   docNo?: string;
   date: string;
   supplierName?: string;
-  deptName?: string;
-  fromDept?: string;
-  toDept?: string;
+  grnType?: string;
   createdAt: string;
   [key: string]: any;
 }
@@ -22,7 +20,7 @@ const StoreHistory: React.FC = () => {
   const [filteredForms, setFilteredForms] = useState<StoreForm[]>([]);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedDate, setSelectedDate] = useState<string>('');
-  const [selectedType, setSelectedType] = useState<'all' | 'grn' | 'mis' | 'fgn'>('all');
+  const [selectedType, setSelectedType] = useState<'all' | 'normal-grn' | 'jw-annexure-grn'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedForm, setSelectedForm] = useState<StoreForm | null>(null);
 
@@ -39,47 +37,54 @@ const StoreHistory: React.FC = () => {
   useEffect(() => {
     const loadForms = async () => {
       try {
-        const [grns, misses, fgns] = await Promise.all([
-          grnAPI.getAll(),
-          misAPI.getAll(),
-          fgnAPI.getAll()
+        // Fetch all GRNs (both Normal and JW Annexure) from separate tables
+        const [grns, jwGrns] = await Promise.all([
+          grnAPI.getAll().catch(err => {
+            console.warn('Error fetching GRNs:', err);
+            return [];
+          }),
+          jwAnnexureGRNAPI.getAll().catch(err => {
+            console.warn('Error fetching JW Annexure GRNs:', err);
+            return [];
+          })
         ]);
 
-        // Transform GRNs
-        const grnForms: StoreForm[] = grns.map(grn => ({
-          id: grn.id,
-          type: 'grn' as const,
-          docNo: grn.doc_no,
-          date: grn.date,
-          supplierName: grn.supplier_name,
-          createdAt: grn.created_at || grn.date
-        }));
+        // Transform normal GRNs
+        const normalGrnForms: StoreForm[] = (grns || [])
+          .map(grn => ({
+            id: grn.id,
+            type: 'normal-grn' as const,
+            docNo: grn.doc_no,
+            date: grn.date,
+            supplierName: grn.party_name || grn.supplier_name || '',
+            grnType: 'NORMAL',
+            createdAt: grn.created_at || grn.date
+          }));
 
-        // Transform MIS
-        const misForms: StoreForm[] = misses.map(mis => ({
-          id: mis.id,
-          type: 'mis' as const,
-          docNo: mis.doc_no,
-          date: mis.date,
-          deptName: mis.dept_name,
-          createdAt: mis.created_at || mis.date
-        }));
+        // Transform JW Annexure GRNs
+        const jwGrnForms: StoreForm[] = (jwGrns || [])
+          .map(grn => ({
+            id: grn.id,
+            type: 'jw-annexure-grn' as const,
+            docNo: grn.doc_no,
+            date: grn.date,
+            supplierName: grn.party_name || '',
+            grnType: 'JW_ANNEXURE',
+            createdAt: grn.created_at || grn.date
+          }));
 
-        // Transform FGNs
-        const fgnForms: StoreForm[] = fgns.map(fgn => ({
-          id: fgn.id,
-          type: 'fgn' as const,
-          docNo: fgn.doc_no,
-          date: fgn.date,
-          fromDept: fgn.from_dept,
-          toDept: fgn.to_dept,
-          createdAt: fgn.created_at || fgn.date
-        }));
-
-        setForms([...grnForms, ...misForms, ...fgnForms]);
+        const allForms = [...normalGrnForms, ...jwGrnForms];
+        setForms(allForms);
+        
+        if (allForms.length === 0) {
+          console.log('No GRN records found in database');
+        }
       } catch (error) {
         console.error('Error loading store forms:', error);
-        alert('Error loading store history. Please try again.');
+        // Don't show alert if it's just empty data
+        if (error && typeof error === 'object' && 'message' in error) {
+          console.error('Error details:', error);
+        }
       }
     };
 
@@ -117,9 +122,6 @@ const StoreHistory: React.FC = () => {
       filtered = filtered.filter(form => {
         return (
           form.supplierName?.toLowerCase().includes(term) ||
-          form.deptName?.toLowerCase().includes(term) ||
-          form.fromDept?.toLowerCase().includes(term) ||
-          form.toDept?.toLowerCase().includes(term) ||
           form.docNo?.toLowerCase().includes(term)
         );
       });
@@ -151,21 +153,18 @@ const StoreHistory: React.FC = () => {
 
   const getFormTitle = (form: StoreForm) => {
     switch (form.type) {
-      case 'grn':
-        return `GRN - ${form.docNo || 'N/A'}`;
-      case 'mis':
-        return `MIS - ${form.docNo || 'N/A'}`;
-      case 'fgn':
-        return `FGN - ${form.docNo || 'N/A'}`;
+      case 'normal-grn':
+        return `Normal GRN - ${form.docNo || 'N/A'}`;
+      case 'jw-annexure-grn':
+        return `JW Annexure GRN - ${form.docNo || 'N/A'}`;
       default:
-        return 'Store Form';
+        return 'GRN Form';
     }
   };
 
   // Group forms by type
-  const grns = filteredForms.filter(f => f.type === 'grn');
-  const misses = filteredForms.filter(f => f.type === 'mis');
-  const fgns = filteredForms.filter(f => f.type === 'fgn');
+  const normalGrns = filteredForms.filter(f => f.type === 'normal-grn');
+  const jwGrns = filteredForms.filter(f => f.type === 'jw-annexure-grn');
 
   if (selectedForm) {
     return (
@@ -191,7 +190,7 @@ const StoreHistory: React.FC = () => {
   return (
     <div className="bg-white rounded-lg shadow p-6">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Store History</h2>
+        <h2 className="text-2xl font-bold text-gray-800">Inward History</h2>
       </div>
 
       {/* Filters */}
@@ -234,9 +233,8 @@ const StoreHistory: React.FC = () => {
               className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="all">All Types</option>
-              <option value="grn">GRN</option>
-              <option value="mis">MIS</option>
-              <option value="fgn">FGN</option>
+              <option value="normal-grn">Normal GRN</option>
+              <option value="jw-annexure-grn">JW Annexure GRN</option>
             </select>
           </div>
         </div>
@@ -260,16 +258,16 @@ const StoreHistory: React.FC = () => {
         Showing {filteredForms.length} form(s) {selectedDate ? `on ${formatDate(selectedDate)}` : selectedYear ? `in ${selectedYear}` : ''}
       </div>
 
-      {/* GRN Section */}
-      {selectedType === 'all' || selectedType === 'grn' ? (
+      {/* Normal GRN Section */}
+      {selectedType === 'all' || selectedType === 'normal-grn' ? (
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
             <Package className="w-5 h-5 text-green-600" />
-            <h3 className="text-lg font-semibold text-gray-800">GRN - Goods Received Notes ({grns.length})</h3>
+            <h3 className="text-lg font-semibold text-gray-800">Normal GRN ({normalGrns.length})</h3>
           </div>
-          {grns.length > 0 ? (
+          {normalGrns.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {grns.map((form) => (
+              {normalGrns.map((form) => (
                 <div
                   key={form.id}
                   className="border border-gray-300 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
@@ -278,7 +276,7 @@ const StoreHistory: React.FC = () => {
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <Package className="w-5 h-5 text-green-600" />
-                      <span className="font-semibold text-gray-800">GRN</span>
+                      <span className="font-semibold text-gray-800">Normal GRN</span>
                     </div>
                   </div>
                   <div className="space-y-1 text-sm text-gray-600">
@@ -301,22 +299,22 @@ const StoreHistory: React.FC = () => {
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500">
-              No GRN records found
+              No Normal GRN records found
             </div>
           )}
         </div>
       ) : null}
 
-      {/* MIS Section */}
-      {selectedType === 'all' || selectedType === 'mis' ? (
-        <div className="mb-8">
+      {/* JW Annexure GRN Section */}
+      {selectedType === 'all' || selectedType === 'jw-annexure-grn' ? (
+        <div>
           <div className="flex items-center gap-2 mb-4">
-            <FileText className="w-5 h-5 text-blue-600" />
-            <h3 className="text-lg font-semibold text-gray-800">MIS - Material Issue Slips ({misses.length})</h3>
+            <ArrowRightCircle className="w-5 h-5 text-blue-600" />
+            <h3 className="text-lg font-semibold text-gray-800">JW Annexure GRN ({jwGrns.length})</h3>
           </div>
-          {misses.length > 0 ? (
+          {jwGrns.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {misses.map((form) => (
+              {jwGrns.map((form) => (
                 <div
                   key={form.id}
                   className="border border-gray-300 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
@@ -324,14 +322,14 @@ const StoreHistory: React.FC = () => {
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <FileText className="w-5 h-5 text-blue-600" />
-                      <span className="font-semibold text-gray-800">MIS</span>
+                      <ArrowRightCircle className="w-5 h-5 text-blue-600" />
+                      <span className="font-semibold text-gray-800">JW Annexure GRN</span>
                     </div>
                   </div>
                   <div className="space-y-1 text-sm text-gray-600">
                     <div><span className="font-medium">Doc No:</span> {form.docNo || 'N/A'}</div>
                     <div><span className="font-medium">Date:</span> {formatDate(form.date || form.createdAt)}</div>
-                    <div><span className="font-medium">Department:</span> {form.deptName || 'N/A'}</div>
+                    <div><span className="font-medium">Supplier:</span> {form.supplierName || 'N/A'}</div>
                   </div>
                   <button
                     onClick={(e) => {
@@ -348,55 +346,7 @@ const StoreHistory: React.FC = () => {
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500">
-              No MIS records found
-            </div>
-          )}
-        </div>
-      ) : null}
-
-      {/* FGN Section */}
-      {selectedType === 'all' || selectedType === 'fgn' ? (
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <ShoppingCart className="w-5 h-5 text-purple-600" />
-            <h3 className="text-lg font-semibold text-gray-800">FGN - Finished Goods Transfer Notes ({fgns.length})</h3>
-          </div>
-          {fgns.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {fgns.map((form) => (
-                <div
-                  key={form.id}
-                  className="border border-gray-300 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => handleViewForm(form)}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <ShoppingCart className="w-5 h-5 text-purple-600" />
-                      <span className="font-semibold text-gray-800">FGN</span>
-                    </div>
-                  </div>
-                  <div className="space-y-1 text-sm text-gray-600">
-                    <div><span className="font-medium">Doc No:</span> {form.docNo || 'N/A'}</div>
-                    <div><span className="font-medium">Date:</span> {formatDate(form.date || form.createdAt)}</div>
-                    <div><span className="font-medium">From:</span> {form.fromDept || 'N/A'}</div>
-                    <div><span className="font-medium">To:</span> {form.toDept || 'N/A'}</div>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleViewForm(form);
-                    }}
-                    className="mt-3 w-full px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center justify-center gap-2 text-sm"
-                  >
-                    <Eye className="w-4 h-4" />
-                    View
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              No FGN records found
+              No JW Annexure GRN records found
             </div>
           )}
         </div>

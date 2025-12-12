@@ -23,6 +23,34 @@ export async function POST(request: NextRequest) {
 
     const { username, email, password, fullName, phone } = validatedData;
 
+    // Block invalid/default usernames that shouldn't be allowed
+    const invalidUsernames = [
+      'current_user',
+      'current user',
+      'Current User',
+      'CURRENT_USER',
+      'user',
+      'User',
+      'USER',
+      'admin',
+      'Admin',
+      'ADMIN',
+      'test',
+      'Test',
+      'TEST',
+      'demo',
+      'Demo',
+      'DEMO'
+    ];
+    
+    const normalizedUsername = username.trim().toLowerCase();
+    if (invalidUsernames.some(invalid => invalid.toLowerCase() === normalizedUsername)) {
+      return NextResponse.json(
+        { error: 'Invalid username. This username is not allowed.' },
+        { status: 400 }
+      );
+    }
+
     // Check email domain
     if (!email.endsWith('@polypacks.in')) {
       return NextResponse.json(

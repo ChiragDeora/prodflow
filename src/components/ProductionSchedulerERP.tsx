@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  HelpCircle, Info, Link, Menu, Package, Plus, Save, Upload, User, Wrench, X, Settings, Shield
+  HelpCircle, Info, Link, Menu, Package, Plus, Save, Upload, User, Wrench, X, Settings, Shield, Palette, Building2, CheckCircle, XCircle
 } from 'lucide-react';
 import { useAuth } from './auth/AuthProvider';
+import { useAccessControl } from '../lib/useAccessControl';
 import ExcelFileReader from './ExcelFileReader';
 import UnitSelector from './UnitSelector';
 import { 
@@ -16,12 +17,16 @@ import {
   lineAPI,
   unitAPI,
   unitManagementSettingsAPI,
+  colorLabelAPI,
+  partyNameAPI,
   Machine as SupabaseMachine, 
   Mold as SupabaseMold, 
   ScheduleJob as SupabaseScheduleJob,
   RawMaterial as SupabaseRawMaterial,
   PackingMaterial as SupabasePackingMaterial,
   Line as SupabaseLine,
+  ColorLabel,
+  PartyName,
   Unit
 } from '../lib/supabase';
 
@@ -58,14 +63,14 @@ interface MenuItem {
   description: string;
 }
 
-type ModuleType = 'scheduler' | 'masters' | 'approvals' | 'reports' | 'operators' | 'maintenance' | 'quality' | 'profile' | 'production' | 'store-dispatch';
-type ModalType = 'job' | 'machine' | 'mold' | 'packing_material' | 'raw_material' | 'line' | 'view_machine' | 'view_mold' | 'view_schedule' | 'view_packing_material' | 'view_raw_material' | 'view_line' | 'edit_line' | '';
+type ModuleType = 'welcome-dashboard' | 'scheduler' | 'masters' | 'approvals' | 'reports' | 'maintenance' | 'quality' | 'profile' | 'production' | 'store-dispatch' | 'prod-planner';
+type ModalType = 'job' | 'machine' | 'mold' | 'packing_material' | 'raw_material' | 'line' | 'view_machine' | 'view_mold' | 'view_schedule' | 'view_packing_material' | 'view_raw_material' | 'view_line' | 'edit_line' | 'color_label' | 'party_name' | 'view_color_label' | 'view_party_name' | '';
 type ActionType = 'edit' | 'delete' | 'view' | 'approve' | 'mark_done';
-type ItemType = 'machine' | 'mold' | 'schedule' | 'material' | 'product' | 'raw_material' | 'packing_material' | 'line';
-type DataType = 'machines' | 'molds' | 'raw_materials' | 'packing_materials' | 'lines';
+type ItemType = 'machine' | 'mold' | 'schedule' | 'material' | 'product' | 'raw_material' | 'packing_material' | 'line' | 'color_label' | 'party_name';
+type DataType = 'machines' | 'molds' | 'raw_materials' | 'packing_materials' | 'lines' | 'color_labels' | 'party_names';
 
 const ProductionSchedulerERP: React.FC = () => {
-  const [currentModule, setCurrentModule] = useState<ModuleType>('scheduler');
+  const [currentModule, setCurrentModule] = useState<ModuleType>('welcome-dashboard');
   
   const [currentView, setCurrentView] = useState<string>('daily');
   
@@ -76,7 +81,7 @@ const ProductionSchedulerERP: React.FC = () => {
 
   const [showModal, setShowModal] = useState<boolean>(false);
   const [modalType, setModalType] = useState<ModalType>('');
-  const [editingItem, setEditingItem] = useState<Machine | Mold | ScheduleJob | RawMaterial | PackingMaterial | Line | null>(null);
+  const [editingItem, setEditingItem] = useState<Machine | Mold | ScheduleJob | RawMaterial | PackingMaterial | Line | ColorLabel | PartyName | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [viewingNameplate, setViewingNameplate] = useState<string | null>(null);
   const [showExcelReader, setShowExcelReader] = useState<boolean>(false);
@@ -1026,9 +1031,40 @@ const ProductionSchedulerERP: React.FC = () => {
     created_by: 'Current User'
   });
 
-  // Get menu items from module registry (excluding profile)
+  // Access control hook for permission checking
+  const { canAccessModule } = useAccessControl();
+
+  // Map module IDs to permission module keys (some modules map to multiple permission modules)
+  const moduleIdToPermissionKeys: Record<string, string[]> = {
+    'welcome-dashboard': [], // Always accessible (empty array = no permission check needed)
+    'masters': ['masterData'],
+    'store-dispatch': ['storePurchase', 'storeInward', 'storeOutward', 'storeSales'], // Any store permission grants access
+    'prod-planner': ['productionPlanner'],
+    'production': ['production'],
+    'quality': ['quality'],
+    'maintenance': ['maintenance'],
+    'approvals': ['approvals'],
+    'reports': ['reports'],
+    'scheduler': ['productionPlanner'],
+    'profile': [], // Always accessible
+  };
+
+  // Get menu items from module registry (excluding profile), filtered by permissions
   const menuItems: MenuItem[] = getAvailableModules()
     .filter(config => config.id !== 'profile' && config.id !== 'scheduler') // Commented out Production Scheduler
+    .filter(config => {
+      // Always show welcome dashboard
+      if (config.id === 'welcome-dashboard') return true;
+      
+      // Get permission keys for this module
+      const permissionKeys = moduleIdToPermissionKeys[config.id] || [config.id];
+      
+      // If no permission keys defined, module is always accessible
+      if (permissionKeys.length === 0) return true;
+      
+      // Check if user has access to any of the permission modules
+      return permissionKeys.some(key => canAccessModule(key));
+    })
     .map(config => ({
       id: config.id,
       label: config.label,
@@ -1036,7 +1072,7 @@ const ProductionSchedulerERP: React.FC = () => {
       description: config.description
     }));
 
-  const handleAction = async (actionType: ActionType, item: Machine | Mold | ScheduleJob | RawMaterial | PackingMaterial | Line, itemType: ItemType): Promise<void> => {
+  const handleAction = async (actionType: ActionType, item: Machine | Mold | ScheduleJob | RawMaterial | PackingMaterial | Line | any, itemType: ItemType | 'line' | 'color_label' | 'party_name'): Promise<void> => {
     try {
       console.log(`Handling action: ${actionType} for ${itemType}`, item);
     switch (actionType) {
@@ -1050,6 +1086,8 @@ const ProductionSchedulerERP: React.FC = () => {
           setModalType('raw_material');
         } else if (itemType === 'line') {
           setModalType('edit_line');
+        } else if (itemType === 'color_label' || itemType === 'party_name') {
+          setModalType(itemType as ModalType);
         } else {
           setModalType(itemType as ModalType);
         }
@@ -1114,6 +1152,12 @@ const ProductionSchedulerERP: React.FC = () => {
               console.log(`Cannot delete raw material - missing id:`, item);
             } else if (itemType === 'line') {
               console.log(`Cannot delete line - missing line_id:`, item);
+            } else if (itemType === 'color_label' && 'id' in item && (item as any).id) {
+              // Color/Label delete is handled in the component itself
+              console.log(`Color/Label delete handled in component`);
+            } else if (itemType === 'party_name' && 'id' in item && (item as any).id) {
+              // Party Name delete is handled in the component itself
+              console.log(`Party Name delete handled in component`);
             }
         }
         break;
@@ -1132,6 +1176,8 @@ const ProductionSchedulerERP: React.FC = () => {
           setModalType('view_raw_material');
         } else if (itemType === 'line') {
           setModalType('view_line');
+        } else if (itemType === 'color_label' || itemType === 'party_name') {
+          setModalType(`view_${itemType}` as ModalType);
         } else {
           setModalType(`view_${itemType}` as ModalType);
         }
@@ -1196,7 +1242,7 @@ const ProductionSchedulerERP: React.FC = () => {
       }
       
     setShowModal(false);
-    setCurrentModule('scheduler');
+    // Don't switch modules - stay on current module
     } catch (error) {
       console.error('Error creating new job:', error);
     }
@@ -1642,16 +1688,11 @@ const ProductionSchedulerERP: React.FC = () => {
     const module = getModule(currentModule);
     
     if (!module) {
-      // Fallback to scheduler if module not found
-      const schedulerModule = getModule('scheduler');
-      if (schedulerModule) {
-        const SchedulerComponent = schedulerModule.component;
-        return <SchedulerComponent 
-          scheduleData={scheduleData}
-          selectedDate={selectedDate}
-          machinesMaster={machinesMaster}
-          handleAction={handleAction}
-        />;
+      // Fallback to welcome-dashboard if module not found
+      const dashboardModule = getModule('welcome-dashboard');
+      if (dashboardModule) {
+        const DashboardComponent = dashboardModule.component;
+        return <DashboardComponent />;
       }
       return <div>Module not found</div>;
     }
@@ -1716,20 +1757,30 @@ const ProductionSchedulerERP: React.FC = () => {
     // Render other modules with appropriate props
     const getModuleProps = () => {
       switch (currentModule) {
+      case 'welcome-dashboard':
+          return {
+            onModuleChange: (moduleId: string) => {
+              setCurrentModule(moduleId as ModuleType);
+              if (typeof window !== 'undefined') {
+                const userId = localStorage.getItem('currentUserId') || 'default';
+                localStorage.setItem(`prodSchedulerCurrentModule_${userId}`, moduleId);
+              }
+            }
+          };
       case 'approvals':
           return {
             scheduleData,
             handleAction
           };
-      case 'operators':
-          const operatorsFilteredData = getFilteredData();
-          return {
-            scheduleData,
-            selectedDate,
-            handleAction,
-            machinesMaster: operatorsFilteredData.machines,
-            moldsMaster: operatorsFilteredData.molds
-          };
+      // case 'operators':
+      //     const operatorsFilteredData = getFilteredData();
+      //     return {
+      //       scheduleData,
+      //       selectedDate,
+      //       handleAction,
+      //       machinesMaster: operatorsFilteredData.machines,
+      //       moldsMaster: operatorsFilteredData.molds
+      //     };
         case 'masters':
           const mastersFilteredData = getFilteredData();
           return {
@@ -1795,7 +1846,18 @@ const ProductionSchedulerERP: React.FC = () => {
             openExcelReader,
             handleAction,
             setViewingNameplate,
-            InfoButton
+            InfoButton,
+            // Callback to collapse sidebar when sub nav is clicked
+            onSubNavClick: () => {
+              if (sidebarOpen) {
+                setSidebarOpen(false);
+                // Save to localStorage with user-specific key
+                if (typeof window !== 'undefined') {
+                  const userId = localStorage.getItem('currentUserId') || 'default';
+                  localStorage.setItem(`prodSchedulerSidebarOpen_${userId}`, JSON.stringify(false));
+                }
+              }
+            }
           };
         case 'reports':
           return {};
@@ -1803,14 +1865,65 @@ const ProductionSchedulerERP: React.FC = () => {
           return {
             machinesMaster: sortedMachines,
             linesMaster: sortedLines,
+            moldsMaster: sortedMolds,
             unitManagementEnabled,
             defaultUnit,
-            units
+            units,
+            // Callback to collapse sidebar when sub nav is clicked
+            onSubNavClick: () => {
+              if (sidebarOpen) {
+                setSidebarOpen(false);
+                // Save to localStorage with user-specific key
+                if (typeof window !== 'undefined') {
+                  const userId = localStorage.getItem('currentUserId') || 'default';
+                  localStorage.setItem(`prodSchedulerSidebarOpen_${userId}`, JSON.stringify(false));
+                }
+              }
+            }
           };
         case 'quality':
           return {
             linesMaster: sortedLines,
-            moldsMaster: sortedMolds
+            moldsMaster: sortedMolds,
+            // Callback to collapse sidebar when sub nav is clicked
+            onSubNavClick: () => {
+              if (sidebarOpen) {
+                setSidebarOpen(false);
+                // Save to localStorage with user-specific key
+                if (typeof window !== 'undefined') {
+                  const userId = localStorage.getItem('currentUserId') || 'default';
+                  localStorage.setItem(`prodSchedulerSidebarOpen_${userId}`, JSON.stringify(false));
+                }
+              }
+            }
+          };
+        case 'production':
+          return {
+            // Callback to collapse sidebar when sub nav is clicked
+            onSubNavClick: () => {
+              if (sidebarOpen) {
+                setSidebarOpen(false);
+                // Save to localStorage with user-specific key
+                if (typeof window !== 'undefined') {
+                  const userId = localStorage.getItem('currentUserId') || 'default';
+                  localStorage.setItem(`prodSchedulerSidebarOpen_${userId}`, JSON.stringify(false));
+                }
+              }
+            }
+          };
+        case 'store-dispatch':
+          return {
+            // Callback to collapse sidebar when sub nav is clicked
+            onSubNavClick: () => {
+              if (sidebarOpen) {
+                setSidebarOpen(false);
+                // Save to localStorage with user-specific key
+                if (typeof window !== 'undefined') {
+                  const userId = localStorage.getItem('currentUserId') || 'default';
+                  localStorage.setItem(`prodSchedulerSidebarOpen_${userId}`, JSON.stringify(false));
+                }
+              }
+            }
           };
       case 'profile':
           return {};
@@ -1821,6 +1934,18 @@ const ProductionSchedulerERP: React.FC = () => {
 
     return <ModuleComponent {...getModuleProps()} />;
   };
+
+  // Auto-collapse sidebar when prod-planner module is opened
+  useEffect(() => {
+    if (currentModule === 'prod-planner' && sidebarOpen) {
+      setSidebarOpen(false);
+      // Save to localStorage with user-specific key
+      if (typeof window !== 'undefined') {
+        const userId = localStorage.getItem('currentUserId') || 'default';
+        localStorage.setItem(`prodSchedulerSidebarOpen_${userId}`, JSON.stringify(false));
+      }
+    }
+  }, [currentModule]);
 
   // Restore user preferences from localStorage on component mount
   useEffect(() => {
@@ -1867,9 +1992,15 @@ const ProductionSchedulerERP: React.FC = () => {
       const savedPackingMaterialCategoryFilter = localStorage.getItem(`prodSchedulerPackingMaterialCategoryFilter_${userId}`);
       if (savedPackingMaterialCategoryFilter) setPackingMaterialCategoryFilter(savedPackingMaterialCategoryFilter);
       
-      // Restore module selection
+      // Restore module selection (default to welcome-dashboard if not set or if scheduler was saved)
       const savedCurrentModule = localStorage.getItem(`prodSchedulerCurrentModule_${userId}`);
-      if (savedCurrentModule) setCurrentModule(savedCurrentModule as ModuleType);
+      if (savedCurrentModule && savedCurrentModule !== 'scheduler') {
+        setCurrentModule(savedCurrentModule as ModuleType);
+      } else {
+        // Default to welcome-dashboard, or migrate from scheduler
+        setCurrentModule('welcome-dashboard');
+        localStorage.setItem(`prodSchedulerCurrentModule_${userId}`, 'welcome-dashboard');
+      }
       
       // Restore sidebar state
       const savedSidebarOpen = localStorage.getItem(`prodSchedulerSidebarOpen_${userId}`);
@@ -3103,6 +3234,375 @@ const ProductionSchedulerERP: React.FC = () => {
           </div>
         </div>
       )}
+      {showModal && modalType === 'color_label' && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <Palette className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {editingItem && 'id' in editingItem && editingItem.id ? 'Edit Color/Label' : 'Add New Color/Label'}
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {editingItem && 'id' in editingItem && editingItem.id 
+                      ? 'Update color/label information' 
+                      : 'Enter color/label details to add to the system'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowModal(false);
+                  setEditingItem(null);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const colorLabelData = {
+                sr_no: parseInt(formData.get('sr_no') as string) || 0,
+                color_label: formData.get('color_label') as string
+              };
+              
+              try {
+                if (editingItem && 'id' in editingItem && editingItem.id) {
+                  // Update existing color/label
+                  await colorLabelAPI.update(editingItem.id, colorLabelData);
+                } else {
+                  // Create new color/label
+                  await colorLabelAPI.create(colorLabelData);
+                }
+                setShowModal(false);
+                setEditingItem(null);
+                // Trigger a custom event to refresh the color label list
+                window.dispatchEvent(new CustomEvent('refreshColorLabels'));
+              } catch (error) {
+                console.error('Error saving color/label:', error);
+                alert('Error saving color/label. Please try again.');
+              }
+            }}>
+              <div className="p-6 space-y-6">
+                {/* Basic Information */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <div className="w-1 h-5 bg-purple-600 rounded-full mr-3"></div>
+                    Color/Label Information
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Sr. No. <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="sr_no"
+                        required
+                        min="1"
+                        placeholder="e.g., 1"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'sr_no' in editingItem ? editingItem.sr_no : ''}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Color / Label <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="color_label"
+                        required
+                        placeholder="e.g., Natural, Peach, White"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'color_label' in editingItem ? editingItem.color_label : ''}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+                <div className="text-sm text-gray-500">
+                  <span className="text-red-500">*</span> Required fields
+                </div>
+                <div className="flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowModal(false);
+                      setEditingItem(null);
+                    }}
+                    className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium flex items-center"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {editingItem && 'id' in editingItem && editingItem.id ? 'Update Color/Label' : 'Add Color/Label'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {showModal && modalType === 'view_color_label' && editingItem && 'id' in editingItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <Palette className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Color/Label Details</h2>
+                  <p className="text-sm text-gray-500 mt-1">View color/label information</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowModal(false);
+                  setEditingItem(null);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <div className="w-1 h-5 bg-purple-600 rounded-full mr-3"></div>
+                    Basic Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Sr. No.
+                      </label>
+                      <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-900">
+                        {(editingItem as ColorLabel).sr_no}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Color / Label
+                      </label>
+                      <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-900">
+                        {(editingItem as ColorLabel).color_label}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end p-6 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={() => {
+                  setShowModal(false);
+                  setEditingItem(null);
+                }}
+                className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showModal && modalType === 'party_name' && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Building2 className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {editingItem && 'id' in editingItem && editingItem.id ? 'Edit Party Name' : 'Add New Party Name'}
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {editingItem && 'id' in editingItem && editingItem.id 
+                      ? 'Update party name information' 
+                      : 'Enter party name details to add to the system'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowModal(false);
+                  setEditingItem(null);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const partyNameData = {
+                name: formData.get('name') as string
+              };
+              
+              try {
+                if (editingItem && 'id' in editingItem && editingItem.id) {
+                  // Update existing party name
+                  await partyNameAPI.update(editingItem.id, partyNameData);
+                } else {
+                  // Create new party name
+                  await partyNameAPI.create(partyNameData);
+                }
+                setShowModal(false);
+                setEditingItem(null);
+                // Trigger a custom event to refresh the party name list
+                window.dispatchEvent(new CustomEvent('refreshPartyNames'));
+              } catch (error) {
+                console.error('Error saving party name:', error);
+                alert('Error saving party name. Please try again.');
+              }
+            }}>
+              <div className="p-6 space-y-6">
+                {/* Basic Information */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <div className="w-1 h-5 bg-blue-600 rounded-full mr-3"></div>
+                    Party Name Information
+                  </h3>
+
+                  <div className="grid grid-cols-1 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="name"
+                        required
+                        placeholder="e.g., Easy, Herald, Regular"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'name' in editingItem ? editingItem.name : ''}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+                <div className="text-sm text-gray-500">
+                  <span className="text-red-500">*</span> Required fields
+                </div>
+                <div className="flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowModal(false);
+                      setEditingItem(null);
+                    }}
+                    className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {editingItem && 'id' in editingItem && editingItem.id ? 'Update Party Name' : 'Add Party Name'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {showModal && modalType === 'view_party_name' && editingItem && 'id' in editingItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Building2 className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Party Name Details</h2>
+                  <p className="text-sm text-gray-500 mt-1">View party name information</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowModal(false);
+                  setEditingItem(null);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <div className="w-1 h-5 bg-blue-600 rounded-full mr-3"></div>
+                    Basic Information
+                  </h3>
+                  <div className="grid grid-cols-1 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Name
+                      </label>
+                      <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-900">
+                        {(editingItem as PartyName).name}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end p-6 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={() => {
+                  setShowModal(false);
+                  setEditingItem(null);
+                }}
+                className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showModal && (modalType === 'view_machine' || modalType === 'view_mold' || modalType === 'view_packing_material' || modalType === 'view_raw_material' || modalType === 'view_line' || modalType === 'edit_line') && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -3511,6 +4011,32 @@ const ProductionSchedulerERP: React.FC = () => {
                           </div>
                         </div>
 
+                        {/* Grinding Section */}
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                            <div className="w-1 h-5 bg-orange-600 rounded-full mr-3"></div>
+                            Grinding
+                          </h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-gray-50 rounded-lg p-4">
+                              <div className="text-sm font-medium text-gray-600 mb-1">Grinding Available</div>
+                              <div className="text-lg font-semibold text-gray-900">
+                                {currentLine.grinding ? (
+                                  <span className="text-green-600 flex items-center">
+                                    <CheckCircle className="w-5 h-5 mr-2" />
+                                    Yes
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-500 flex items-center">
+                                    <XCircle className="w-5 h-5 mr-2" />
+                                    No
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
                         {/* Machine Assignments */}
                         <div>
                           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -3558,7 +4084,8 @@ const ProductionSchedulerERP: React.FC = () => {
                             conveyor_machine_id: formData.get('conveyor_machine_id') as string || undefined,
                             hoist_machine_id: formData.get('hoist_machine_id') as string || undefined,
                             status: formData.get('status') as 'Active' | 'Inactive' | 'Maintenance',
-                            unit: formData.get('unit') as string || 'Unit 1'
+                            unit: formData.get('unit') as string || 'Unit 1',
+                            grinding: formData.get('grinding') === 'true'
                           };
                           
                           try {
@@ -3789,6 +4316,32 @@ const ProductionSchedulerERP: React.FC = () => {
                             </div>
                           </div>
 
+                          {/* Grinding Section */}
+                          <div className="mb-6">
+                            <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                              <div className="w-1 h-5 bg-orange-600 rounded-full mr-3"></div>
+                              Grinding
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Grinding Available
+                                </label>
+                                <select
+                                  name="grinding"
+                                  defaultValue={(editingItem as Line).grinding ? 'true' : 'false'}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 text-gray-900 focus:ring-purple-500 focus:border-purple-500"
+                                >
+                                  <option value="false">No</option>
+                                  <option value="true">Yes</option>
+                                </select>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Indicates if grinding operations can be performed on this line
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
                           {/* Form Actions */}
                           <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
                             <button
@@ -3833,11 +4386,15 @@ const ProductionSchedulerERP: React.FC = () => {
       
       {/* Excel File Reader Modal */}
       {showExcelReader && (
-        <ExcelFileReader
-          defaultDataType={excelDataType}
-          onDataImported={handleDataImported}
-          onClose={() => setShowExcelReader(false)}
-        />
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+            <ExcelFileReader
+              defaultDataType={excelDataType}
+              onDataImported={handleDataImported}
+              onClose={() => setShowExcelReader(false)}
+            />
+          </div>
+        </div>
       )}
       
       {/* Info Modal */}

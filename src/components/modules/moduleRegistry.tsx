@@ -6,13 +6,13 @@ import ProductionScheduler from './production-schedule';
 import MasterDataModule from './master-data';
 import ApprovalsModule from './approvals';
 import ReportsModule from './reports';
-import OperatorPanel from './operator-panel';
 import UserProfileModule from './profile';
 import MaintenanceManagementModule from './maintenance-management';
 import QualityControlModule from './quality-control';
 import ProdPlanner from './prod-planner';
 import ProductionModule from './production';
 import StoreDispatchModule from './store-dispatch';
+import WelcomeDashboard from './welcome-dashboard';
 
 
 
@@ -21,13 +21,13 @@ import { moduleConfig as productionScheduleConfig } from './production-schedule/
 import { moduleConfig as masterDataConfig } from './master-data/moduleConfig';
 import { moduleConfig as approvalsConfig } from './approvals/moduleConfig';
 import { moduleConfig as reportsConfig } from './reports/moduleConfig';
-import { moduleConfig as operatorPanelConfig } from './operator-panel/moduleConfig';
 import { moduleConfig as profileConfig } from './profile/moduleConfig';
 import { moduleConfig as maintenanceConfig } from './maintenance-management/moduleConfig';
 import { moduleConfig as qualityConfig } from './quality-control/moduleConfig';
 import { moduleConfig as prodPlannerConfig } from './prod-planner/moduleConfig';
 import { moduleConfig as productionConfig } from './production/moduleConfig';
 import { moduleConfig as storeDispatchConfig } from './store-dispatch/moduleConfig';
+import { moduleConfig as welcomeDashboardConfig } from './welcome-dashboard/moduleConfig';
 
 
 
@@ -44,7 +44,12 @@ export interface ModuleDefinition {
 }
 
 // Module registry - maps module IDs to their components and configs
+// Ordered as: dashboard, masters, store, prod planner, production, quality, maintenance, approvals, reports
 export const moduleRegistry: Record<string, ModuleDefinition> = {
+  'welcome-dashboard': {
+    config: welcomeDashboardConfig,
+    component: WelcomeDashboard
+  },
   'scheduler': {
     config: productionScheduleConfig,
     component: ProductionScheduler
@@ -53,29 +58,9 @@ export const moduleRegistry: Record<string, ModuleDefinition> = {
     config: masterDataConfig,
     component: MasterDataModule
   },
-  'approvals': {
-    config: approvalsConfig,
-    component: ApprovalsModule
-  },
-  'reports': {
-    config: reportsConfig,
-    component: ReportsModule
-  },
-  'operators': {
-    config: operatorPanelConfig,
-    component: OperatorPanel
-  },
-  'maintenance': {
-    config: maintenanceConfig,
-    component: MaintenanceManagementModule
-  },
-  'quality': {
-    config: qualityConfig,
-    component: QualityControlModule
-  },
-  'profile': {
-    config: profileConfig,
-    component: UserProfileModule
+  'store-dispatch': {
+    config: storeDispatchConfig,
+    component: StoreDispatchModule
   },
   'prod-planner': {
     config: prodPlannerConfig,
@@ -85,9 +70,25 @@ export const moduleRegistry: Record<string, ModuleDefinition> = {
     config: productionConfig,
     component: ProductionModule
   },
-  'store-dispatch': {
-    config: storeDispatchConfig,
-    component: StoreDispatchModule
+  'quality': {
+    config: qualityConfig,
+    component: QualityControlModule
+  },
+  'maintenance': {
+    config: maintenanceConfig,
+    component: MaintenanceManagementModule
+  },
+  'approvals': {
+    config: approvalsConfig,
+    component: ApprovalsModule
+  },
+  'reports': {
+    config: reportsConfig,
+    component: ReportsModule
+  },
+  'profile': {
+    config: profileConfig,
+    component: UserProfileModule
   },
 };
 

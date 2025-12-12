@@ -37,6 +37,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Block invalid/default usernames that shouldn't be allowed
+    const invalidUsernames = [
+      'current_user',
+      'current user',
+      'Current User',
+      'CURRENT_USER',
+      'user',
+      'User',
+      'USER',
+      'admin',
+      'Admin',
+      'ADMIN',
+      'test',
+      'Test',
+      'TEST',
+      'demo',
+      'Demo',
+      'DEMO'
+    ];
+    
+    const normalizedUsername = username.trim().toLowerCase();
+    if (invalidUsernames.some(invalid => invalid.toLowerCase() === normalizedUsername)) {
+      return NextResponse.json(
+        { error: 'Invalid username. This username is not allowed.' },
+        { status: 403 }
+      );
+    }
+
     // Get user by username
     const { data: user, error: userError } = await supabase
       .from('auth_users')
@@ -44,16 +72,31 @@ export async function POST(request: NextRequest) {
       .eq('username', username)
       .single();
 
+    if (userError) {
+      console.error('Database error fetching user:', userError);
+      // Check if it's a table doesn't exist error
+      if (userError.code === '42P01' || userError.message?.includes('does not exist')) {
+        return NextResponse.json(
+          { error: 'Database configuration error. Please contact administrator.' },
+          { status: 500 }
+        );
+      }
+    }
+
     if (userError || !user) {
-      // Log failed login attempt
-      await supabase.from('auth_audit_logs').insert({
-        action: 'login_failed',
-        resource_type: 'auth_users',
-        details: { username, reason: 'user_not_found' },
-        outcome: 'failure',
-        ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
-        user_agent: request.headers.get('user-agent') || null
-      });
+      // Try to log failed login attempt (but don't fail if this fails)
+      try {
+        await supabase.from('auth_audit_logs').insert({
+          action: 'login_failed',
+          resource_type: 'auth_users',
+          details: { username, reason: 'user_not_found' },
+          outcome: 'failure',
+          ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
+          user_agent: request.headers.get('user-agent') || null
+        });
+      } catch (auditError) {
+        console.warn('Could not log failed login attempt:', auditError);
+      }
 
       return NextResponse.json(
         { error: 'Invalid username or password' },
@@ -105,17 +148,21 @@ export async function POST(request: NextRequest) {
         .update(updates)
         .eq('id', user.id);
 
-      // Log failed login attempt
-      await supabase.from('auth_audit_logs').insert({
-        user_id: user.id,
-        action: 'login_failed',
-        resource_type: 'auth_users',
-        resource_id: user.id,
-        details: { username, reason: 'invalid_password', failed_attempts: newFailedAttempts },
-        outcome: 'failure',
-        ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
-        user_agent: request.headers.get('user-agent') || null
-      });
+      // Log failed login attempt (but don't fail if this fails)
+      try {
+        await supabase.from('auth_audit_logs').insert({
+          user_id: user.id,
+          action: 'login_failed',
+          resource_type: 'auth_users',
+          resource_id: user.id,
+          details: { username, reason: 'invalid_password', failed_attempts: newFailedAttempts },
+          outcome: 'failure',
+          ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
+          user_agent: request.headers.get('user-agent') || null
+        });
+      } catch (auditError) {
+        console.warn('Could not log failed login attempt:', auditError);
+      }
 
       return NextResponse.json(
         { error: 'Invalid username or password' },
@@ -161,18 +208,23 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', user.id);
 
-    // Log successful login
-    await supabase.from('auth_audit_logs').insert({
-      user_id: user.id,
-      action: 'login_success',
-      resource_type: 'auth_users',
-      resource_id: user.id,
-      details: { username },
-      outcome: 'success',
-      ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
-      user_agent: request.headers.get('user-agent') || null,
-      is_super_admin_override: user.is_root_admin || false
-    });
+    // Log successful login (but don't fail if this fails)
+    try {
+      await supabase.from('auth_audit_logs').insert({
+        user_id: user.id,
+        action: 'login_success',
+        resource_type: 'auth_users',
+        resource_id: user.id,
+        details: { username },
+        outcome: 'success',
+        ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
+        user_agent: request.headers.get('user-agent') || null,
+        is_super_admin_override: user.is_root_admin || false
+      });
+    } catch (auditError) {
+      console.warn('Could not log successful login:', auditError);
+      // Don't fail login if audit logging fails
+    }
 
     // Check if password reset is required
     const requiresPasswordReset = user.password_reset_required || 

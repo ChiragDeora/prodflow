@@ -8,7 +8,7 @@ import {
   Lock, Unlock, Archive, RotateCcw
 } from 'lucide-react';
 import { BOMMasterWithVersions, BOMVersion, BOMComponent, BOMAudit, bomMasterAPI } from '@/lib/supabase';
-
+import { removeOldPrefix, updateItemNameWithRPOrCK } from '@/utils/bomCodeUtils';
 
 import ExcelFileReader from '../../ExcelFileReader';
 
@@ -18,6 +18,12 @@ const formatNumericValue = (value: any): string => {
   const numValue = Number(value);
   if (isNaN(numValue)) return '-';
   return numValue.toFixed(2);
+};
+
+// Utility function to remove leading underscores from values
+const cleanUnderscoreValue = (value: any): string => {
+  if (value === null || value === undefined) return '-';
+  return String(value).replace(/^_+/, '');
 };
 
 interface BOMMasterProps {
@@ -40,6 +46,9 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
   const [auditData, setAuditData] = useState<BOMAudit[]>([]);
   const [sortField, setSortField] = useState<string>('sl_no');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [filterByStatus, setFilterByStatus] = useState<string>('all');
+  const [filterByCode, setFilterByCode] = useState<string>('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   // Load BOM masters on component mount and when category changes
   useEffect(() => {
@@ -178,11 +187,12 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
       }
     };
     
-    const matchesSearch = getSearchFields(bom).includes(searchTerm.toLowerCase());
+    const matchesSearch = searchTerm === '' || getSearchFields(bom).includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || bom.status === statusFilter;
+    const matchesStatusFilter = filterByStatus === 'all' || bom.status === filterByStatus;
+    const matchesCodeFilter = filterByCode === '' || getSearchFields(bom).includes(filterByCode.toLowerCase());
     
-    // Remove category filtering since data is already filtered by API
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesStatus && matchesStatusFilter && matchesCodeFilter;
   });
 
   // Debug logging
@@ -310,6 +320,130 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
         </div>
       )}
 
+      {/* Enhanced Filters and Search */}
+      <div className="mx-6 mb-4 bg-white rounded-lg shadow p-4">
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Search Input */}
+          <div className="flex-1 min-w-64">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder={`Search ${selectedCategory} BOMs...`}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* Status Filter */}
+          <div className="min-w-32">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="all">All Status</option>
+              <option value="draft">Draft</option>
+              <option value="released">Released</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+
+          {/* Code Filter */}
+          <div className="min-w-48">
+            <input
+              type="text"
+              placeholder="Filter by code..."
+              value={filterByCode}
+              onChange={(e) => setFilterByCode(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          {/* Advanced Filters Toggle */}
+          <button
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center"
+          >
+            <Filter className="w-4 h-4 mr-2" />
+            Filters
+            {showAdvancedFilters ? <ChevronDown className="w-4 h-4 ml-1" /> : <ChevronRight className="w-4 h-4 ml-1" />}
+          </button>
+
+          {/* Results Count */}
+          <div className="text-sm text-gray-600">
+            {filteredBomMasters.length} of {bomMasters.length} BOMs
+          </div>
+        </div>
+
+        {/* Advanced Filters Panel */}
+        {showAdvancedFilters && (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Sort Field */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Sort By</label>
+                <select
+                  value={sortField}
+                  onChange={(e) => setSortField(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="sl_no">Serial Number</option>
+                  <option value="item_name">Item Name</option>
+                  <option value="item_code">Item Code</option>
+                  <option value="created_at">Created Date</option>
+                  <option value="updated_at">Updated Date</option>
+                  {selectedCategory === 'SFG' && (
+                    <>
+                      <option value="sfg_code">SFG Code</option>
+                      <option value="part_weight_gm_pcs">Part Weight</option>
+                    </>
+                  )}
+                  {(selectedCategory === 'FG' || selectedCategory === 'LOCAL') && (
+                    <>
+                      <option value="party_name">Party Name</option>
+                      <option value="pack_size">Pack Size</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+              {/* Sort Direction */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Sort Order</label>
+                <select
+                  value={sortDirection}
+                  onChange={(e) => setSortDirection(e.target.value as 'asc' | 'desc')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
+              </div>
+
+              {/* Clear Filters */}
+              <div className="flex items-end">
+                <button
+                  onClick={() => {
+                    setSearchTerm('');
+                    setStatusFilter('all');
+                    setFilterByCode('');
+                    setFilterByStatus('all');
+                    setSortField('sl_no');
+                    setSortDirection('asc');
+                  }}
+                  className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                >
+                  Clear All Filters
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* BOM Masters Table */}
       <div className="flex-1 overflow-auto p-6">
         {loading ? (
@@ -415,6 +549,9 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
                         <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-28 whitespace-nowrap">
                           QTY/METER 2
                         </th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20 whitespace-nowrap">
+                          CBM
+                        </th>
                       </>
                     )}
                     {selectedCategory === 'LOCAL' && (
@@ -461,6 +598,9 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
                         <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-28 whitespace-nowrap">
                           QTY/METER 2
                         </th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20 whitespace-nowrap">
+                          CBM
+                        </th>
                       </>
                     )}
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24 whitespace-nowrap">
@@ -471,143 +611,184 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {sortedBomMasters.map((bom) => (
                     <tr key={bom.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center">
                         {(bom as any).sl_no !== null && (bom as any).sl_no !== undefined ? (bom as any).sl_no : '-'}
                       </td>
                       {selectedCategory === 'SFG' && (
                         <>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).item_name || '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(() => {
+                              const itemName = (bom as any).item_name || '';
+                              const sfgCode = (bom as any).sfg_code || '';
+                              // Update item name to include RP/CK indicator if not already present
+                              return updateItemNameWithRPOrCK(itemName, sfgCode) || '-';
+                            })()}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).sfg_code || '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(() => {
+                              const code = (bom as any).sfg_code || '';
+                              // Remove 100 prefix if present for display
+                              return removeOldPrefix(code) || '-';
+                            })()}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).pcs !== null && (bom as any).pcs !== undefined ? formatNumericValue((bom as any).pcs) : '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).part_weight_gm_pcs !== null && (bom as any).part_weight_gm_pcs !== undefined ? `${formatNumericValue((bom as any).part_weight_gm_pcs)}g` : '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).colour || '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).hp_percentage !== null && (bom as any).hp_percentage !== undefined ? `${formatNumericValue((bom as any).hp_percentage * 100)}%` : '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).icp_percentage !== null && (bom as any).icp_percentage !== undefined ? `${formatNumericValue((bom as any).icp_percentage * 100)}%` : '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).rcp_percentage !== null && (bom as any).rcp_percentage !== undefined ? `${formatNumericValue((bom as any).rcp_percentage * 100)}%` : '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).ldpe_percentage !== null && (bom as any).ldpe_percentage !== undefined ? `${formatNumericValue((bom as any).ldpe_percentage * 100)}%` : '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).gpps_percentage !== null && (bom as any).gpps_percentage !== undefined ? `${formatNumericValue((bom as any).gpps_percentage * 100)}%` : '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).mb_percentage !== null && (bom as any).mb_percentage !== undefined ? `${formatNumericValue((bom as any).mb_percentage * 100)}%` : '-'}
                           </td>
                         </>
                       )}
                       {selectedCategory === 'FG' && (
                         <>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).item_code || '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(() => {
+                              const code = (bom as any).item_code || '';
+                              // Remove 200 prefix if present for display
+                              return removeOldPrefix(code) || '-';
+                            })()}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).party_name || '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).pack_size || '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).sfg_1 || '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(() => {
+                              const sfgCode = (bom as any).sfg_1 || '';
+                              // Remove 100 prefix if present for display
+                              return removeOldPrefix(sfgCode) || '-';
+                            })()}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-_                            {(bom as any).sfg_1_qty !== null && (bom as any).sfg_1_qty !== undefined ? (bom as any).sfg_1_qty : '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(bom as any).sfg_1_qty !== null && (bom as any).sfg_1_qty !== undefined ? 
+                              cleanUnderscoreValue((bom as any).sfg_1_qty) : '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).sfg_2 || '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(() => {
+                              const sfgCode = (bom as any).sfg_2 || '';
+                              // Remove 100 prefix if present for display
+                              return removeOldPrefix(sfgCode) || '-';
+                            })()}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).sfg_2_qty !== null && (bom as any).sfg_2_qty !== undefined ? (bom as any).sfg_2_qty : '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {cleanUnderscoreValue((bom as any).sfg_2_qty)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).cnt_code || '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).cnt_qty !== null && (bom as any).cnt_qty !== undefined ? (bom as any).cnt_qty : '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {cleanUnderscoreValue((bom as any).cnt_qty)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).polybag_code || '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).poly_qty !== null && (bom as any).poly_qty !== undefined ? (bom as any).poly_qty : '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {cleanUnderscoreValue((bom as any).poly_qty)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).bopp_1 || '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).qty_meter !== null && (bom as any).qty_meter !== undefined ? formatNumericValue((bom as any).qty_meter) : '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(bom as any).qty_meter !== null && (bom as any).qty_meter !== undefined ? formatNumericValue(cleanUnderscoreValue((bom as any).qty_meter)) : '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).bopp_2 || '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).qty_meter_2 !== null && (bom as any).qty_meter_2 !== undefined ? formatNumericValue((bom as any).qty_meter_2) : '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(bom as any).qty_meter_2 !== null && (bom as any).qty_meter_2 !== undefined ? formatNumericValue(cleanUnderscoreValue((bom as any).qty_meter_2)) : '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(bom as any).cbm !== null && (bom as any).cbm !== undefined ? formatNumericValue((bom as any).cbm) : '-'}
                           </td>
                         </>
                       )}
                       {selectedCategory === 'LOCAL' && (
                         <>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).item_code || '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(() => {
+                              const code = (bom as any).item_code || '';
+                              // Remove 200 prefix if present for display
+                              return removeOldPrefix(code) || '-';
+                            })()}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).pack_size || '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).sfg_1 || '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(() => {
+                              const sfgCode = (bom as any).sfg_1 || '';
+                              // Remove 100 prefix if present for display
+                              return removeOldPrefix(sfgCode) || '-';
+                            })()}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).sfg_1_qty !== null && (bom as any).sfg_1_qty !== undefined ? (bom as any).sfg_1_qty : '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(bom as any).sfg_1_qty !== null && (bom as any).sfg_1_qty !== undefined ? 
+                              cleanUnderscoreValue((bom as any).sfg_1_qty) : '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).sfg_2 || '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(() => {
+                              const sfgCode = (bom as any).sfg_2 || '';
+                              // Remove 100 prefix if present for display
+                              return removeOldPrefix(sfgCode) || '-';
+                            })()}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).sfg_2_qty !== null && (bom as any).sfg_2_qty !== undefined ? (bom as any).sfg_2_qty : '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {cleanUnderscoreValue((bom as any).sfg_2_qty)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).cnt_code || '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).cnt_qty !== null && (bom as any).cnt_qty !== undefined ? (bom as any).cnt_qty : '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {cleanUnderscoreValue((bom as any).cnt_qty)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).polybag_code || '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).poly_qty !== null && (bom as any).poly_qty !== undefined ? (bom as any).poly_qty : '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {cleanUnderscoreValue((bom as any).poly_qty)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).bopp_1 || '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).qty_meter !== null && (bom as any).qty_meter !== undefined ? formatNumericValue((bom as any).qty_meter) : '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(bom as any).qty_meter !== null && (bom as any).qty_meter !== undefined ? formatNumericValue(cleanUnderscoreValue((bom as any).qty_meter)) : '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).bopp_2 || '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(bom as any).qty_meter_2 !== null && (bom as any).qty_meter_2 !== undefined ? formatNumericValue((bom as any).qty_meter_2) : '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(bom as any).qty_meter_2 !== null && (bom as any).qty_meter_2 !== undefined ? formatNumericValue(cleanUnderscoreValue((bom as any).qty_meter_2)) : '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(bom as any).cbm !== null && (bom as any).cbm !== undefined ? formatNumericValue((bom as any).cbm) : '-'}
                           </td>
                         </>
                       )}
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
+                    <div className="flex space-x-2 justify-center">
                       <button
                         onClick={() => handleViewVersions(bom)}
                             className="text-blue-600 hover:text-blue-900 text-xs bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 flex items-center"

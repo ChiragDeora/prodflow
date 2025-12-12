@@ -1,17 +1,17 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, Search, Filter, FileText, Truck, Eye, Download } from 'lucide-react';
-import { dispatchMemoAPI, deliveryChallanAPI } from '../../../lib/supabase';
+import { Calendar, Search, Filter, FileText, Truck, Eye, Download, Package, ArrowRightCircle } from 'lucide-react';
+import { deliveryChallanAPI, misAPI, jobWorkChallanAPI } from '../../../lib/supabase';
 
 interface DispatchForm {
   id: string;
-  type: 'dispatch-memo' | 'delivery-challan';
-  memoNo?: string;
+  type: 'delivery-challan' | 'mis' | 'job-work-challan';
   srNo?: string;
   date: string;
   partyName?: string;
   to?: string;
+  deptName?: string;
   createdAt: string;
   docNo?: string;
   [key: string]: any;
@@ -22,7 +22,7 @@ const DispatchHistory: React.FC = () => {
   const [filteredForms, setFilteredForms] = useState<DispatchForm[]>([]);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedDate, setSelectedDate] = useState<string>('');
-  const [selectedType, setSelectedType] = useState<'all' | 'dispatch-memo' | 'delivery-challan'>('all');
+  const [selectedType, setSelectedType] = useState<'all' | 'delivery-challan' | 'mis' | 'job-work-challan'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedForm, setSelectedForm] = useState<DispatchForm | null>(null);
 
@@ -40,39 +40,50 @@ const DispatchHistory: React.FC = () => {
     // Load forms from database
     const loadForms = async () => {
       try {
-        // Fetch both memo and challan forms
-        const [memos, challans] = await Promise.all([
-          dispatchMemoAPI.getAll(),
-          deliveryChallanAPI.getAll()
+        // Fetch all outward forms (Dispatch Memo is now in Sales section)
+        const [challans, misses, jobWorkChallans] = await Promise.all([
+          deliveryChallanAPI.getAll(),
+          misAPI.getAll(),
+          jobWorkChallanAPI.getAll()
         ]);
-
-        // Transform memos to unified format
-        const memoForms: DispatchForm[] = memos.map(memo => ({
-          id: memo.id,
-          type: 'dispatch-memo' as const,
-          memoNo: memo.memo_no,
-          date: memo.date,
-          partyName: memo.party_name,
-          location: memo.location,
-          createdAt: memo.created_at || memo.date,
-          docNo: memo.doc_no
-        }));
 
         // Transform challans to unified format
         const challanForms: DispatchForm[] = challans.map(challan => ({
           id: challan.id,
           type: 'delivery-challan' as const,
-          srNo: challan.sr_no,
+          srNo: challan.dc_no || challan.sr_no,
           date: challan.date,
-          to: challan.to_address,
+          to: challan.party_name || challan.address || challan.to_address,
           vehicleNo: challan.vehicle_no || undefined,
           state: challan.state || undefined,
           createdAt: challan.created_at || challan.date,
           docNo: challan.doc_no
         }));
 
+        // Transform MIS to unified format
+        const misForms: DispatchForm[] = misses.map(mis => ({
+          id: mis.id,
+          type: 'mis' as const,
+          date: mis.date,
+          deptName: mis.dept_name,
+          createdAt: mis.created_at || mis.date,
+          docNo: mis.doc_no
+        }));
+
+        // Transform Job Work Challans to unified format
+        const jobWorkForms: DispatchForm[] = jobWorkChallans.map(challan => ({
+          id: challan.id,
+          type: 'job-work-challan' as const,
+          date: challan.date,
+          partyName: challan.party_name,
+          gstNo: challan.gst_no || undefined,
+          vehicleNo: challan.vehicle_no || undefined,
+          createdAt: challan.created_at || challan.date,
+          docNo: challan.doc_no
+        }));
+
         // Combine and set forms
-        setForms([...memoForms, ...challanForms]);
+        setForms([...challanForms, ...misForms, ...jobWorkForms]);
       } catch (error) {
         console.error('Error loading dispatch forms:', error);
         alert('Error loading dispatch history. Please try again.');
@@ -112,11 +123,13 @@ const DispatchHistory: React.FC = () => {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(form => {
         return (
-          form.memoNo?.toLowerCase().includes(term) ||
           form.srNo?.toLowerCase().includes(term) ||
           form.partyName?.toLowerCase().includes(term) ||
           form.to?.toLowerCase().includes(term) ||
-          form.docNo?.toLowerCase().includes(term)
+          form.docNo?.toLowerCase().includes(term) ||
+          form.deptName?.toLowerCase().includes(term) ||
+          form.gstNo?.toLowerCase().includes(term) ||
+          form.vehicleNo?.toLowerCase().includes(term)
         );
       });
     }
@@ -146,16 +159,20 @@ const DispatchHistory: React.FC = () => {
   };
 
   const getFormTitle = (form: DispatchForm) => {
-    if (form.type === 'dispatch-memo') {
-      return `Dispatch Memo - ${form.memoNo || form.docNo || 'N/A'}`;
-    } else {
+    if (form.type === 'delivery-challan') {
       return `Delivery Challan - ${form.srNo || form.docNo || 'N/A'}`;
+    } else if (form.type === 'mis') {
+      return `MIS - ${form.docNo || 'N/A'}`;
+    } else if (form.type === 'job-work-challan') {
+      return `Job Work Challan - ${form.docNo || 'N/A'}`;
     }
+    return 'Unknown Form';
   };
 
   // Group forms by type
-  const dispatchMemos = filteredForms.filter(f => f.type === 'dispatch-memo');
   const deliveryChallans = filteredForms.filter(f => f.type === 'delivery-challan');
+  const misForms = filteredForms.filter(f => f.type === 'mis');
+  const jobWorkChallans = filteredForms.filter(f => f.type === 'job-work-challan');
 
   if (selectedForm) {
     return (
@@ -224,7 +241,8 @@ const DispatchHistory: React.FC = () => {
               className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="all">All Types</option>
-              <option value="dispatch-memo">Dispatch Memo</option>
+              <option value="mis">MIS</option>
+              <option value="job-work-challan">Job Work Challan</option>
               <option value="delivery-challan">Delivery Challan</option>
             </select>
           </div>
@@ -249,16 +267,16 @@ const DispatchHistory: React.FC = () => {
         Showing {filteredForms.length} form(s) {selectedDate ? `on ${formatDate(selectedDate)}` : selectedYear ? `in ${selectedYear}` : ''}
       </div>
 
-      {/* Dispatch Memos Section */}
-      {selectedType === 'all' || selectedType === 'dispatch-memo' ? (
+      {/* MIS Section */}
+      {selectedType === 'all' || selectedType === 'mis' ? (
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
             <FileText className="w-5 h-5 text-blue-600" />
-            <h3 className="text-lg font-semibold text-gray-800">Dispatch Memos ({dispatchMemos.length})</h3>
+            <h3 className="text-lg font-semibold text-gray-800">MIS ({misForms.length})</h3>
           </div>
-          {dispatchMemos.length > 0 ? (
+          {misForms.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {dispatchMemos.map((form) => (
+              {misForms.map((form) => (
                 <div
                   key={form.id}
                   className="border border-gray-300 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
@@ -267,14 +285,13 @@ const DispatchHistory: React.FC = () => {
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <FileText className="w-5 h-5 text-blue-600" />
-                      <span className="font-semibold text-gray-800">Dispatch Memo</span>
+                      <span className="font-semibold text-gray-800">MIS</span>
                     </div>
                   </div>
                   <div className="space-y-1 text-sm text-gray-600">
-                    <div><span className="font-medium">Memo No:</span> {form.memoNo || form.docNo || 'N/A'}</div>
+                    <div><span className="font-medium">Doc No:</span> {form.docNo || 'N/A'}</div>
                     <div><span className="font-medium">Date:</span> {formatDate(form.date || form.createdAt)}</div>
-                    <div><span className="font-medium">Party:</span> {form.partyName || 'N/A'}</div>
-                    <div><span className="font-medium">Location:</span> {form.location || 'N/A'}</div>
+                    <div><span className="font-medium">Department:</span> {form.deptName || 'N/A'}</div>
                   </div>
                   <button
                     onClick={(e) => {
@@ -291,7 +308,55 @@ const DispatchHistory: React.FC = () => {
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500">
-              No dispatch memos found
+              No MIS found
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {/* Job Work Challans Section */}
+      {selectedType === 'all' || selectedType === 'job-work-challan' ? (
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <ArrowRightCircle className="w-5 h-5 text-orange-600" />
+            <h3 className="text-lg font-semibold text-gray-800">Job Work Challans ({jobWorkChallans.length})</h3>
+          </div>
+          {jobWorkChallans.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {jobWorkChallans.map((form) => (
+                <div
+                  key={form.id}
+                  className="border border-gray-300 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => handleViewForm(form)}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <ArrowRightCircle className="w-5 h-5 text-orange-600" />
+                      <span className="font-semibold text-gray-800">Job Work Challan</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1 text-sm text-gray-600">
+                    <div><span className="font-medium">Doc No:</span> {form.docNo || 'N/A'}</div>
+                    <div><span className="font-medium">Date:</span> {formatDate(form.date || form.createdAt)}</div>
+                    <div><span className="font-medium">Party:</span> {form.partyName || 'N/A'}</div>
+                    <div><span className="font-medium">GST No:</span> {form.gstNo || 'N/A'}</div>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleViewForm(form);
+                    }}
+                    className="mt-3 w-full px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 flex items-center justify-center gap-2 text-sm"
+                  >
+                    <Eye className="w-4 h-4" />
+                    View
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              No job work challans found
             </div>
           )}
         </div>
@@ -299,7 +364,7 @@ const DispatchHistory: React.FC = () => {
 
       {/* Delivery Challans Section */}
       {selectedType === 'all' || selectedType === 'delivery-challan' ? (
-        <div>
+        <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
             <Truck className="w-5 h-5 text-green-600" />
             <h3 className="text-lg font-semibold text-gray-800">Delivery Challans ({deliveryChallans.length})</h3>

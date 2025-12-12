@@ -3,100 +3,92 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, Printer } from 'lucide-react';
 import { deliveryChallanAPI } from '../../../lib/supabase';
+import PrintHeader from '../../shared/PrintHeader';
 
-interface DeliveryItem {
+interface DeliveryChallanItem {
   id: string;
-  materialDescription: string;
-  qty: string;
+  itemCode: string;
+  itemDescription: string;
+  hsnCode: string;
   uom: string;
-  remarks: string;
+  packSize: string;
+  boxNo: string;
+  noOfPcs: string;
+  value: string;
 }
 
 interface DeliveryChallanFormData {
-  srNo: string;
-  date: string;
+  dcNo: string;
+  dcDate: string;
+  poNo: string;
   vehicleNo: string;
   lrNo: string;
   returnable: boolean;
-  to: string;
+  partyName: string;
+  address: string;
   state: string;
-  items: DeliveryItem[];
-  totalQty: string;
-  receivedBy: string;
-  preparedBy: string;
-  checkedBy: string;
-  authorizedSignatory: string;
+  gstNo: string;
+  items: DeliveryChallanItem[];
 }
 
 const DeliveryChallanForm: React.FC = () => {
   const [formData, setFormData] = useState<DeliveryChallanFormData>({
-    srNo: '',
-    date: new Date().toISOString().split('T')[0],
+    dcNo: '',
+    dcDate: new Date().toISOString().split('T')[0],
+    poNo: '',
     vehicleNo: '',
     lrNo: '',
     returnable: false,
-    to: '',
+    partyName: '',
+    address: '',
     state: '',
+    gstNo: '',
     items: [
-      { id: '1', materialDescription: '', qty: '', uom: '', remarks: '' }
-    ],
-    totalQty: '',
-    receivedBy: '',
-    preparedBy: '',
-    checkedBy: '',
-    authorizedSignatory: ''
+      { id: '1', itemCode: '', itemDescription: '', hsnCode: '', uom: '', packSize: '', boxNo: '', noOfPcs: '', value: '' }
+    ]
   });
 
   const [docNo, setDocNo] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // Generate document number on component mount or when date changes
+  // Generate document number
   useEffect(() => {
     const generateDocNo = () => {
-      const year = new Date(formData.date || new Date()).getFullYear();
-      const month = String(new Date(formData.date || new Date()).getMonth() + 1).padStart(2, '0');
+      const year = new Date(date || new Date()).getFullYear();
+      const month = String(new Date(date || new Date()).getMonth() + 1).padStart(2, '0');
       const random = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
-      return `DC-${year}${month}-${random}`;
+      return `DPPL-DC-${year}${month}-${random}/R00`;
     };
     setDocNo(generateDocNo());
-  }, [formData.date]);
+  }, [date]);
 
-  const handleInputChange = (field: keyof DeliveryChallanFormData, value: string | boolean) => {
+  const handleInputChange = (field: keyof Omit<DeliveryChallanFormData, 'items'>, value: string | boolean) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
   };
 
-  const handleItemChange = (id: string, field: keyof DeliveryItem, value: string) => {
-    setFormData(prev => {
-      const updatedItems = prev.items.map(item =>
+  const handleItemChange = (id: string, field: keyof DeliveryChallanItem, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.map(item =>
         item.id === id ? { ...item, [field]: value } : item
-      );
-      
-      // Calculate total quantity when qty changes
-      let updatedTotalQty = prev.totalQty;
-      if (field === 'qty') {
-        const total = updatedItems.reduce((sum: number, item) => {
-          return sum + (parseFloat(item.qty) || 0);
-        }, 0);
-        updatedTotalQty = total.toString();
-      }
-      
-      return {
-        ...prev,
-        items: updatedItems,
-        totalQty: updatedTotalQty
-      };
-    });
+      )
+    }));
   };
 
   const addItemRow = () => {
-    const newItem: DeliveryItem = {
+    const newItem: DeliveryChallanItem = {
       id: Date.now().toString(),
-      materialDescription: '',
-      qty: '',
+      itemCode: '',
+      itemDescription: '',
+      hsnCode: '',
       uom: '',
-      remarks: ''
+      packSize: '',
+      boxNo: '',
+      noOfPcs: '',
+      value: ''
     };
     setFormData(prev => ({
       ...prev,
@@ -106,71 +98,62 @@ const DeliveryChallanForm: React.FC = () => {
 
   const removeItemRow = (id: string) => {
     if (formData.items.length > 1) {
-      setFormData(prev => {
-        const newItems = prev.items.filter(item => item.id !== id);
-        // Recalculate total
-        const total = newItems.reduce((sum: number, item) => {
-          return sum + (parseFloat(item.qty) || 0);
-        }, 0);
-        return {
-          ...prev,
-          items: newItems,
-          totalQty: total.toString()
-        };
-      });
+      setFormData(prev => ({
+        ...prev,
+        items: prev.items.filter(item => item.id !== id)
+      }));
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Prepare challan data
       const challanData = {
         doc_no: docNo,
-        sr_no: formData.srNo,
-        date: formData.date,
+        date: date,
+        dc_no: formData.dcNo || undefined,
+        dc_date: formData.dcDate || undefined,
+        po_no: formData.poNo || undefined,
         vehicle_no: formData.vehicleNo || undefined,
         lr_no: formData.lrNo || undefined,
         returnable: formData.returnable,
-        to_address: formData.to,
+        party_name: formData.partyName || undefined,
+        address: formData.address || undefined,
         state: formData.state || undefined,
-        total_qty: formData.totalQty ? parseFloat(formData.totalQty) : undefined,
-        received_by: formData.receivedBy || undefined,
-        prepared_by: formData.preparedBy || undefined,
-        checked_by: formData.checkedBy || undefined,
-        authorized_signatory: formData.authorizedSignatory || undefined
+        gst_no: formData.gstNo || undefined
       };
 
-      // Prepare items data
       const itemsData = formData.items
-        .filter(item => item.materialDescription.trim() !== '') // Only include items with descriptions
+        .filter(item => item.itemDescription.trim() !== '' || item.itemCode.trim() !== '')
         .map(item => ({
-          material_description: item.materialDescription,
-          qty: item.qty ? parseFloat(item.qty) : undefined,
+          item_code: item.itemCode || undefined,
+          item_description: item.itemDescription,
+          hsn_code: item.hsnCode || undefined,
           uom: item.uom || undefined,
-          remarks: item.remarks || undefined
+          pack_size: item.packSize || undefined,
+          box_no: item.boxNo || undefined,
+          no_of_pcs: item.noOfPcs ? parseFloat(item.noOfPcs) : undefined,
+          value: item.value ? parseFloat(item.value) : undefined
         }));
 
-      // Save to database
       await deliveryChallanAPI.create(challanData, itemsData);
       alert('Delivery Challan saved successfully!');
       
       // Reset form
       setFormData({
-        srNo: '',
-        date: new Date().toISOString().split('T')[0],
+        dcNo: '',
+        dcDate: new Date().toISOString().split('T')[0],
+        poNo: '',
         vehicleNo: '',
         lrNo: '',
         returnable: false,
-        to: '',
+        partyName: '',
+        address: '',
         state: '',
-        items: [{ id: '1', materialDescription: '', qty: '', uom: '', remarks: '' }],
-        totalQty: '',
-        receivedBy: '',
-        preparedBy: '',
-        checkedBy: '',
-        authorizedSignatory: ''
+        gstNo: '',
+        items: [{ id: '1', itemCode: '', itemDescription: '', hsnCode: '', uom: '', packSize: '', boxNo: '', noOfPcs: '', value: '' }]
       });
+      setDate(new Date().toISOString().split('T')[0]);
     } catch (error) {
       console.error('Error saving delivery challan:', error);
       alert('Error saving delivery challan. Please try again.');
@@ -182,188 +165,231 @@ const DeliveryChallanForm: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-8 max-w-5xl mx-auto">
+    <div className="bg-white rounded-lg shadow p-8 max-w-6xl mx-auto">
+      <PrintHeader docNo={docNo} date={date} />
+      
       <form onSubmit={handleSubmit} className="print:p-8">
-        {/* Header Section */}
-        <div className="text-center mb-4">
-          {/* Company Logo */}
-          <div className="flex items-center justify-center gap-4 mb-2">
-            <img
-              src="/dppl_logo.png"
-              alt="DEORA POLYPLAST LLP Logo"
-              width={380}
-              height={80}
-              className="object-contain"
-              onError={(e) => {
-                console.error('Failed to load logo:', e);
-              }}
-            />
-          </div>
-          
-          {/* Factory Address */}
-          <div className="text-sm text-gray-700 mb-3">
-            <div>Factory Address:- Plot no 32 & 33 Silver Industrial Estate, Village Bhimpore, Nani daman -396 210</div>
-            <div className="flex justify-center gap-6 mt-2">
-              <span>Email : <input type="email" className="border-b border-gray-300 focus:outline-none focus:border-blue-500 px-2" /></span>
-              <span>Mob. No. :- <input type="tel" className="border-b border-gray-300 focus:outline-none focus:border-blue-500 px-2" /></span>
-            </div>
-          </div>
+        {/* Main Title */}
+        <div className="text-center mb-6 print:mb-4">
+          <h2 className="text-3xl font-bold text-gray-900">Delivery Challan</h2>
         </div>
 
-        {/* Document Title */}
-        <div className="text-center mb-6">
-          <h2 className="text-3xl font-bold text-gray-900">DELIVERY CHALLAN</h2>
-        </div>
-
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-2 gap-6 mb-6">
-          {/* Left Side - Recipient Details */}
+        {/* Party Details and Challan Details Section */}
+        <div className="grid grid-cols-2 gap-6 mb-6 print:mb-4">
+          {/* Left: Party Details */}
           <div className="space-y-4">
+            <h3 className="font-semibold text-gray-900 mb-3">Party Details</h3>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                TO,
-              </label>
-              <textarea
-                value={formData.to}
-                onChange={(e) => handleInputChange('to', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-24"
-                placeholder="Enter recipient name and address"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                State :-
+                Party Name:
               </label>
               <input
                 type="text"
-                value={formData.state}
-                onChange={(e) => handleInputChange('state', e.target.value)}
+                value={formData.partyName}
+                onChange={(e) => handleInputChange('partyName', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Address:
+              </label>
+              <textarea
+                value={formData.address}
+                onChange={(e) => handleInputChange('address', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-20"
+                rows={3}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  State:
+                </label>
+                <input
+                  type="text"
+                  value={formData.state}
+                  onChange={(e) => handleInputChange('state', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  GST No:
+                </label>
+                <input
+                  type="text"
+                  value={formData.gstNo}
+                  onChange={(e) => handleInputChange('gstNo', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
             </div>
           </div>
 
-          {/* Right Side - Challan Details */}
-          <div className="border-2 border-gray-300 p-4 rounded-lg">
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Sr. No :
-                </label>
-                <input
-                  type="text"
-                  value={formData.srNo}
-                  onChange={(e) => handleInputChange('srNo', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date :-
-                </label>
-                <input
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => handleInputChange('date', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Vehicle No :-
-                </label>
-                <input
-                  type="text"
-                  value={formData.vehicleNo}
-                  onChange={(e) => handleInputChange('vehicleNo', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Lr No.:-
-                </label>
-                <input
-                  type="text"
-                  value={formData.lrNo}
-                  onChange={(e) => handleInputChange('lrNo', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={formData.returnable}
-                  onChange={(e) => handleInputChange('returnable', e.target.checked)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <label className="text-sm font-medium text-gray-700">
-                  Returnable / Non Returnable
-                </label>
-              </div>
+          {/* Right: Challan Details */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-gray-900 mb-3">Challan Details</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                D.C. No. :-
+              </label>
+              <input
+                type="text"
+                value={formData.dcNo}
+                onChange={(e) => handleInputChange('dcNo', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                D.C. Date :-
+              </label>
+              <input
+                type="date"
+                value={formData.dcDate}
+                onChange={(e) => handleInputChange('dcDate', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                PO. No. :-
+              </label>
+              <input
+                type="text"
+                value={formData.poNo}
+                onChange={(e) => handleInputChange('poNo', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Vehicle No :-
+              </label>
+              <input
+                type="text"
+                value={formData.vehicleNo}
+                onChange={(e) => handleInputChange('vehicleNo', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Lr No.:-
+              </label>
+              <input
+                type="text"
+                value={formData.lrNo}
+                onChange={(e) => handleInputChange('lrNo', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <input
+                type="checkbox"
+                checked={formData.returnable}
+                onChange={(e) => handleInputChange('returnable', e.target.checked)}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label className="text-sm font-medium text-gray-700">
+                Returnable / Non Returnable
+              </label>
             </div>
           </div>
         </div>
 
         {/* Items Table */}
-        <div className="mb-6 overflow-x-auto">
+        <div className="mb-6 print:mb-4 overflow-x-auto">
           <table className="w-full border-collapse border border-gray-300">
             <thead>
               <tr className="bg-gray-100">
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold w-16">Sr. No.</th>
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Material Description</th>
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold w-24">Qty.</th>
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold w-24">UOM</th>
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Remarks</th>
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold w-16">Action</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-12">Sl.</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Item Code</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Item Description</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">HSN Code</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-24">UOM</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Pack Size</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Box No</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">No of Pcs</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Value</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-16 print:hidden">Action</th>
               </tr>
             </thead>
             <tbody>
               {formData.items.map((item, index) => (
                 <tr key={item.id}>
-                  <td className="border border-gray-300 px-4 py-2 text-center">{index + 1}</td>
-                  <td className="border border-gray-300 px-4 py-2">
+                  <td className="border border-gray-300 px-2 py-2 text-center">{index + 1}</td>
+                  <td className="border border-gray-300 px-2 py-2">
                     <input
                       type="text"
-                      value={item.materialDescription}
-                      onChange={(e) => handleItemChange(item.id, 'materialDescription', e.target.value)}
+                      value={item.itemCode}
+                      onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
+                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                    />
+                  </td>
+                  <td className="border border-gray-300 px-2 py-2">
+                    <input
+                      type="text"
+                      value={item.itemDescription}
+                      onChange={(e) => handleItemChange(item.id, 'itemDescription', e.target.value)}
                       className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
                       required
                     />
                   </td>
-                  <td className="border border-gray-300 px-4 py-2">
+                  <td className="border border-gray-300 px-2 py-2">
                     <input
-                      type="number"
-                      value={item.qty}
-                      onChange={(e) => handleItemChange(item.id, 'qty', e.target.value)}
+                      type="text"
+                      value={item.hsnCode}
+                      onChange={(e) => handleItemChange(item.id, 'hsnCode', e.target.value)}
                       className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                      step="0.01"
-                      min="0"
                     />
                   </td>
-                  <td className="border border-gray-300 px-4 py-2">
+                  <td className="border border-gray-300 px-2 py-2">
                     <input
                       type="text"
                       value={item.uom}
                       onChange={(e) => handleItemChange(item.id, 'uom', e.target.value)}
                       className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                      placeholder="kg/pcs/etc"
                     />
                   </td>
-                  <td className="border border-gray-300 px-4 py-2">
+                  <td className="border border-gray-300 px-2 py-2">
                     <input
                       type="text"
-                      value={item.remarks}
-                      onChange={(e) => handleItemChange(item.id, 'remarks', e.target.value)}
+                      value={item.packSize}
+                      onChange={(e) => handleItemChange(item.id, 'packSize', e.target.value)}
                       className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
                     />
                   </td>
-                  <td className="border border-gray-300 px-4 py-2 text-center">
+                  <td className="border border-gray-300 px-2 py-2">
+                    <input
+                      type="text"
+                      value={item.boxNo}
+                      onChange={(e) => handleItemChange(item.id, 'boxNo', e.target.value)}
+                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                    />
+                  </td>
+                  <td className="border border-gray-300 px-2 py-2">
+                    <input
+                      type="number"
+                      value={item.noOfPcs}
+                      onChange={(e) => handleItemChange(item.id, 'noOfPcs', e.target.value)}
+                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                      step="0.01"
+                      min="0"
+                    />
+                  </td>
+                  <td className="border border-gray-300 px-2 py-2">
+                    <input
+                      type="number"
+                      value={item.value}
+                      onChange={(e) => handleItemChange(item.id, 'value', e.target.value)}
+                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                      step="0.01"
+                      min="0"
+                    />
+                  </td>
+                  <td className="border border-gray-300 px-2 py-2 text-center print:hidden">
                     {formData.items.length > 1 && (
                       <button
                         type="button"
@@ -381,80 +407,11 @@ const DeliveryChallanForm: React.FC = () => {
           <button
             type="button"
             onClick={addItemRow}
-            className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 print:hidden"
           >
             <Plus className="w-4 h-4" />
             Add Row
           </button>
-        </div>
-
-        {/* Total Qty */}
-        <div className="mb-6">
-          <label className="inline-block text-sm font-medium text-gray-700 mr-4">
-            Total Qty.:
-          </label>
-          <input
-            type="text"
-            value={formData.totalQty}
-            readOnly
-            className="px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-semibold w-32"
-          />
-        </div>
-
-        {/* Footer Section */}
-        <div className="grid grid-cols-2 gap-8 mt-8">
-          {/* Left - Received By */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Received By :-
-            </label>
-            <textarea
-              value={formData.receivedBy}
-              onChange={(e) => handleInputChange('receivedBy', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-20"
-              placeholder="Signature and name"
-            />
-          </div>
-
-          {/* Right - Company Authorization */}
-          <div>
-            <div className="text-sm font-medium text-gray-700 mb-4">For Deora Polyplast LLP</div>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Prepared By
-                </label>
-                <input
-                  type="text"
-                  value={formData.preparedBy}
-                  onChange={(e) => handleInputChange('preparedBy', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Checked By
-                </label>
-                <input
-                  type="text"
-                  value={formData.checkedBy}
-                  onChange={(e) => handleInputChange('checkedBy', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Authorized Signatory
-                </label>
-                <input
-                  type="text"
-                  value={formData.authorizedSignatory}
-                  onChange={(e) => handleInputChange('authorizedSignatory', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Action Buttons */}
@@ -481,4 +438,3 @@ const DeliveryChallanForm: React.FC = () => {
 };
 
 export default DeliveryChallanForm;
-

@@ -1,13 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, Search, Filter, FileText, ShoppingCart, Eye, User } from 'lucide-react';
-import { vendorRegistrationAPI, materialIndentSlipAPI, purchaseOrderAPI } from '../../../lib/supabase';
+import { Calendar, Search, Filter, FileText, ShoppingCart, Eye } from 'lucide-react';
+import { materialIndentSlipAPI, purchaseOrderAPI } from '../../../lib/supabase';
 
 interface PurchaseForm {
   id: string;
-  type: 'vendor-registration' | 'material-indent' | 'purchase-order';
-  customerName?: string;
+  type: 'material-indent' | 'purchase-order';
   poNo?: string;
   docNo?: string;
   date: string;
@@ -21,7 +20,7 @@ const PurchaseHistory: React.FC = () => {
   const [filteredForms, setFilteredForms] = useState<PurchaseForm[]>([]);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedDate, setSelectedDate] = useState<string>('');
-  const [selectedType, setSelectedType] = useState<'all' | 'vendor-registration' | 'material-indent' | 'purchase-order'>('all');
+  const [selectedType, setSelectedType] = useState<'all' | 'material-indent' | 'purchase-order'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedForm, setSelectedForm] = useState<PurchaseForm | null>(null);
 
@@ -38,35 +37,31 @@ const PurchaseHistory: React.FC = () => {
   useEffect(() => {
     const loadForms = async () => {
       try {
-        const [vendors, indentSlips, purchaseOrders] = await Promise.all([
-          vendorRegistrationAPI.getAll(),
-          materialIndentSlipAPI.getAll(),
-          purchaseOrderAPI.getAll()
+        // Fetch all purchase-related forms in parallel (Vendor Registration moved to Commercial Master)
+        const [indentSlips, purchaseOrders] = await Promise.all([
+          materialIndentSlipAPI.getAll().catch(err => {
+            console.warn('Error fetching material indent slips:', err);
+            return [];
+          }),
+          purchaseOrderAPI.getAll().catch(err => {
+            console.warn('Error fetching purchase orders:', err);
+            return [];
+          })
         ]);
 
-        // Transform vendors
-        const vendorForms: PurchaseForm[] = vendors.map(vendor => ({
-          id: vendor.id,
-          type: 'vendor-registration' as const,
-          customerName: vendor.customer_name,
-          date: vendor.created_at || new Date().toISOString().split('T')[0],
-          customerSupplier: vendor.customer_supplier,
-          createdAt: vendor.created_at || new Date().toISOString()
-        }));
-
         // Transform indent slips
-        const indentForms: PurchaseForm[] = indentSlips.map(slip => ({
+        const indentForms: PurchaseForm[] = (indentSlips || []).map(slip => ({
           id: slip.id,
           type: 'material-indent' as const,
-          docNo: slip.doc_no,
+          docNo: slip.ident_no || slip.doc_no || '',
           date: slip.date,
-          departmentName: slip.department_name,
-          personName: slip.person_name,
+          departmentName: slip.party_name || slip.department_name || '',
+          personName: slip.person_name || '',
           createdAt: slip.created_at || slip.date
         }));
 
         // Transform purchase orders
-        const orderForms: PurchaseForm[] = purchaseOrders.map(order => ({
+        const orderForms: PurchaseForm[] = (purchaseOrders || []).map(order => ({
           id: order.id,
           type: 'purchase-order' as const,
           poNo: order.po_no,
@@ -76,10 +71,18 @@ const PurchaseHistory: React.FC = () => {
           createdAt: order.created_at || order.date
         }));
 
-        setForms([...vendorForms, ...indentForms, ...orderForms]);
+        const allForms = [...indentForms, ...orderForms];
+        setForms(allForms);
+        
+        if (allForms.length === 0) {
+          console.log('No purchase records found in database');
+        }
       } catch (error) {
         console.error('Error loading purchase forms:', error);
-        alert('Error loading purchase history. Please try again.');
+        // Don't show alert if it's just empty data
+        if (error && typeof error === 'object' && 'message' in error) {
+          console.error('Error details:', error);
+        }
       }
     };
 
@@ -116,10 +119,10 @@ const PurchaseHistory: React.FC = () => {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(form => {
         return (
-          form.customerName?.toLowerCase().includes(term) ||
           form.poNo?.toLowerCase().includes(term) ||
           form.docNo?.toLowerCase().includes(term) ||
-          form.departmentName?.toLowerCase().includes(term)
+          form.departmentName?.toLowerCase().includes(term) ||
+          form.personName?.toLowerCase().includes(term)
         );
       });
     }
@@ -150,8 +153,6 @@ const PurchaseHistory: React.FC = () => {
 
   const getFormTitle = (form: PurchaseForm) => {
     switch (form.type) {
-      case 'vendor-registration':
-        return `Vendor Registration - ${form.customerName || 'N/A'}`;
       case 'material-indent':
         return `Material Indent Slip - ${form.docNo || 'N/A'}`;
       case 'purchase-order':
@@ -162,7 +163,6 @@ const PurchaseHistory: React.FC = () => {
   };
 
   // Group forms by type
-  const vendorRegistrations = filteredForms.filter(f => f.type === 'vendor-registration');
   const materialIndents = filteredForms.filter(f => f.type === 'material-indent');
   const purchaseOrders = filteredForms.filter(f => f.type === 'purchase-order');
 
@@ -233,7 +233,6 @@ const PurchaseHistory: React.FC = () => {
               className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="all">All Types</option>
-              <option value="vendor-registration">Vendor Registration</option>
               <option value="material-indent">Material Indent Slip</option>
               <option value="purchase-order">Purchase Order</option>
             </select>
@@ -258,53 +257,6 @@ const PurchaseHistory: React.FC = () => {
       <div className="mb-4 text-sm text-gray-600">
         Showing {filteredForms.length} form(s) {selectedDate ? `on ${formatDate(selectedDate)}` : selectedYear ? `in ${selectedYear}` : ''}
       </div>
-
-      {/* Vendor Registrations Section */}
-      {selectedType === 'all' || selectedType === 'vendor-registration' ? (
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <User className="w-5 h-5 text-purple-600" />
-            <h3 className="text-lg font-semibold text-gray-800">Vendor Registrations ({vendorRegistrations.length})</h3>
-          </div>
-          {vendorRegistrations.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {vendorRegistrations.map((form) => (
-                <div
-                  key={form.id}
-                  className="border border-gray-300 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => handleViewForm(form)}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <User className="w-5 h-5 text-purple-600" />
-                      <span className="font-semibold text-gray-800">Vendor Registration</span>
-                    </div>
-                  </div>
-                  <div className="space-y-1 text-sm text-gray-600">
-                    <div><span className="font-medium">Name:</span> {form.customerName || 'N/A'}</div>
-                    <div><span className="font-medium">Date:</span> {formatDate(form.date || form.createdAt)}</div>
-                    <div><span className="font-medium">Type:</span> {form.customerSupplier || 'N/A'}</div>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleViewForm(form);
-                    }}
-                    className="mt-3 w-full px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center justify-center gap-2 text-sm"
-                  >
-                    <Eye className="w-4 h-4" />
-                    View
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              No vendor registrations found
-            </div>
-          )}
-        </div>
-      ) : null}
 
       {/* Material Indent Slips Section */}
       {selectedType === 'all' || selectedType === 'material-indent' ? (

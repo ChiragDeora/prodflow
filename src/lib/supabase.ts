@@ -173,6 +173,7 @@ export interface Line {
   hoist_machine_id?: string;
   status: 'Active' | 'Inactive' | 'Maintenance';
   unit?: string;
+  grinding?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -202,6 +203,154 @@ export interface MaintenanceTask {
   cost_estimate?: number;
   actual_cost?: number;
   notes?: string;
+}
+
+// Breakdown Maintenance Interfaces
+export interface BreakdownMaintenanceTask {
+  id: string;
+  title: string;
+  description?: string;
+  breakdown_type: 'emergency' | 'corrective' | 'urgent_repair';
+  failure_reason?: string;
+  failure_category?: string;
+  downtime_hours?: number;
+  impact_on_production?: 'high' | 'medium' | 'low' | 'critical';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: 'pending' | 'in_progress' | 'completed' | 'overdue' | 'cancelled';
+  machine_id?: string;
+  line_id?: string;
+  unit?: string;
+  assigned_to?: string;
+  assigned_by?: string;
+  reported_by?: string;
+  reported_at?: string;
+  due_date: string;
+  estimated_duration_hours?: number;
+  actual_duration_hours?: number;
+  created_at?: string;
+  updated_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  root_cause_analysis?: string;
+  corrective_action_taken?: string;
+  preventive_measures?: string;
+  parts_used?: any;
+  parts_cost?: number;
+  labor_cost?: number;
+  total_cost?: number;
+  notes?: string;
+}
+
+// Mold Breakdown Maintenance Interface
+export interface MoldBreakdownMaintenanceTask {
+  id: string;
+  title: string;
+  description?: string;
+  breakdown_type: 'emergency' | 'corrective' | 'urgent_repair';
+  failure_reason?: string;
+  // Mold-specific failure fields
+  air_valve_pressure_broken?: boolean;
+  valve_broken?: boolean;
+  hrc_not_working?: boolean;
+  heating_element_failed?: boolean;
+  cooling_channel_blocked?: boolean;
+  ejector_pin_broken?: boolean;
+  sprue_bushing_damaged?: boolean;
+  cavity_damage?: boolean;
+  core_damage?: boolean;
+  vent_blocked?: boolean;
+  gate_damage?: boolean;
+  other_issues?: string;
+  downtime_hours?: number;
+  impact_on_production?: 'high' | 'medium' | 'low' | 'critical';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: 'pending' | 'in_progress' | 'completed' | 'overdue' | 'cancelled';
+  mold_id: string;
+  machine_id?: string;
+  line_id?: string;
+  unit?: string;
+  assigned_to?: string;
+  assigned_by?: string;
+  reported_by?: string;
+  reported_at?: string;
+  due_date: string;
+  estimated_duration_hours?: number;
+  actual_duration_hours?: number;
+  created_at?: string;
+  updated_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  root_cause_analysis?: string;
+  corrective_action_taken?: string;
+  preventive_measures?: string;
+  parts_used?: any;
+  parts_cost?: number;
+  labor_cost?: number;
+  total_cost?: number;
+  notes?: string;
+}
+
+// Preventive Maintenance Interfaces
+export interface PreventiveMaintenanceTask {
+  id: string;
+  title: string;
+  description?: string;
+  maintenance_type: 'scheduled' | 'routine' | 'inspection' | 'calibration' | 'lubrication' | 'cleaning';
+  schedule_frequency?: string;
+  schedule_id?: string;
+  next_due_date?: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: 'pending' | 'in_progress' | 'completed' | 'overdue' | 'cancelled' | 'skipped';
+  machine_id?: string;
+  line_id?: string;
+  unit?: string;
+  assigned_to?: string;
+  assigned_by?: string;
+  due_date: string;
+  scheduled_date?: string;
+  estimated_duration_hours?: number;
+  actual_duration_hours?: number;
+  created_at?: string;
+  updated_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  checklist_items?: any;
+  checklist_completed?: boolean;
+  parts_required?: any;
+  parts_used?: any;
+  parts_cost?: number;
+  labor_cost?: number;
+  total_cost?: number;
+  inspection_notes?: string;
+  findings?: string;
+  recommendations?: string;
+  notes?: string;
+  is_recurring?: boolean;
+  recurrence_interval?: number;
+  recurrence_unit?: string;
+  last_completed_date?: string;
+  completion_count?: number;
+}
+
+export interface PreventiveMaintenanceSchedule {
+  id: string;
+  name: string;
+  description?: string;
+  schedule_type: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'custom';
+  frequency_value: number;
+  frequency_unit: 'days' | 'weeks' | 'months' | 'years';
+  start_date: string;
+  end_date?: string;
+  is_active?: boolean;
+  machine_id?: string;
+  line_id?: string;
+  unit?: string;
+  task_template?: any;
+  checklist_template?: any;
+  estimated_duration_hours?: number;
+  created_at?: string;
+  updated_at?: string;
+  last_generated_date?: string;
 }
 
 export interface MaintenanceSchedule {
@@ -343,6 +492,33 @@ export interface BOMAudit {
   user_agent?: string;
 }
 
+// Others Master Types
+export interface ColorLabel {
+  id: string;
+  sr_no: number;
+  color_label: string;
+  created_at?: string;
+  updated_at?: string;
+  created_by?: string;
+  updated_by?: string;
+}
+
+export interface PartyName {
+  id: string;
+  name: string;
+  code?: string;
+  address?: string;
+  contact_person?: string;
+  phone?: string;
+  email?: string;
+  gstin?: string;
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
+  created_by?: string;
+  updated_by?: string;
+}
+
 // BOM Master with versions view
 export interface BOMMasterWithVersions extends BOMMaster {
   total_versions: number;
@@ -387,32 +563,90 @@ export interface DispatchMemoItem {
 export interface DeliveryChallan {
   id: string;
   doc_no: string;
-  sr_no: string;
   date: string;
+  dc_no?: string;
+  dc_date?: string;
+  po_no?: string;
   vehicle_no?: string;
   lr_no?: string;
   returnable: boolean;
-  to_address: string;
+  party_name?: string;
+  address?: string;
   state?: string;
+  gst_no?: string;
+  created_by?: string;
+  created_at?: string;
+  updated_at?: string;
+  // Legacy fields kept for backward compatibility
+  sr_no?: string;
+  to_address?: string;
   total_qty?: number;
   received_by?: string;
   prepared_by?: string;
   checked_by?: string;
   authorized_signatory?: string;
+}
+
+// Order Book Types
+export interface OrderBook {
+  id: string;
+  doc_no: string;
+  po_number: string;
+  order_date: string;
+  customer_name: string;
+  customer_address?: string;
+  customer_contact?: string;
+  customer_email?: string;
+  delivery_date?: string;
+  status: string;
+  total_amount?: number;
+  gst_percentage?: number;
+  gst_amount?: number;
+  final_amount?: number;
+  payment_terms?: string;
+  delivery_terms?: string;
+  remarks?: string;
   created_by?: string;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface OrderBookItem {
+  id: string;
+  order_book_id: string;
+  sr_no: number;
+  part_code: string;
+  part_name?: string;
+  description?: string;
+  quantity: number;
+  delivered_qty?: number;
+  pending_qty?: number;
+  unit?: string;
+  unit_price?: number;
+  total_price?: number;
+  delivery_schedule?: string;
+  status?: string;
+  remarks?: string;
+  created_at?: string;
 }
 
 export interface DeliveryChallanItem {
   id: string;
   challan_id: string;
   sr_no: number;
-  material_description: string;
-  qty?: number;
+  item_code?: string;
+  item_description?: string;
+  hsn_code?: string;
   uom?: string;
-  remarks?: string;
+  pack_size?: string;
+  box_no?: string;
+  no_of_pcs?: number;
+  value?: number;
   created_at?: string;
+  // Legacy fields kept for backward compatibility
+  material_description?: string;
+  qty?: number;
+  remarks?: string;
 }
 
 // Purchase Types
@@ -425,6 +659,12 @@ export interface VendorRegistration {
   gst_no?: string;
   pan_no?: string;
   customer_supplier?: 'Customer' | 'Supplier';
+  bank_name?: string;
+  bank_account_number?: string;
+  ifsc_code?: string;
+  bank_branch?: string;
+  account_holder_name?: string;
+  account_type?: 'Savings' | 'Current' | 'Other';
   created_by?: string;
   created_at?: string;
   updated_at?: string;
@@ -432,18 +672,25 @@ export interface VendorRegistration {
 
 export interface MaterialIndentSlip {
   id: string;
-  doc_no: string;
+  doc_no?: string; // Legacy field, kept for backward compatibility
+  ident_no?: string; // New field for Indent Number
   date: string;
-  department_name: string;
-  person_name: string;
-  sr_no: string;
   indent_date: string;
-  to_address: string;
-  purchase_store_incharge?: string;
   tentative_required_date?: string;
+  party_name?: string;
+  address?: string;
+  state?: string;
+  gst_no?: string;
   dept_head_sign?: string;
   store_inch_sign?: string;
   plant_head_sign?: string;
+  status?: 'OPEN' | 'CLOSED_PERFECT' | 'CLOSED_OVER_RECEIVED' | 'MANUALLY_CLOSED';
+  // Legacy fields kept for backward compatibility
+  department_name?: string;
+  person_name?: string;
+  sr_no?: string;
+  to_address?: string;
+  purchase_store_incharge?: string;
   created_by?: string;
   created_at?: string;
   updated_at?: string;
@@ -453,11 +700,20 @@ export interface MaterialIndentSlipItem {
   id: string;
   indent_slip_id: string;
   sr_no: number;
-  description_specification: string;
+  item_code?: string;
+  item_name?: string;
+  dimension?: string;
+  pack_size?: string;
   qty?: number;
   uom?: string;
-  make_mfg_remarks?: string;
+  party_name?: string;
+  color_remarks?: string;
+  received_qty?: number;
+  pending_qty?: number;
   created_at?: string;
+  // Legacy fields kept for backward compatibility
+  description_specification?: string;
+  make_mfg_remarks?: string;
 }
 
 export interface PurchaseOrder {
@@ -465,7 +721,11 @@ export interface PurchaseOrder {
   doc_no: string;
   po_no: string;
   date: string;
-  to_address: string;
+  ref_date?: string;
+  party_name?: string;
+  address?: string;
+  state?: string;
+  gst_no?: string;
   reference?: string;
   total_amt?: number;
   gst_percentage?: number;
@@ -475,9 +735,19 @@ export interface PurchaseOrder {
   in_favour_of?: string;
   inspection?: string;
   authorized_signatory?: string;
+  delivery_address?: string;
+  delivery_terms?: string;
+  payment_terms?: string;
+  packing_charges?: string;
+  warranty?: string;
+  other_terms?: string;
+  indent_slip_id?: string; // Link to Material Indent Slip
+  po_type?: 'CAPITAL' | 'OPERATIONAL'; // PO Type
   created_by?: string;
   created_at?: string;
   updated_at?: string;
+  // Legacy field kept for backward compatibility
+  to_address?: string;
 }
 
 export interface PurchaseOrderItem {
@@ -487,9 +757,11 @@ export interface PurchaseOrderItem {
   description: string;
   qty?: number;
   unit?: string;
-  unit_price?: number;
+  rate?: number;
   total_price?: number;
   created_at?: string;
+  // Legacy field kept for backward compatibility
+  unit_price?: number;
 }
 
 // Store Types
@@ -497,19 +769,33 @@ export interface GRN {
   id: string;
   doc_no: string;
   date: string;
-  supplier_name: string;
+  grn_no?: string;
+  grn_date?: string;
   po_no?: string;
   po_date?: string;
   invoice_no?: string;
   invoice_date?: string;
-  type_of_material?: 'RM' | 'PM' | 'STORE';
-  grn_no?: string;
-  grn_date?: string;
-  received_by?: string;
-  verified_by?: string;
+  party_name?: string;
+  address?: string;
+  state?: string;
+  gst_no?: string;
+  total_amount?: number;
+  freight_others?: number;
+  igst_percentage?: number;
+  cgst_percentage?: number;
+  utgst_percentage?: number;
+  round_off?: number;
+  final_amount?: number;
+  amount_in_words?: string;
+  indent_slip_id?: string; // Link to Material Indent Slip
   created_by?: string;
   created_at?: string;
   updated_at?: string;
+  // Legacy fields kept for backward compatibility
+  supplier_name?: string;
+  type_of_material?: 'RM' | 'PM' | 'STORE';
+  received_by?: string;
+  verified_by?: string;
 }
 
 export interface GRNItem {
@@ -517,11 +803,50 @@ export interface GRNItem {
   grn_id: string;
   sr_no: number;
   item_description: string;
+  po_qty?: number;
+  grn_qty?: number;
+  rate?: number;
+  total_price?: number;
+  uom?: string;
+  remarks?: string;
+  created_at?: string;
+  // Legacy fields kept for backward compatibility
   box_bag?: string;
   per_box_bag_qty?: number;
   total_qty?: number;
-  uom?: string;
-  remarks?: string;
+}
+
+export interface JWAnnexureGRN {
+  id: string;
+  doc_no: string;
+  date: string;
+  jw_no?: string;
+  jw_date?: string;
+  indent_no?: string;
+  indent_date?: string;
+  challan_no?: string;
+  challan_date?: string;
+  party_name?: string;
+  address?: string;
+  state?: string;
+  gst_no?: string;
+  total_value?: number;
+  indent_slip_id?: string; // Link to Material Indent Slip
+  created_by?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface JWAnnexureGRNItem {
+  id: string;
+  jw_annexure_grn_id: string;
+  sr_no: number;
+  item_code?: string;
+  item_name?: string;
+  indent_qty?: number;
+  rcd_qty?: number;
+  rate?: number;
+  net_value?: number;
   created_at?: string;
 }
 
@@ -544,6 +869,7 @@ export interface MISItem {
   id: string;
   mis_id: string;
   sr_no: number;
+  item_code?: string;
   description_of_material: string;
   uom?: string;
   required_qty?: number;
@@ -578,6 +904,40 @@ export interface FGNItem {
   total_qty?: number;
   received_qty?: number;
   qc_check?: string;
+  remarks?: string;
+  created_at?: string;
+}
+
+export interface JobWorkChallan {
+  id: string;
+  doc_no: string;
+  sr_no: string;
+  date: string;
+  jobwork_annexure_no?: string;
+  jobwork_annexure_date?: string;
+  party_name: string;
+  party_address?: string;
+  gst_no?: string;
+  vehicle_no?: string;
+  lr_no?: string;
+  challan_no?: string;
+  challan_date?: string;
+  total_qty?: number;
+  prepared_by?: string;
+  checked_by?: string;
+  authorized_signatory?: string;
+  created_by?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface JobWorkChallanItem {
+  id: string;
+  challan_id: string;
+  sr_no: number;
+  material_description: string;
+  qty?: number;
+  uom?: string;
   remarks?: string;
   created_at?: string;
 }
@@ -1453,17 +1813,24 @@ export const lineAPI = {
   }
 }; 
 
-// CRUD Operations for Maintenance Tasks
+// CRUD Operations for Maintenance Tasks (LEGACY - Still used by some components)
+// TODO: Update all components to use breakdownMaintenanceAPI and preventiveMaintenanceAPI
 export const maintenanceTaskAPI = {
   // Get all maintenance tasks
   async getAll(): Promise<MaintenanceTask[]> {
     try {
+      // Check if table exists first
       const { data, error } = await supabase
         .from('maintenance_tasks')
         .select('*')
         .order('due_date', { ascending: true });
       
       if (error) {
+        // If table doesn't exist, return empty array instead of throwing
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_tasks table does not exist, returning empty array');
+          return [];
+        }
         handleSupabaseError(error, 'fetching maintenance tasks');
         throw error;
       }
@@ -1472,73 +1839,114 @@ export const maintenanceTaskAPI = {
       return data || [];
     } catch (error) {
       console.error('❌ Failed to fetch maintenance tasks:', error);
-      throw error;
+      // Return empty array instead of throwing to prevent app crashes
+      return [];
     }
   },
 
   // Get maintenance task by ID
   async getById(taskId: string): Promise<MaintenanceTask | null> {
-    const { data, error } = await supabase
-      .from('maintenance_tasks')
-      .select('*')
-      .eq('id', taskId)
-      .single();
-    
-    if (error) {
-      console.error('Error fetching maintenance task:', error);
+    try {
+      const { data, error } = await supabase
+        .from('maintenance_tasks')
+        .select('*')
+        .eq('id', taskId)
+        .single();
+      
+      if (error) {
+        // If table doesn't exist, return null instead of throwing
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_tasks table does not exist');
+          return null;
+        }
+        console.error('Error fetching maintenance task:', error);
+        return null;
+      }
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to get maintenance task:', error);
       return null;
     }
-    return data;
   },
 
   // Create new maintenance task
   async create(task: Omit<MaintenanceTask, 'id' | 'created_at' | 'updated_at'>): Promise<MaintenanceTask | null> {
-    const { data, error } = await supabase
-      .from('maintenance_tasks')
-      .insert(task)
-      .select()
-      .single();
-    
-    if (error) {
-      handleSupabaseError(error, 'creating maintenance task');
-      throw error;
+    try {
+      const { data, error } = await supabase
+        .from('maintenance_tasks')
+        .insert(task)
+        .select()
+        .single();
+      
+      if (error) {
+        // If table doesn't exist, return null instead of throwing
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_tasks table does not exist, cannot create task');
+          return null;
+        }
+        handleSupabaseError(error, 'creating maintenance task');
+        throw error;
+      }
+      
+      console.log('✅ Successfully created maintenance task:', data?.id);
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to create maintenance task:', error);
+      return null;
     }
-    
-    console.log('✅ Successfully created maintenance task:', data?.id);
-    return data;
   },
 
   // Update maintenance task
   async update(taskId: string, updates: Partial<MaintenanceTask>): Promise<MaintenanceTask | null> {
-    const { data, error } = await supabase
-      .from('maintenance_tasks')
-      .update(updates)
-      .eq('id', taskId)
-      .select()
-      .single();
-    
-    if (error) {
-      handleSupabaseError(error, 'updating maintenance task');
-      throw error;
+    try {
+      const { data, error } = await supabase
+        .from('maintenance_tasks')
+        .update(updates)
+        .eq('id', taskId)
+        .select()
+        .single();
+      
+      if (error) {
+        // If table doesn't exist, return null instead of throwing
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_tasks table does not exist, cannot update task');
+          return null;
+        }
+        handleSupabaseError(error, 'updating maintenance task');
+        throw error;
+      }
+      
+      console.log('✅ Successfully updated maintenance task:', data?.id);
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to update maintenance task:', error);
+      return null;
     }
-    
-    console.log('✅ Successfully updated maintenance task:', data?.id);
-    return data;
   },
 
   // Delete maintenance task
   async delete(taskId: string): Promise<void> {
-    const { error } = await supabase
-      .from('maintenance_tasks')
-      .delete()
-      .eq('id', taskId);
-    
-    if (error) {
-      handleSupabaseError(error, 'deleting maintenance task');
-      throw error;
+    try {
+      const { error } = await supabase
+        .from('maintenance_tasks')
+        .delete()
+        .eq('id', taskId);
+      
+      if (error) {
+        // If table doesn't exist, just log and return (don't throw)
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_tasks table does not exist, cannot delete task');
+          return;
+        }
+        handleSupabaseError(error, 'deleting maintenance task');
+        throw error;
+      }
+      
+      console.log('✅ Successfully deleted maintenance task:', taskId);
+    } catch (error) {
+      console.error('❌ Failed to delete maintenance task:', error);
+      // Don't throw - just log the error
     }
-    
-    console.log('✅ Successfully deleted maintenance task:', taskId);
   },
 
   // Get tasks by line
@@ -1551,6 +1959,11 @@ export const maintenanceTaskAPI = {
         .order('due_date', { ascending: true });
       
       if (error) {
+        // If table doesn't exist, return empty array instead of throwing
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_tasks table does not exist, returning empty array');
+          return [];
+        }
         handleSupabaseError(error, 'fetching line maintenance tasks');
         throw error;
       }
@@ -1558,7 +1971,7 @@ export const maintenanceTaskAPI = {
       return data || [];
     } catch (error) {
       console.error('❌ Failed to fetch line maintenance tasks:', error);
-      throw error;
+      return [];
     }
   },
 
@@ -1572,6 +1985,11 @@ export const maintenanceTaskAPI = {
         .order('due_date', { ascending: true });
       
       if (error) {
+        // If table doesn't exist, return empty array instead of throwing
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_tasks table does not exist, returning empty array');
+          return [];
+        }
         handleSupabaseError(error, 'fetching machine maintenance tasks');
         throw error;
       }
@@ -1579,7 +1997,7 @@ export const maintenanceTaskAPI = {
       return data || [];
     } catch (error) {
       console.error('❌ Failed to fetch machine maintenance tasks:', error);
-      throw error;
+      return [];
     }
   },
 
@@ -1594,6 +2012,11 @@ export const maintenanceTaskAPI = {
         .order('due_date', { ascending: true });
       
       if (error) {
+        // If table doesn't exist, return empty array instead of throwing
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_tasks table does not exist, returning empty array');
+          return [];
+        }
         handleSupabaseError(error, 'fetching overdue maintenance tasks');
         throw error;
       }
@@ -1601,12 +2024,345 @@ export const maintenanceTaskAPI = {
       return data || [];
     } catch (error) {
       console.error('❌ Failed to fetch overdue maintenance tasks:', error);
+      return [];
+    }
+  }
+};
+
+// CRUD Operations for Breakdown Maintenance Tasks
+export const breakdownMaintenanceAPI = {
+  // Get all breakdown tasks
+  async getAll(): Promise<BreakdownMaintenanceTask[]> {
+    try {
+      const { data, error } = await supabase
+        .from('breakdown_maintenance_tasks')
+        .select('*')
+        .order('reported_at', { ascending: false });
+      
+      if (error) {
+        handleSupabaseError(error, 'fetching breakdown tasks');
+        throw error;
+      }
+      
+      console.log('✅ Successfully fetched', data?.length || 0, 'breakdown tasks');
+      return data || [];
+    } catch (error) {
+      console.error('❌ Failed to fetch breakdown tasks:', error);
+      throw error;
+    }
+  },
+
+  // Get breakdown task by ID
+  async getById(taskId: string): Promise<BreakdownMaintenanceTask | null> {
+    const { data, error } = await supabase
+      .from('breakdown_maintenance_tasks')
+      .select('*')
+      .eq('id', taskId)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching breakdown task:', error);
+      return null;
+    }
+    return data;
+  },
+
+  // Create new breakdown task
+  async create(task: Omit<BreakdownMaintenanceTask, 'id' | 'created_at' | 'updated_at'>): Promise<BreakdownMaintenanceTask | null> {
+    const { data, error } = await supabase
+      .from('breakdown_maintenance_tasks')
+      .insert(task)
+      .select()
+      .single();
+    
+    if (error) {
+      handleSupabaseError(error, 'creating breakdown task');
+      throw error;
+    }
+    
+    console.log('✅ Successfully created breakdown task:', data?.id);
+    return data;
+  },
+
+  // Update breakdown task
+  async update(taskId: string, updates: Partial<BreakdownMaintenanceTask>): Promise<BreakdownMaintenanceTask | null> {
+    const { data, error } = await supabase
+      .from('breakdown_maintenance_tasks')
+      .update(updates)
+      .eq('id', taskId)
+      .select()
+      .single();
+    
+    if (error) {
+      handleSupabaseError(error, 'updating breakdown task');
+      throw error;
+    }
+    
+    console.log('✅ Successfully updated breakdown task:', data?.id);
+    return data;
+  },
+
+  // Delete breakdown task
+  async delete(taskId: string): Promise<void> {
+    const { error } = await supabase
+      .from('breakdown_maintenance_tasks')
+      .delete()
+      .eq('id', taskId);
+    
+    if (error) {
+      handleSupabaseError(error, 'deleting breakdown task');
+      throw error;
+    }
+    
+    console.log('✅ Successfully deleted breakdown task:', taskId);
+  },
+
+  // Get active breakdown tasks
+  async getActive(): Promise<BreakdownMaintenanceTask[]> {
+    try {
+      const { data, error } = await supabase
+        .from('breakdown_maintenance_tasks')
+        .select('*')
+        .in('status', ['pending', 'in_progress'])
+        .order('priority', { ascending: false })
+        .order('reported_at', { ascending: false });
+      
+      if (error) {
+        handleSupabaseError(error, 'fetching active breakdown tasks');
+        throw error;
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('❌ Failed to fetch active breakdown tasks:', error);
       throw error;
     }
   }
 };
 
-// CRUD Operations for Maintenance Schedules
+// CRUD Operations for Mold Breakdown Maintenance Tasks
+export const moldBreakdownMaintenanceAPI = {
+  // Get all mold breakdown tasks
+  async getAll(): Promise<MoldBreakdownMaintenanceTask[]> {
+    try {
+      const { data, error } = await supabase
+        .from('mold_breakdown_maintenance_tasks')
+        .select('*')
+        .order('reported_at', { ascending: false });
+      
+      if (error) {
+        handleSupabaseError(error, 'fetching mold breakdown tasks');
+        throw error;
+      }
+      
+      console.log('✅ Successfully fetched', data?.length || 0, 'mold breakdown tasks');
+      return data || [];
+    } catch (error) {
+      console.error('❌ Failed to fetch mold breakdown tasks:', error);
+      throw error;
+    }
+  },
+
+  // Get mold breakdown task by ID
+  async getById(taskId: string): Promise<MoldBreakdownMaintenanceTask | null> {
+    const { data, error } = await supabase
+      .from('mold_breakdown_maintenance_tasks')
+      .select('*')
+      .eq('id', taskId)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching mold breakdown task:', error);
+      return null;
+    }
+    return data;
+  },
+
+  // Create new mold breakdown task
+  async create(task: Omit<MoldBreakdownMaintenanceTask, 'id' | 'created_at' | 'updated_at'>): Promise<MoldBreakdownMaintenanceTask | null> {
+    const { data, error } = await supabase
+      .from('mold_breakdown_maintenance_tasks')
+      .insert(task)
+      .select()
+      .single();
+    
+    if (error) {
+      handleSupabaseError(error, 'creating mold breakdown task');
+      throw error;
+    }
+    
+    console.log('✅ Successfully created mold breakdown task:', data?.id);
+    return data;
+  },
+
+  // Update mold breakdown task
+  async update(taskId: string, updates: Partial<MoldBreakdownMaintenanceTask>): Promise<MoldBreakdownMaintenanceTask | null> {
+    const { data, error } = await supabase
+      .from('mold_breakdown_maintenance_tasks')
+      .update(updates)
+      .eq('id', taskId)
+      .select()
+      .single();
+    
+    if (error) {
+      handleSupabaseError(error, 'updating mold breakdown task');
+      throw error;
+    }
+    
+    console.log('✅ Successfully updated mold breakdown task:', data?.id);
+    return data;
+  },
+
+  // Delete mold breakdown task
+  async delete(taskId: string): Promise<void> {
+    const { error } = await supabase
+      .from('mold_breakdown_maintenance_tasks')
+      .delete()
+      .eq('id', taskId);
+    
+    if (error) {
+      handleSupabaseError(error, 'deleting mold breakdown task');
+      throw error;
+    }
+    
+    console.log('✅ Successfully deleted mold breakdown task:', taskId);
+  },
+
+  // Get active mold breakdown tasks
+  async getActive(): Promise<MoldBreakdownMaintenanceTask[]> {
+    try {
+      const { data, error } = await supabase
+        .from('mold_breakdown_maintenance_tasks')
+        .select('*')
+        .in('status', ['pending', 'in_progress'])
+        .order('priority', { ascending: false })
+        .order('reported_at', { ascending: false });
+      
+      if (error) {
+        handleSupabaseError(error, 'fetching active mold breakdown tasks');
+        throw error;
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('❌ Failed to fetch active mold breakdown tasks:', error);
+      throw error;
+    }
+  }
+};
+
+// CRUD Operations for Preventive Maintenance Tasks
+export const preventiveMaintenanceAPI = {
+  // Get all preventive tasks
+  async getAll(): Promise<PreventiveMaintenanceTask[]> {
+    try {
+      const { data, error } = await supabase
+        .from('preventive_maintenance_tasks')
+        .select('*')
+        .order('scheduled_date', { ascending: true });
+      
+      if (error) {
+        handleSupabaseError(error, 'fetching preventive tasks');
+        throw error;
+      }
+      
+      console.log('✅ Successfully fetched', data?.length || 0, 'preventive tasks');
+      return data || [];
+    } catch (error) {
+      console.error('❌ Failed to fetch preventive tasks:', error);
+      throw error;
+    }
+  },
+
+  // Get preventive task by ID
+  async getById(taskId: string): Promise<PreventiveMaintenanceTask | null> {
+    const { data, error } = await supabase
+      .from('preventive_maintenance_tasks')
+      .select('*')
+      .eq('id', taskId)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching preventive task:', error);
+      return null;
+    }
+    return data;
+  },
+
+  // Create new preventive task
+  async create(task: Omit<PreventiveMaintenanceTask, 'id' | 'created_at' | 'updated_at'>): Promise<PreventiveMaintenanceTask | null> {
+    const { data, error } = await supabase
+      .from('preventive_maintenance_tasks')
+      .insert(task)
+      .select()
+      .single();
+    
+    if (error) {
+      handleSupabaseError(error, 'creating preventive task');
+      throw error;
+    }
+    
+    console.log('✅ Successfully created preventive task:', data?.id);
+    return data;
+  },
+
+  // Update preventive task
+  async update(taskId: string, updates: Partial<PreventiveMaintenanceTask>): Promise<PreventiveMaintenanceTask | null> {
+    const { data, error } = await supabase
+      .from('preventive_maintenance_tasks')
+      .update(updates)
+      .eq('id', taskId)
+      .select()
+      .single();
+    
+    if (error) {
+      handleSupabaseError(error, 'updating preventive task');
+      throw error;
+    }
+    
+    console.log('✅ Successfully updated preventive task:', data?.id);
+    return data;
+  },
+
+  // Delete preventive task
+  async delete(taskId: string): Promise<void> {
+    const { error } = await supabase
+      .from('preventive_maintenance_tasks')
+      .delete()
+      .eq('id', taskId);
+    
+    if (error) {
+      handleSupabaseError(error, 'deleting preventive task');
+      throw error;
+    }
+    
+    console.log('✅ Successfully deleted preventive task:', taskId);
+  },
+
+  // Get overdue preventive tasks
+  async getOverdue(): Promise<PreventiveMaintenanceTask[]> {
+    try {
+      const { data, error } = await supabase
+        .from('preventive_maintenance_tasks')
+        .select('*')
+        .lt('due_date', new Date().toISOString().split('T')[0])
+        .in('status', ['pending', 'in_progress'])
+        .order('due_date', { ascending: true });
+      
+      if (error) {
+        handleSupabaseError(error, 'fetching overdue preventive tasks');
+        throw error;
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('❌ Failed to fetch overdue preventive tasks:', error);
+      throw error;
+    }
+  }
+};
+
+// CRUD Operations for Maintenance Schedules (LEGACY - Table may not exist)
 export const maintenanceScheduleAPI = {
   // Get all maintenance schedules
   async getAll(): Promise<MaintenanceSchedule[]> {
@@ -1617,6 +2373,11 @@ export const maintenanceScheduleAPI = {
         .order('created_at', { ascending: false });
       
       if (error) {
+        // If table doesn't exist, return empty array instead of throwing
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_schedules table does not exist, returning empty array');
+          return [];
+        }
         handleSupabaseError(error, 'fetching maintenance schedules');
         throw error;
       }
@@ -1624,58 +2385,88 @@ export const maintenanceScheduleAPI = {
       return data || [];
     } catch (error) {
       console.error('❌ Failed to fetch maintenance schedules:', error);
-      throw error;
+      return [];
     }
   },
 
   // Create new maintenance schedule
   async create(schedule: Omit<MaintenanceSchedule, 'id' | 'created_at' | 'updated_at'>): Promise<MaintenanceSchedule | null> {
-    const { data, error } = await supabase
-      .from('maintenance_schedules')
-      .insert(schedule)
-      .select()
-      .single();
-    
-    if (error) {
-      handleSupabaseError(error, 'creating maintenance schedule');
-      throw error;
+    try {
+      const { data, error } = await supabase
+        .from('maintenance_schedules')
+        .insert(schedule)
+        .select()
+        .single();
+      
+      if (error) {
+        // If table doesn't exist, return null instead of throwing
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_schedules table does not exist, cannot create schedule');
+          return null;
+        }
+        handleSupabaseError(error, 'creating maintenance schedule');
+        throw error;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to create maintenance schedule:', error);
+      return null;
     }
-    
-    return data;
   },
 
   // Update maintenance schedule
   async update(scheduleId: string, updates: Partial<MaintenanceSchedule>): Promise<MaintenanceSchedule | null> {
-    const { data, error } = await supabase
-      .from('maintenance_schedules')
-      .update(updates)
-      .eq('id', scheduleId)
-      .select()
-      .single();
-    
-    if (error) {
-      handleSupabaseError(error, 'updating maintenance schedule');
-      throw error;
+    try {
+      const { data, error } = await supabase
+        .from('maintenance_schedules')
+        .update(updates)
+        .eq('id', scheduleId)
+        .select()
+        .single();
+      
+      if (error) {
+        // If table doesn't exist, return null instead of throwing
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_schedules table does not exist, cannot update schedule');
+          return null;
+        }
+        handleSupabaseError(error, 'updating maintenance schedule');
+        throw error;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to update maintenance schedule:', error);
+      return null;
     }
-    
-    return data;
   },
 
   // Delete maintenance schedule
   async delete(scheduleId: string): Promise<void> {
-    const { error } = await supabase
-      .from('maintenance_schedules')
-      .delete()
-      .eq('id', scheduleId);
-    
-    if (error) {
-      handleSupabaseError(error, 'deleting maintenance schedule');
-      throw error;
+    try {
+      const { error } = await supabase
+        .from('maintenance_schedules')
+        .delete()
+        .eq('id', scheduleId);
+      
+      if (error) {
+        // If table doesn't exist, just log and return (don't throw)
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_schedules table does not exist, cannot delete schedule');
+          return;
+        }
+        handleSupabaseError(error, 'deleting maintenance schedule');
+        throw error;
+      }
+    } catch (error) {
+      console.error('❌ Failed to delete maintenance schedule:', error);
+      // Don't throw - just log the error
     }
   }
 };
 
-// CRUD Operations for Maintenance Checklists
+// CRUD Operations for Maintenance Checklists (LEGACY - Table may not exist)
 export const maintenanceChecklistAPI = {
   // Get all maintenance checklists
   async getAll(): Promise<MaintenanceChecklist[]> {
@@ -1686,6 +2477,11 @@ export const maintenanceChecklistAPI = {
         .order('created_at', { ascending: false });
       
       if (error) {
+        // If table doesn't exist, return empty array instead of throwing
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_checklists table does not exist, returning empty array');
+          return [];
+        }
         handleSupabaseError(error, 'fetching maintenance checklists');
         throw error;
       }
@@ -1693,7 +2489,7 @@ export const maintenanceChecklistAPI = {
       return data || [];
     } catch (error) {
       console.error('❌ Failed to fetch maintenance checklists:', error);
-      throw error;
+      return [];
     }
   },
 
@@ -1707,6 +2503,11 @@ export const maintenanceChecklistAPI = {
         .order('name', { ascending: true });
       
       if (error) {
+        // If table doesn't exist, return empty array instead of throwing
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_checklists table does not exist, returning empty array');
+          return [];
+        }
         handleSupabaseError(error, 'fetching checklists by type');
         throw error;
       }
@@ -1714,53 +2515,83 @@ export const maintenanceChecklistAPI = {
       return data || [];
     } catch (error) {
       console.error('❌ Failed to fetch checklists by type:', error);
-      throw error;
+      return [];
     }
   },
 
   // Create new maintenance checklist
   async create(checklist: Omit<MaintenanceChecklist, 'id' | 'created_at' | 'updated_at'>): Promise<MaintenanceChecklist | null> {
-    const { data, error } = await supabase
-      .from('maintenance_checklists')
-      .insert(checklist)
-      .select()
-      .single();
-    
-    if (error) {
-      handleSupabaseError(error, 'creating maintenance checklist');
-      throw error;
+    try {
+      const { data, error } = await supabase
+        .from('maintenance_checklists')
+        .insert(checklist)
+        .select()
+        .single();
+      
+      if (error) {
+        // If table doesn't exist, return null instead of throwing
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_checklists table does not exist, cannot create checklist');
+          return null;
+        }
+        handleSupabaseError(error, 'creating maintenance checklist');
+        throw error;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to create maintenance checklist:', error);
+      return null;
     }
-    
-    return data;
   },
 
   // Update maintenance checklist
   async update(checklistId: string, updates: Partial<MaintenanceChecklist>): Promise<MaintenanceChecklist | null> {
-    const { data, error } = await supabase
-      .from('maintenance_checklists')
-      .update(updates)
-      .eq('id', checklistId)
-      .select()
-      .single();
-    
-    if (error) {
-      handleSupabaseError(error, 'updating maintenance checklist');
-      throw error;
+    try {
+      const { data, error } = await supabase
+        .from('maintenance_checklists')
+        .update(updates)
+        .eq('id', checklistId)
+        .select()
+        .single();
+      
+      if (error) {
+        // If table doesn't exist, return null instead of throwing
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_checklists table does not exist, cannot update checklist');
+          return null;
+        }
+        handleSupabaseError(error, 'updating maintenance checklist');
+        throw error;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to update maintenance checklist:', error);
+      return null;
     }
-    
-    return data;
   },
 
   // Delete maintenance checklist
   async delete(checklistId: string): Promise<void> {
-    const { error } = await supabase
-      .from('maintenance_checklists')
-      .delete()
-      .eq('id', checklistId);
-    
-    if (error) {
-      handleSupabaseError(error, 'deleting maintenance checklist');
-      throw error;
+    try {
+      const { error } = await supabase
+        .from('maintenance_checklists')
+        .delete()
+        .eq('id', checklistId);
+      
+      if (error) {
+        // If table doesn't exist, just log and return (don't throw)
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_checklists table does not exist, cannot delete checklist');
+          return;
+        }
+        handleSupabaseError(error, 'deleting maintenance checklist');
+        throw error;
+      }
+    } catch (error) {
+      console.error('❌ Failed to delete maintenance checklist:', error);
+      // Don't throw - just log the error
     }
   },
 
@@ -1773,6 +2604,11 @@ export const maintenanceChecklistAPI = {
         .select();
       
       if (error) {
+        // If table doesn't exist, return empty array instead of throwing
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('⚠️ maintenance_checklists table does not exist, cannot bulk create checklists');
+          return [];
+        }
         handleSupabaseError(error, 'bulk creating maintenance checklists');
         throw error;
       }
@@ -2871,9 +3707,17 @@ export const deliveryChallanAPI = {
         const itemsToInsert = items.map((item, index) => ({
           challan_id: newChallan.id,
           sr_no: index + 1,
-          material_description: item.material_description,
-          qty: item.qty ? parseFloat(item.qty.toString()) : null,
+          item_code: item.item_code || null,
+          item_description: item.item_description || null,
+          hsn_code: item.hsn_code || null,
           uom: item.uom || null,
+          pack_size: item.pack_size || null,
+          box_no: item.box_no || null,
+          no_of_pcs: item.no_of_pcs ? parseFloat(item.no_of_pcs.toString()) : null,
+          value: item.value ? parseFloat(item.value.toString()) : null,
+          // Legacy fields for backward compatibility
+          material_description: item.material_description || item.item_description || null,
+          qty: item.qty || item.no_of_pcs ? parseFloat((item.qty || item.no_of_pcs || 0).toString()) : null,
           remarks: item.remarks || null
         }));
 
@@ -2922,9 +3766,17 @@ export const deliveryChallanAPI = {
           const itemsToInsert = items.map((item, index) => ({
             challan_id: id,
             sr_no: index + 1,
-            material_description: item.material_description,
-            qty: item.qty ? parseFloat(item.qty.toString()) : null,
+            item_code: item.item_code || null,
+            item_description: item.item_description || null,
+            hsn_code: item.hsn_code || null,
             uom: item.uom || null,
+            pack_size: item.pack_size || null,
+            box_no: item.box_no || null,
+            no_of_pcs: item.no_of_pcs ? parseFloat(item.no_of_pcs.toString()) : null,
+            value: item.value ? parseFloat(item.value.toString()) : null,
+            // Legacy fields for backward compatibility
+            material_description: item.material_description || item.item_description || null,
+            qty: item.qty || item.no_of_pcs ? parseFloat((item.qty || item.no_of_pcs || 0).toString()) : null,
             remarks: item.remarks || null
           }));
 
@@ -3139,10 +3991,18 @@ export const materialIndentSlipAPI = {
         const itemsToInsert = items.map((item, index) => ({
           indent_slip_id: newSlip.id,
           sr_no: index + 1,
-          description_specification: item.description_specification,
+          // New fields
+          item_code: item.item_code || null,
+          item_name: item.item_name || null,
+          dimension: item.dimension || null,
+          pack_size: item.pack_size || null,
+          party_name: item.party_name || null,
+          color_remarks: item.color_remarks || null,
           qty: item.qty ? parseFloat(item.qty.toString()) : null,
           uom: item.uom || null,
-          make_mfg_remarks: item.make_mfg_remarks || null
+          // Legacy fields for backward compatibility
+          description_specification: item.description_specification || item.item_name || null,
+          make_mfg_remarks: item.make_mfg_remarks || item.color_remarks || null
         }));
 
         const { error: itemsError } = await supabase
@@ -3186,10 +4046,18 @@ export const materialIndentSlipAPI = {
           const itemsToInsert = items.map((item, index) => ({
             indent_slip_id: id,
             sr_no: index + 1,
-            description_specification: item.description_specification,
+            // New fields
+            item_code: item.item_code || null,
+            item_name: item.item_name || null,
+            dimension: item.dimension || null,
+            pack_size: item.pack_size || null,
+            party_name: item.party_name || null,
+            color_remarks: item.color_remarks || null,
             qty: item.qty ? parseFloat(item.qty.toString()) : null,
             uom: item.uom || null,
-            make_mfg_remarks: item.make_mfg_remarks || null
+            // Legacy fields for backward compatibility
+            description_specification: item.description_specification || item.item_name || null,
+            make_mfg_remarks: item.make_mfg_remarks || item.color_remarks || null
           }));
 
           const { error: itemsError } = await supabase
@@ -3224,6 +4092,89 @@ export const materialIndentSlipAPI = {
       }
     } catch (error) {
       console.error('❌ Failed to delete material indent slip:', error);
+      throw error;
+    }
+  },
+
+  // Manually close a material indent slip
+  async manuallyClose(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('purchase_material_indent_slip')
+        .update({ 
+          status: 'MANUALLY_CLOSED',
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', id);
+      
+      if (error) {
+        handleSupabaseError(error, 'manually closing material indent slip');
+        throw error;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to manually close material indent slip:', error);
+      return false;
+    }
+  },
+
+  // Update received quantity for a specific item
+  async updateReceivedQuantity(indentSlipId: string, itemId: string, receivedQty: number): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('purchase_material_indent_slip_items')
+        .update({ 
+          received_qty: receivedQty
+        })
+        .eq('id', itemId)
+        .eq('indent_slip_id', indentSlipId);
+      
+      if (error) {
+        handleSupabaseError(error, 'updating received quantity');
+        throw error;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to update received quantity:', error);
+      return false;
+    }
+  },
+
+  // Get open indents (with pending quantities)
+  async getOpenIndents(): Promise<{ slip: MaterialIndentSlip; items: MaterialIndentSlipItem[] }[]> {
+    try {
+      const { data: slips, error: slipsError } = await supabase
+        .from('purchase_material_indent_slip')
+        .select('*')
+        .in('status', ['OPEN', 'CLOSED_OVER_RECEIVED'])
+        .order('date', { ascending: false });
+      
+      if (slipsError) {
+        handleSupabaseError(slipsError, 'fetching open material indent slips');
+        throw slipsError;
+      }
+
+      const result = [];
+      for (const slip of slips || []) {
+        const { data: items, error: itemsError } = await supabase
+          .from('purchase_material_indent_slip_items')
+          .select('*')
+          .eq('indent_slip_id', slip.id)
+          .order('sr_no', { ascending: true });
+        
+        if (itemsError) {
+          handleSupabaseError(itemsError, 'fetching material indent slip items');
+          continue;
+        }
+
+        result.push({ slip, items: items || [] });
+      }
+
+      return result;
+    } catch (error) {
+      console.error('❌ Failed to fetch open material indent slips:', error);
       throw error;
     }
   }
@@ -3303,7 +4254,8 @@ export const purchaseOrderAPI = {
           description: item.description,
           qty: item.qty ? parseFloat(item.qty.toString()) : null,
           unit: item.unit || null,
-          unit_price: item.unit_price ? parseFloat(item.unit_price.toString()) : null,
+          rate: item.rate ? parseFloat(item.rate.toString()) : null,
+          unit_price: item.unit_price || item.rate ? parseFloat((item.unit_price || item.rate || 0).toString()) : null,
           total_price: item.total_price ? parseFloat(item.total_price.toString()) : null
         }));
 
@@ -3351,7 +4303,8 @@ export const purchaseOrderAPI = {
             description: item.description,
             qty: item.qty ? parseFloat(item.qty.toString()) : null,
             unit: item.unit || null,
-            unit_price: item.unit_price ? parseFloat(item.unit_price.toString()) : null,
+            rate: item.rate ? parseFloat(item.rate.toString()) : null,
+            unit_price: item.unit_price || item.rate ? parseFloat((item.unit_price || item.rate || 0).toString()) : null,
             total_price: item.total_price ? parseFloat(item.total_price.toString()) : null
           }));
 
@@ -3464,11 +4417,16 @@ export const grnAPI = {
           grn_id: newGRN.id,
           sr_no: index + 1,
           item_description: item.item_description,
+          po_qty: item.po_qty ? parseFloat(item.po_qty.toString()) : null,
+          grn_qty: item.grn_qty ? parseFloat(item.grn_qty.toString()) : null,
+          rate: item.rate ? parseFloat(item.rate.toString()) : null,
+          total_price: item.total_price ? parseFloat(item.total_price.toString()) : null,
+          uom: item.uom || null,
+          remarks: item.remarks || null,
+          // Legacy fields for backward compatibility
           box_bag: item.box_bag || null,
           per_box_bag_qty: item.per_box_bag_qty ? parseFloat(item.per_box_bag_qty.toString()) : null,
-          total_qty: item.total_qty ? parseFloat(item.total_qty.toString()) : null,
-          uom: item.uom || null,
-          remarks: item.remarks || null
+          total_qty: item.total_qty || item.grn_qty ? parseFloat((item.total_qty || item.grn_qty || 0).toString()) : null
         }));
 
         const { error: itemsError } = await supabase
@@ -3513,11 +4471,16 @@ export const grnAPI = {
             grn_id: id,
             sr_no: index + 1,
             item_description: item.item_description,
+            po_qty: item.po_qty ? parseFloat(item.po_qty.toString()) : null,
+            grn_qty: item.grn_qty ? parseFloat(item.grn_qty.toString()) : null,
+            rate: item.rate ? parseFloat(item.rate.toString()) : null,
+            total_price: item.total_price ? parseFloat(item.total_price.toString()) : null,
+            uom: item.uom || null,
+            remarks: item.remarks || null,
+            // Legacy fields for backward compatibility
             box_bag: item.box_bag || null,
             per_box_bag_qty: item.per_box_bag_qty ? parseFloat(item.per_box_bag_qty.toString()) : null,
-            total_qty: item.total_qty ? parseFloat(item.total_qty.toString()) : null,
-            uom: item.uom || null,
-            remarks: item.remarks || null
+            total_qty: item.total_qty || item.grn_qty ? parseFloat((item.total_qty || item.grn_qty || 0).toString()) : null
           }));
 
           const { error: itemsError } = await supabase
@@ -3552,6 +4515,171 @@ export const grnAPI = {
       }
     } catch (error) {
       console.error('❌ Failed to delete GRN:', error);
+      throw error;
+    }
+  }
+};
+
+// CRUD Operations for JW Annexure GRN
+export const jwAnnexureGRNAPI = {
+  // Get all JW Annexure GRNs
+  async getAll(): Promise<JWAnnexureGRN[]> {
+    try {
+      const { data, error } = await supabase
+        .from('store_jw_annexure_grn')
+        .select('*')
+        .order('date', { ascending: false });
+      
+      if (error) {
+        handleSupabaseError(error, 'fetching JW Annexure GRNs');
+        throw error;
+      }
+      return data || [];
+    } catch (error) {
+      console.error('❌ Failed to fetch JW Annexure GRNs:', error);
+      throw error;
+    }
+  },
+
+  // Get JW Annexure GRN by ID with items
+  async getById(id: string): Promise<{ grn: JWAnnexureGRN; items: JWAnnexureGRNItem[] } | null> {
+    try {
+      const { data: grn, error: grnError } = await supabase
+        .from('store_jw_annexure_grn')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (grnError) {
+        handleSupabaseError(grnError, 'fetching JW Annexure GRN');
+        return null;
+      }
+
+      const { data: items, error: itemsError } = await supabase
+        .from('store_jw_annexure_grn_items')
+        .select('*')
+        .eq('jw_annexure_grn_id', id)
+        .order('sr_no', { ascending: true });
+      
+      if (itemsError) {
+        handleSupabaseError(itemsError, 'fetching JW Annexure GRN items');
+        return null;
+      }
+
+      return { grn, items: items || [] };
+    } catch (error) {
+      console.error('❌ Failed to fetch JW Annexure GRN:', error);
+      return null;
+    }
+  },
+
+  // Create JW Annexure GRN with items
+  async create(grn: Omit<JWAnnexureGRN, 'id' | 'created_at' | 'updated_at'>, items: Omit<JWAnnexureGRNItem, 'id' | 'jw_annexure_grn_id' | 'created_at' | 'sr_no'>[]): Promise<JWAnnexureGRN | null> {
+    try {
+      const { data: newGRN, error: grnError } = await supabase
+        .from('store_jw_annexure_grn')
+        .insert([grn])
+        .select()
+        .single();
+      
+      if (grnError) {
+        handleSupabaseError(grnError, 'creating JW Annexure GRN');
+        throw grnError;
+      }
+
+      if (items.length > 0) {
+        const itemsToInsert = items.map((item, index) => ({
+          jw_annexure_grn_id: newGRN.id,
+          sr_no: index + 1,
+          item_code: item.item_code || null,
+          item_name: item.item_name || null,
+          indent_qty: item.indent_qty ? parseFloat(item.indent_qty.toString()) : null,
+          rcd_qty: item.rcd_qty ? parseFloat(item.rcd_qty.toString()) : null,
+          rate: item.rate ? parseFloat(item.rate.toString()) : null,
+          net_value: item.net_value ? parseFloat(item.net_value.toString()) : null
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('store_jw_annexure_grn_items')
+          .insert(itemsToInsert);
+        
+        if (itemsError) {
+          handleSupabaseError(itemsError, 'creating JW Annexure GRN items');
+          await supabase.from('store_jw_annexure_grn').delete().eq('id', newGRN.id);
+          throw itemsError;
+        }
+      }
+
+      console.log('✅ Successfully created JW Annexure GRN:', newGRN.id);
+      return newGRN;
+    } catch (error) {
+      console.error('❌ Failed to create JW Annexure GRN:', error);
+      throw error;
+    }
+  },
+
+  // Update JW Annexure GRN
+  async update(id: string, updates: Partial<JWAnnexureGRN>, items?: Omit<JWAnnexureGRNItem, 'id' | 'jw_annexure_grn_id' | 'created_at' | 'sr_no'>[]): Promise<JWAnnexureGRN | null> {
+    try {
+      const { data, error } = await supabase
+        .from('store_jw_annexure_grn')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+        handleSupabaseError(error, 'updating JW Annexure GRN');
+        throw error;
+      }
+
+      if (items !== undefined) {
+        await supabase.from('store_jw_annexure_grn_items').delete().eq('jw_annexure_grn_id', id);
+        
+        if (items.length > 0) {
+          const itemsToInsert = items.map((item, index) => ({
+            jw_annexure_grn_id: id,
+            sr_no: index + 1,
+            item_code: item.item_code || null,
+            item_name: item.item_name || null,
+            indent_qty: item.indent_qty ? parseFloat(item.indent_qty.toString()) : null,
+            rcd_qty: item.rcd_qty ? parseFloat(item.rcd_qty.toString()) : null,
+            rate: item.rate ? parseFloat(item.rate.toString()) : null,
+            net_value: item.net_value ? parseFloat(item.net_value.toString()) : null
+          }));
+
+          const { error: itemsError } = await supabase
+            .from('store_jw_annexure_grn_items')
+            .insert(itemsToInsert);
+          
+          if (itemsError) {
+            handleSupabaseError(itemsError, 'updating JW Annexure GRN items');
+            throw itemsError;
+          }
+        }
+      }
+
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to update JW Annexure GRN:', error);
+      throw error;
+    }
+  },
+
+  // Delete JW Annexure GRN
+  async delete(id: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('store_jw_annexure_grn')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        handleSupabaseError(error, 'deleting JW Annexure GRN');
+        throw error;
+      }
+    } catch (error) {
+      console.error('❌ Failed to delete JW Annexure GRN:', error);
       throw error;
     }
   }
@@ -3628,6 +4756,7 @@ export const misAPI = {
         const itemsToInsert = items.map((item, index) => ({
           mis_id: newMIS.id,
           sr_no: index + 1,
+          item_code: item.item_code || null,
           description_of_material: item.description_of_material,
           uom: item.uom || null,
           required_qty: item.required_qty ? parseFloat(item.required_qty.toString()) : null,
@@ -3676,6 +4805,7 @@ export const misAPI = {
           const itemsToInsert = items.map((item, index) => ({
             mis_id: id,
             sr_no: index + 1,
+            item_code: item.item_code || null,
             description_of_material: item.description_of_material,
             uom: item.uom || null,
             required_qty: item.required_qty ? parseFloat(item.required_qty.toString()) : null,
@@ -3882,6 +5012,921 @@ export const fgnAPI = {
       }
     } catch (error) {
       console.error('❌ Failed to delete FGN:', error);
+      throw error;
+    }
+  }
+};
+
+// CRUD Operations for Job Work Challan
+export const jobWorkChallanAPI = {
+  // Get all job work challans
+  async getAll(): Promise<JobWorkChallan[]> {
+    try {
+      const { data, error } = await supabase
+        .from('store_job_work_challan')
+        .select('*')
+        .order('date', { ascending: false });
+      
+      if (error) {
+        handleSupabaseError(error, 'fetching job work challans');
+        throw error;
+      }
+      return data || [];
+    } catch (error) {
+      console.error('❌ Failed to fetch job work challans:', error);
+      throw error;
+    }
+  },
+
+  // Get job work challan by ID with items
+  async getById(id: string): Promise<{ challan: JobWorkChallan; items: JobWorkChallanItem[] } | null> {
+    try {
+      const { data: challan, error: challanError } = await supabase
+        .from('store_job_work_challan')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (challanError) {
+        handleSupabaseError(challanError, 'fetching job work challan');
+        return null;
+      }
+
+      const { data: items, error: itemsError } = await supabase
+        .from('store_job_work_challan_items')
+        .select('*')
+        .eq('challan_id', id)
+        .order('sr_no', { ascending: true });
+      
+      if (itemsError) {
+        handleSupabaseError(itemsError, 'fetching job work challan items');
+        return null;
+      }
+
+      return { challan, items: items || [] };
+    } catch (error) {
+      console.error('❌ Failed to fetch job work challan:', error);
+      return null;
+    }
+  },
+
+  // Create job work challan with items
+  async create(challan: Omit<JobWorkChallan, 'id' | 'created_at' | 'updated_at'>, items: Omit<JobWorkChallanItem, 'id' | 'challan_id' | 'created_at' | 'sr_no'>[]): Promise<JobWorkChallan | null> {
+    try {
+      const { data: newChallan, error: challanError } = await supabase
+        .from('store_job_work_challan')
+        .insert([challan])
+        .select()
+        .single();
+      
+      if (challanError) {
+        handleSupabaseError(challanError, 'creating job work challan');
+        throw challanError;
+      }
+
+      if (items.length > 0) {
+        const itemsToInsert = items.map((item, index) => ({
+          challan_id: newChallan.id,
+          sr_no: index + 1,
+          material_description: item.material_description,
+          qty: item.qty ? parseFloat(item.qty.toString()) : null,
+          uom: item.uom || null,
+          remarks: item.remarks || null
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('store_job_work_challan_items')
+          .insert(itemsToInsert);
+        
+        if (itemsError) {
+          handleSupabaseError(itemsError, 'creating job work challan items');
+          await supabase.from('store_job_work_challan').delete().eq('id', newChallan.id);
+          throw itemsError;
+        }
+      }
+
+      console.log('✅ Successfully created job work challan:', newChallan.id);
+      return newChallan;
+    } catch (error) {
+      console.error('❌ Failed to create job work challan:', error);
+      throw error;
+    }
+  },
+
+  // Update job work challan
+  async update(id: string, updates: Partial<JobWorkChallan>, items?: Omit<JobWorkChallanItem, 'id' | 'challan_id' | 'created_at' | 'sr_no'>[]): Promise<JobWorkChallan | null> {
+    try {
+      const { data, error } = await supabase
+        .from('store_job_work_challan')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+        handleSupabaseError(error, 'updating job work challan');
+        throw error;
+      }
+
+      if (items !== undefined) {
+        await supabase.from('store_job_work_challan_items').delete().eq('challan_id', id);
+        
+        if (items.length > 0) {
+          const itemsToInsert = items.map((item, index) => ({
+            challan_id: id,
+            sr_no: index + 1,
+            material_description: item.material_description,
+            qty: item.qty ? parseFloat(item.qty.toString()) : null,
+            uom: item.uom || null,
+            remarks: item.remarks || null
+          }));
+
+          const { error: itemsError } = await supabase
+            .from('store_job_work_challan_items')
+            .insert(itemsToInsert);
+          
+          if (itemsError) {
+            handleSupabaseError(itemsError, 'updating job work challan items');
+            throw itemsError;
+          }
+        }
+      }
+
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to update job work challan:', error);
+      throw error;
+    }
+  },
+
+  // Delete job work challan
+  async delete(id: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('store_job_work_challan')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        handleSupabaseError(error, 'deleting job work challan');
+        throw error;
+      }
+    } catch (error) {
+      console.error('❌ Failed to delete job work challan:', error);
+      throw error;
+    }
+  }
+};
+
+// CRUD Operations for Order Book
+export const orderBookAPI = {
+  // Get all order books
+  async getAll(): Promise<OrderBook[]> {
+    try {
+      const { data, error } = await supabase
+        .from('sales_order_book')
+        .select('*')
+        .order('order_date', { ascending: false });
+      
+      if (error) {
+        handleSupabaseError(error, 'fetching order books');
+        throw error;
+      }
+      return data || [];
+    } catch (error) {
+      console.error('❌ Failed to fetch order books:', error);
+      throw error;
+    }
+  },
+
+  // Get order book by ID with items
+  async getById(id: string): Promise<{ order: OrderBook; items: OrderBookItem[] } | null> {
+    try {
+      const { data: order, error: orderError } = await supabase
+        .from('sales_order_book')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (orderError) {
+        handleSupabaseError(orderError, 'fetching order book');
+        return null;
+      }
+
+      const { data: items, error: itemsError } = await supabase
+        .from('sales_order_book_items')
+        .select('*')
+        .eq('order_book_id', id)
+        .order('sr_no', { ascending: true });
+      
+      if (itemsError) {
+        handleSupabaseError(itemsError, 'fetching order book items');
+        return null;
+      }
+
+      return { order, items: items || [] };
+    } catch (error) {
+      console.error('❌ Failed to fetch order book:', error);
+      return null;
+    }
+  },
+
+  // Create order book with items
+  async create(order: Omit<OrderBook, 'id' | 'created_at' | 'updated_at'>, items: Omit<OrderBookItem, 'id' | 'order_book_id' | 'created_at' | 'sr_no'>[]): Promise<OrderBook | null> {
+    try {
+      // Insert order first
+      const { data: newOrder, error: orderError } = await supabase
+        .from('sales_order_book')
+        .insert([order])
+        .select()
+        .single();
+      
+      if (orderError) {
+        handleSupabaseError(orderError, 'creating order book');
+        throw orderError;
+      }
+
+      // Insert items
+      if (items.length > 0) {
+        const itemsToInsert = items.map((item, index) => ({
+          order_book_id: newOrder.id,
+          sr_no: index + 1,
+          part_code: item.part_code,
+          part_name: item.part_name || null,
+          description: item.description || null,
+          quantity: item.quantity,
+          delivered_qty: item.delivered_qty || 0,
+          pending_qty: item.pending_qty !== undefined ? item.pending_qty : item.quantity,
+          unit: item.unit || null,
+          unit_price: item.unit_price || null,
+          total_price: item.total_price || null,
+          delivery_schedule: item.delivery_schedule || null,
+          status: item.status || 'Pending',
+          remarks: item.remarks || null
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('sales_order_book_items')
+          .insert(itemsToInsert);
+        
+        if (itemsError) {
+          handleSupabaseError(itemsError, 'creating order book items');
+          // Rollback order if items fail
+          await supabase.from('sales_order_book').delete().eq('id', newOrder.id);
+          throw itemsError;
+        }
+      }
+
+      console.log('✅ Successfully created order book:', newOrder.id);
+      return newOrder;
+    } catch (error) {
+      console.error('❌ Failed to create order book:', error);
+      throw error;
+    }
+  },
+
+  // Update order book
+  async update(id: string, updates: Partial<OrderBook>, items?: Omit<OrderBookItem, 'id' | 'order_book_id' | 'created_at' | 'sr_no'>[]): Promise<OrderBook | null> {
+    try {
+      const { data, error } = await supabase
+        .from('sales_order_book')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+        handleSupabaseError(error, 'updating order book');
+        throw error;
+      }
+
+      // Update items if provided
+      if (items !== undefined) {
+        // Delete existing items
+        await supabase.from('sales_order_book_items').delete().eq('order_book_id', id);
+        
+        // Insert new items
+        if (items.length > 0) {
+          const itemsToInsert = items.map((item, index) => ({
+            order_book_id: id,
+            sr_no: index + 1,
+            part_code: item.part_code,
+            part_name: item.part_name || null,
+            description: item.description || null,
+            quantity: item.quantity,
+            delivered_qty: item.delivered_qty || 0,
+            pending_qty: item.pending_qty !== undefined ? item.pending_qty : item.quantity,
+            unit: item.unit || null,
+            unit_price: item.unit_price || null,
+            total_price: item.total_price || null,
+            delivery_schedule: item.delivery_schedule || null,
+            status: item.status || 'Pending',
+            remarks: item.remarks || null
+          }));
+
+          const { error: itemsError } = await supabase
+            .from('sales_order_book_items')
+            .insert(itemsToInsert);
+          
+          if (itemsError) {
+            handleSupabaseError(itemsError, 'updating order book items');
+            throw itemsError;
+          }
+        }
+      }
+
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to update order book:', error);
+      throw error;
+    }
+  },
+
+  // Delete order book
+  async delete(id: string): Promise<void> {
+    try {
+      // Items will be deleted automatically due to CASCADE
+      const { error } = await supabase
+        .from('sales_order_book')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        handleSupabaseError(error, 'deleting order book');
+        throw error;
+      }
+    } catch (error) {
+      console.error('❌ Failed to delete order book:', error);
+      throw error;
+    }
+  }
+};
+
+// CRUD Operations for Color/Label Master
+export const colorLabelAPI = {
+  // Get all color/labels
+  async getAll(): Promise<ColorLabel[]> {
+    try {
+      const { data, error } = await supabase
+        .from('color_label_master')
+        .select('*')
+        .order('sr_no', { ascending: true });
+      
+      if (error) {
+        handleSupabaseError(error, 'fetching color/labels');
+        throw error;
+      }
+      return data || [];
+    } catch (error) {
+      console.error('❌ Failed to fetch color/labels:', error);
+      throw error;
+    }
+  },
+
+  // Get color/label by ID
+  async getById(id: string): Promise<ColorLabel | null> {
+    try {
+      const { data, error } = await supabase
+        .from('color_label_master')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (error) {
+        handleSupabaseError(error, 'fetching color/label');
+        return null;
+      }
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to fetch color/label:', error);
+      return null;
+    }
+  },
+
+  // Create new color/label
+  async create(colorLabel: Omit<ColorLabel, 'id' | 'created_at' | 'updated_at'>): Promise<ColorLabel | null> {
+    try {
+      // If sr_no is not provided, get the next available number
+      let finalColorLabel = { ...colorLabel };
+      if (!finalColorLabel.sr_no) {
+        const { data: existing } = await supabase
+          .from('color_label_master')
+          .select('sr_no')
+          .order('sr_no', { ascending: false })
+          .limit(1)
+          .single();
+        
+        finalColorLabel.sr_no = existing?.sr_no ? existing.sr_no + 1 : 1;
+      }
+      
+      const { data, error } = await supabase
+        .from('color_label_master')
+        .insert([finalColorLabel])
+        .select()
+        .single();
+      
+      if (error) {
+        handleSupabaseError(error, 'creating color/label');
+        throw error;
+      }
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to create color/label:', error);
+      throw error;
+    }
+  },
+
+  // Update color/label
+  async update(id: string, updates: Partial<ColorLabel>): Promise<ColorLabel | null> {
+    try {
+      const { data, error } = await supabase
+        .from('color_label_master')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+        handleSupabaseError(error, 'updating color/label');
+        throw error;
+      }
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to update color/label:', error);
+      throw error;
+    }
+  },
+
+  // Delete color/label
+  async delete(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('color_label_master')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        handleSupabaseError(error, 'deleting color/label');
+        throw error;
+      }
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to delete color/label:', error);
+      throw error;
+    }
+  },
+
+  // Get colors for a specific party
+  async getColorsForParty(partyName: string): Promise<ColorLabel[]> {
+    try {
+      // First, get the party ID
+      const { data: partyData, error: partyError } = await supabase
+        .from('party_name_master')
+        .select('id')
+        .eq('name', partyName)
+        .single();
+      
+      if (partyError || !partyData) {
+        // If party not found or no mapping, return all colors
+        return await this.getAll();
+      }
+
+      // Get mapped colors for this party
+      const { data: mappingData, error: mappingError } = await supabase
+        .from('party_color_mapping')
+        .select('color_label_id')
+        .eq('party_name_id', partyData.id);
+
+      if (mappingError || !mappingData || mappingData.length === 0) {
+        // If no mapping exists, return all colors
+        return await this.getAll();
+      }
+
+      // Get the actual color labels
+      const colorIds = mappingData.map(m => m.color_label_id);
+      const { data: colorsData, error: colorsError } = await supabase
+        .from('color_label_master')
+        .select('*')
+        .in('id', colorIds)
+        .order('sr_no');
+
+      if (colorsError) {
+        handleSupabaseError(colorsError, 'fetching colors for party');
+        // Fallback to all colors
+        return await this.getAll();
+      }
+
+      return colorsData || [];
+    } catch (error) {
+      console.error('❌ Failed to fetch colors for party:', error);
+      // Fallback to all colors
+      return await this.getAll();
+    }
+  }
+};
+
+// CRUD Operations for Party Name Master
+export const partyNameAPI = {
+  // Get all party names
+  async getAll(): Promise<PartyName[]> {
+    try {
+      const { data, error } = await supabase
+        .from('party_name_master')
+        .select('*')
+        .order('name');
+      
+      if (error) {
+        handleSupabaseError(error, 'fetching party names');
+        throw error;
+      }
+      return data || [];
+    } catch (error) {
+      console.error('❌ Failed to fetch party names:', error);
+      throw error;
+    }
+  },
+
+  // Get party name by ID
+  async getById(id: string): Promise<PartyName | null> {
+    try {
+      const { data, error } = await supabase
+        .from('party_name_master')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (error) {
+        handleSupabaseError(error, 'fetching party name');
+        return null;
+      }
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to fetch party name:', error);
+      return null;
+    }
+  },
+
+  // Create new party name
+  async create(partyName: Omit<PartyName, 'id' | 'created_at' | 'updated_at'>): Promise<PartyName | null> {
+    try {
+      const { data, error } = await supabase
+        .from('party_name_master')
+        .insert([partyName])
+        .select()
+        .single();
+      
+      if (error) {
+        handleSupabaseError(error, 'creating party name');
+        throw error;
+      }
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to create party name:', error);
+      throw error;
+    }
+  },
+
+  // Update party name
+  async update(id: string, updates: Partial<PartyName>): Promise<PartyName | null> {
+    try {
+      const { data, error } = await supabase
+        .from('party_name_master')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+        handleSupabaseError(error, 'updating party name');
+        throw error;
+      }
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to update party name:', error);
+      throw error;
+    }
+  },
+
+  // Delete party name
+  async delete(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('party_name_master')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        handleSupabaseError(error, 'deleting party name');
+        throw error;
+      }
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to delete party name:', error);
+      throw error;
+    }
+  }
+};
+
+// ============================================================================
+// PRODUCTION BLOCKS TYPES AND API
+// ============================================================================
+
+export interface ProductionBlock {
+  id: string;
+  line_id: string;
+  start_day: number;
+  end_day: number;
+  duration: number;
+  label: string;
+  color: string;
+  mold_id?: string;
+  production_day_start_time?: string; // TIME format
+  is_changeover?: boolean;
+  is_changeover_block?: boolean;
+  changeover_start_day?: number;
+  changeover_end_day?: number;
+  changeover_time?: number;
+  changeover_time_string?: string;
+  changeover_time_mode?: 'minutes' | 'time';
+  changeover_mold_id?: string;
+  changeover_datetime?: string;
+  notes?: string;
+  is_resizing_left?: boolean;
+  planning_month: number;
+  planning_year: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProductionBlockColorSegment {
+  id?: number;
+  block_id: string;
+  color: string;
+  label?: string;
+  start_day_offset: number;
+  end_day_offset: number;
+  created_at?: string;
+}
+
+export interface ProductionBlockProductColor {
+  id?: number;
+  block_id: string;
+  color: string;
+  quantity: number;
+  party_code?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProductionBlockPackingMaterial {
+  id?: number;
+  block_id: string;
+  category: 'boxes' | 'polybags' | 'bopp';
+  packing_material_id: string; // UUID
+  quantity: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProductionBlockPartyCode {
+  id?: number;
+  block_id: string;
+  party_code: string;
+  created_at?: string;
+}
+
+// Production Block with all related data
+export interface ProductionBlockWithRelations extends ProductionBlock {
+  color_segments?: ProductionBlockColorSegment[];
+  product_colors?: ProductionBlockProductColor[];
+  packing_materials?: ProductionBlockPackingMaterial[];
+  party_codes?: ProductionBlockPartyCode[];
+}
+
+// CRUD Operations for Production Blocks
+export const productionBlockAPI = {
+  // Get all blocks for a specific month/year
+  async getByMonth(year: number, month: number): Promise<ProductionBlockWithRelations[]> {
+    try {
+      // Fetch blocks
+      const { data: blocks, error: blocksError } = await supabase
+        .from('production_blocks')
+        .select('*')
+        .eq('planning_year', year)
+        .eq('planning_month', month)
+        .order('start_day', { ascending: true })
+        .order('line_id', { ascending: true });
+      
+      if (blocksError) {
+        handleSupabaseError(blocksError, 'fetching production blocks');
+        throw blocksError;
+      }
+
+      if (!blocks || blocks.length === 0) {
+        return [];
+      }
+
+      const blockIds = blocks.map(b => b.id);
+
+      // Fetch all related data in parallel
+      const [
+        { data: colorSegments },
+        { data: productColors },
+        { data: packingMaterials },
+        { data: partyCodes }
+      ] = await Promise.all([
+        supabase.from('production_block_color_segments').select('*').in('block_id', blockIds),
+        supabase.from('production_block_product_colors').select('*').in('block_id', blockIds),
+        supabase.from('production_block_packing_materials').select('*').in('block_id', blockIds),
+        supabase.from('production_block_party_codes').select('*').in('block_id', blockIds)
+      ]);
+
+      // Combine data
+      return blocks.map(block => ({
+        ...block,
+        color_segments: colorSegments?.filter(cs => cs.block_id === block.id) || [],
+        product_colors: productColors?.filter(pc => pc.block_id === block.id) || [],
+        packing_materials: packingMaterials?.filter(pm => pm.block_id === block.id) || [],
+        party_codes: partyCodes?.filter(pc => pc.block_id === block.id) || []
+      })) as ProductionBlockWithRelations[];
+    } catch (error) {
+      console.error('❌ Failed to fetch production blocks:', error);
+      throw error;
+    }
+  },
+
+  // Get single block by ID
+  async getById(blockId: string): Promise<ProductionBlockWithRelations | null> {
+    try {
+      const { data: block, error } = await supabase
+        .from('production_blocks')
+        .select('*')
+        .eq('id', blockId)
+        .single();
+      
+      if (error) {
+        handleSupabaseError(error, 'fetching production block');
+        return null;
+      }
+
+      if (!block) return null;
+
+      // Fetch related data
+      const [
+        { data: colorSegments },
+        { data: productColors },
+        { data: packingMaterials },
+        { data: partyCodes }
+      ] = await Promise.all([
+        supabase.from('production_block_color_segments').select('*').eq('block_id', blockId),
+        supabase.from('production_block_product_colors').select('*').eq('block_id', blockId),
+        supabase.from('production_block_packing_materials').select('*').eq('block_id', blockId),
+        supabase.from('production_block_party_codes').select('*').eq('block_id', blockId)
+      ]);
+
+      return {
+        ...block,
+        color_segments: colorSegments || [],
+        product_colors: productColors || [],
+        packing_materials: packingMaterials || [],
+        party_codes: partyCodes || []
+      } as ProductionBlockWithRelations;
+    } catch (error) {
+      console.error('❌ Failed to fetch production block:', error);
+      return null;
+    }
+  },
+
+  // Create or update block with all related data
+  async save(block: ProductionBlockWithRelations): Promise<ProductionBlockWithRelations | null> {
+    try {
+      // Prepare main block data (exclude relations)
+      const { color_segments, product_colors, packing_materials, party_codes, ...blockData } = block;
+
+      console.log('💾 productionBlockAPI.save - Block data to save:', blockData);
+      console.log('💾 productionBlockAPI.save - Related data:', {
+        color_segments: color_segments?.length || 0,
+        product_colors: product_colors?.length || 0,
+        packing_materials: packing_materials?.length || 0,
+        party_codes: party_codes?.length || 0
+      });
+
+      // Upsert main block
+      const { data: savedBlock, error: blockError } = await supabase
+        .from('production_blocks')
+        .upsert(blockData, { onConflict: 'id' })
+        .select()
+        .single();
+
+      if (blockError) {
+        console.error('❌ productionBlockAPI.save - Block upsert error:', blockError);
+        handleSupabaseError(blockError, 'saving production block');
+        throw blockError;
+      }
+
+      if (!savedBlock) {
+        console.error('❌ productionBlockAPI.save - No block returned from upsert');
+        return null;
+      }
+
+      console.log('✅ productionBlockAPI.save - Block saved:', savedBlock.id);
+
+      // Delete existing related data
+      await Promise.all([
+        supabase.from('production_block_color_segments').delete().eq('block_id', savedBlock.id),
+        supabase.from('production_block_product_colors').delete().eq('block_id', savedBlock.id),
+        supabase.from('production_block_packing_materials').delete().eq('block_id', savedBlock.id),
+        supabase.from('production_block_party_codes').delete().eq('block_id', savedBlock.id)
+      ]);
+
+      // Insert new related data
+      if (color_segments && color_segments.length > 0) {
+        await supabase.from('production_block_color_segments').insert(
+          color_segments.map(cs => ({ ...cs, block_id: savedBlock.id }))
+        );
+      }
+
+      if (product_colors && product_colors.length > 0) {
+        await supabase.from('production_block_product_colors').insert(
+          product_colors.map(pc => ({ ...pc, block_id: savedBlock.id }))
+        );
+      }
+
+      if (packing_materials && packing_materials.length > 0) {
+        await supabase.from('production_block_packing_materials').insert(
+          packing_materials.map(pm => ({ ...pm, block_id: savedBlock.id }))
+        );
+      }
+
+      if (party_codes && party_codes.length > 0) {
+        await supabase.from('production_block_party_codes').insert(
+          party_codes.map(pc => ({ party_code: pc.party_code || pc, block_id: savedBlock.id }))
+        );
+      }
+
+      // Return complete block
+      return await this.getById(savedBlock.id);
+    } catch (error) {
+      console.error('❌ Failed to save production block:', error);
+      throw error;
+    }
+  },
+
+  // Bulk save multiple blocks
+  async bulkSave(blocks: ProductionBlockWithRelations[]): Promise<ProductionBlockWithRelations[]> {
+    try {
+      const savedBlocks: ProductionBlockWithRelations[] = [];
+      
+      for (const block of blocks) {
+        const saved = await this.save(block);
+        if (saved) savedBlocks.push(saved);
+      }
+
+      console.log('✅ Successfully saved', savedBlocks.length, 'production blocks');
+      return savedBlocks;
+    } catch (error) {
+      console.error('❌ Failed to bulk save production blocks:', error);
+      throw error;
+    }
+  },
+
+  // Delete block and all related data
+  async delete(blockId: string): Promise<void> {
+    try {
+      // Cascade delete will handle related tables, but we can be explicit
+      const { error } = await supabase
+        .from('production_blocks')
+        .delete()
+        .eq('id', blockId);
+      
+      if (error) {
+        handleSupabaseError(error, 'deleting production block');
+        throw error;
+      }
+
+      console.log('✅ Successfully deleted production block:', blockId);
+    } catch (error) {
+      console.error('❌ Failed to delete production block:', error);
+      throw error;
+    }
+  },
+
+  // Delete multiple blocks
+  async bulkDelete(blockIds: string[]): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('production_blocks')
+        .delete()
+        .in('id', blockIds);
+      
+      if (error) {
+        handleSupabaseError(error, 'bulk deleting production blocks');
+        throw error;
+      }
+
+      console.log('✅ Successfully deleted', blockIds.length, 'production blocks');
+    } catch (error) {
+      console.error('❌ Failed to bulk delete production blocks:', error);
       throw error;
     }
   }

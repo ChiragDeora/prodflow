@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Wrench, Package, Link } from 'lucide-react';
+import { Wrench, Package, Link, Building, MoreHorizontal } from 'lucide-react';
 import Image from 'next/image';
 import MachineMaster from './MachineMaster';
 import MoldMaster from './MoldMaster';
@@ -9,6 +9,8 @@ import RawMaterialsMaster from './RawMaterialsMaster';
 import PackingMaterialsMaster from './PackingMaterialsMaster';
 import LineMaster from './LineMaster';
 import BOMMaster from '../bom-master';
+import CommercialMaster from '../commercial-master';
+import OthersMaster from './OthersMaster';
 
 import { 
   Machine as SupabaseMachine, 
@@ -23,7 +25,7 @@ import {
 type Machine = SupabaseMachine;
 type Mold = SupabaseMold;
 type ActionType = 'edit' | 'delete' | 'view' | 'approve' | 'mark_done';
-type ItemType = 'machine' | 'mold' | 'schedule' | 'material' | 'product' | 'raw_material' | 'packing_material';
+type ItemType = 'machine' | 'mold' | 'schedule' | 'material' | 'product' | 'raw_material' | 'packing_material' | 'color_label' | 'party_name';
 
 // Use Supabase types
 type RawMaterial = SupabaseRawMaterial;
@@ -90,9 +92,11 @@ interface MasterDataModuleProps {
   
   // Common handlers
   openExcelReader: (type: string) => void;
-  handleAction: (actionType: ActionType, item: any, itemType: ItemType | 'line') => Promise<void>;
+  handleAction: (actionType: ActionType, item: any, itemType: ItemType | 'line' | 'color_label' | 'party_name') => Promise<void>;
   setViewingNameplate: (nameplate: string | null) => void;
   InfoButton: React.ComponentType<{ type: string }>;
+  // Callback to collapse sidebar when sub nav is clicked
+  onSubNavClick?: () => void;
 }
 
 const MasterDataModule: React.FC<MasterDataModuleProps> = ({
@@ -141,15 +145,27 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
   InfoButton,
   unitManagementEnabled,
   defaultUnit,
-  units
+  units,
+  onSubNavClick
 }) => {
-  const [activeTab, setActiveTab] = useState('machines');
+  // Initialize activeTab from localStorage or default to 'machines'
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedTab = localStorage.getItem('masterDataActiveTab');
+      return savedTab || 'machines';
+    }
+    return 'machines';
+  });
 
   // Save active tab to localStorage whenever it changes
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     if (typeof window !== 'undefined') {
       localStorage.setItem('masterDataActiveTab', tab);
+    }
+    // Collapse sidebar when sub nav tab is clicked
+    if (onSubNavClick) {
+      onSubNavClick();
     }
   };
 
@@ -223,6 +239,28 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
           >
             <Package className="w-5 h-5 inline mr-2" />
             BOM Master
+          </button>
+          <button
+            onClick={() => handleTabChange('commercial_master')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+              activeTab === 'commercial_master'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Building className="w-5 h-5 inline mr-2" />
+            Commercial Master
+          </button>
+          <button
+            onClick={() => handleTabChange('others')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+              activeTab === 'others'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <MoreHorizontal className="w-5 h-5 inline mr-2" />
+            Others
           </button>
         </nav>
       </div>
@@ -329,6 +367,14 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
 
         {activeTab === 'bom_master' && (
           <BOMMaster />
+        )}
+
+        {activeTab === 'commercial_master' && (
+          <CommercialMaster onSubNavClick={onSubNavClick} />
+        )}
+
+        {activeTab === 'others' && (
+          <OthersMaster handleAction={handleAction} openExcelReader={openExcelReader} />
         )}
       </div>
     </div>

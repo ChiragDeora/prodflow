@@ -1,13 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { 
   Factory, 
-  Calendar, 
-  BarChart3, 
   Settings, 
-  Users, 
   Clock,
   CheckCircle,
   AlertTriangle,
@@ -20,12 +17,26 @@ import {
   Award,
   Activity,
   TrendingDown,
-  Minus
+  Minus,
+  Cog,
+  Layers,
+  Eye,
+  X,
+  ChevronRight,
+  ChevronLeft,
+  FileText
 } from 'lucide-react';
+import { useAuth } from '../../auth/AuthProvider';
 import ExcelFileReader from '../../ExcelFileReader';
+import MouldLoadingUnloadingReport from './MouldLoadingUnloadingReport';
+import SiloManagement from './SiloManagement';
+import FGNForm from '../store-dispatch/FGNForm';
+import { moldAPI, machineAPI, lineAPI, Mold, Machine, Line } from '../../../lib/supabase';
+import { Plus } from 'lucide-react';
 
 interface ProductionModuleProps {
-  // Add any props if needed
+  // Callback to collapse sidebar when sub nav is clicked
+  onSubNavClick?: () => void;
 }
 
 // DPR Data Interface
@@ -36,6 +47,8 @@ interface DPRData {
   shiftIncharge: string;
   machines: MachineData[];
   summary: SummaryData;
+  shiftTotal?: ShiftTotalData | null;
+  achievement?: any | null;
 }
 
 interface MachineData {
@@ -53,12 +66,15 @@ interface ProductionRun {
   partWeight: number;
   actualPartWeight: number;
   actualCycle: number;
+  shotsStart: number;
+  shotsEnd: number;
   targetQty: number;
   actualQty: number;
   okProdQty: number;
   okProdKgs: number;
   okProdPercent: number;
   rejKgs: number;
+  lumps: number;
   runTime: number;
   downTime: number;
   stoppageReason: string;
@@ -67,6 +83,9 @@ interface ProductionRun {
   totalTime: number;
   mouldChange: string;
   remark: string;
+  // Quality Check fields
+  partWeightCheck: 'OK' | 'NOT OK' | '';
+  cycleTimeCheck: 'OK' | 'NOT OK' | '';
 }
 
 interface SummaryData {
@@ -80,13 +99,322 @@ interface SummaryData {
   downTime: number;
 }
 
-const ProductionModule: React.FC<ProductionModuleProps> = () => {
+interface ShiftTotalData {
+  type: string;
+  label: string;
+  targetQty: number;
+  actualQty: number;
+  okProdQty: number;
+  okProdKgs: number;
+  okProdPercent: number;
+  rejKgs: number;
+  lumps: number;
+  runTime: number;
+  downTime: number;
+  totalTime: number;
+}
+
+// Column definitions for DPR table
+interface ColumnDefinition {
+  id: string;
+  label: string;
+  category: 'basic' | 'process' | 'shots' | 'production' | 'runtime' | 'stoppage';
+  defaultVisible: boolean;
+}
+
+const DPR_COLUMNS: ColumnDefinition[] = [
+  // Basic Info
+  { id: 'machineNo', label: 'M/c No.', category: 'basic', defaultVisible: true },
+  { id: 'operatorName', label: 'Opt Name', category: 'basic', defaultVisible: true },
+  { id: 'product', label: 'Product', category: 'basic', defaultVisible: true },
+  { id: 'cavity', label: 'Cavity', category: 'basic', defaultVisible: true },
+  
+  // Process Parameters
+  { id: 'targetCycle', label: 'Trg Cycle (sec)', category: 'process', defaultVisible: false },
+  { id: 'targetRunTime', label: 'Trg Run Time (min)', category: 'process', defaultVisible: false },
+  { id: 'partWeight', label: 'Part Wt (gm)', category: 'process', defaultVisible: false },
+  { id: 'actualPartWeight', label: 'Act part wt (gm)', category: 'process', defaultVisible: false },
+  { id: 'actualCycle', label: 'Act Cycle (sec)', category: 'process', defaultVisible: false },
+  { id: 'partWeightCheck', label: 'Part Wt Check', category: 'process', defaultVisible: false },
+  { id: 'cycleTimeCheck', label: 'Cycle Time Check', category: 'process', defaultVisible: false },
+  
+  // No of Shots
+  { id: 'shotsStart', label: 'No of Shots (Start)', category: 'shots', defaultVisible: false },
+  { id: 'shotsEnd', label: 'No of Shots (End)', category: 'shots', defaultVisible: false },
+  
+  // Production Data
+  { id: 'targetQty', label: 'Target Qty (Nos)', category: 'production', defaultVisible: true },
+  { id: 'actualQty', label: 'Actual Qty (Nos)', category: 'production', defaultVisible: true },
+  { id: 'okProdQty', label: 'Ok Prod Qty (Nos)', category: 'production', defaultVisible: true },
+  { id: 'okProdKgs', label: 'Ok Prod (Kgs)', category: 'production', defaultVisible: true },
+  { id: 'okProdPercent', label: 'Ok Prod (%)', category: 'production', defaultVisible: true },
+  { id: 'rejKgs', label: 'Rej (Kgs)', category: 'production', defaultVisible: true },
+  
+  // Runtime
+  { id: 'runTime', label: 'Run Time (mins)', category: 'runtime', defaultVisible: true },
+  { id: 'downTime', label: 'Down time (min)', category: 'runtime', defaultVisible: true },
+  
+  // Stoppage Time and Remarks
+  { id: 'stoppageReason', label: 'Reason', category: 'stoppage', defaultVisible: false },
+  { id: 'startTime', label: 'Start Time', category: 'stoppage', defaultVisible: false },
+  { id: 'endTime', label: 'End Time', category: 'stoppage', defaultVisible: false },
+  { id: 'totalTime', label: 'Total Time (min)', category: 'stoppage', defaultVisible: false },
+  { id: 'mouldChange', label: 'Mould change', category: 'stoppage', defaultVisible: false },
+  { id: 'remark', label: 'REMARK', category: 'stoppage', defaultVisible: false },
+];
+
+// Section visibility definitions
+interface SectionVisibility {
+  shiftTotal: boolean;
+  achievementMetrics: boolean;
+}
+
+// Individual metric visibility for SHIFT TOTAL
+interface ShiftTotalMetrics {
+  targetQty: boolean;
+  actualQty: boolean;
+  okProdQty: boolean;
+  okProdKgs: boolean;
+  okProdPercent: boolean;
+  rejKgs: boolean;
+  lumps: boolean;
+  runTime: boolean;
+  downTime: boolean;
+  totalTime: boolean;
+}
+
+// Individual metric visibility for ACHIEVEMENT METRICS
+interface AchievementMetrics {
+  actualVsTarget: boolean;
+  rejVsOkProd: boolean;
+  runTimeVsTotal: boolean;
+  downTimeVsTotal: boolean;
+}
+
+const DEFAULT_SECTION_VISIBILITY: SectionVisibility = {
+  shiftTotal: true,
+  achievementMetrics: true,
+};
+
+const DEFAULT_SHIFT_TOTAL_METRICS: ShiftTotalMetrics = {
+  targetQty: true,
+  actualQty: true,
+  okProdQty: true,
+  okProdKgs: true,
+  okProdPercent: true,
+  rejKgs: true,
+  lumps: true,
+  runTime: true,
+  downTime: true,
+  totalTime: true,
+};
+
+const DEFAULT_ACHIEVEMENT_METRICS: AchievementMetrics = {
+  actualVsTarget: true,
+  rejVsOkProd: true,
+  runTimeVsTotal: true,
+  downTimeVsTotal: true,
+};
+
+// Load column visibility from localStorage
+const loadColumnVisibility = (): Record<string, boolean> => {
+  if (typeof window === 'undefined') {
+    // Return defaults for SSR
+    const defaults: Record<string, boolean> = {};
+    DPR_COLUMNS.forEach(col => {
+      defaults[col.id] = col.defaultVisible;
+    });
+    return defaults;
+  }
+  
+  try {
+    const saved = localStorage.getItem('dpr_column_visibility');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('Failed to load column visibility:', e);
+  }
+  
+  // Return defaults
+  const defaults: Record<string, boolean> = {};
+  DPR_COLUMNS.forEach(col => {
+    defaults[col.id] = col.defaultVisible;
+  });
+  return defaults;
+};
+
+// Save column visibility to localStorage
+const saveColumnVisibility = (visibility: Record<string, boolean>) => {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('dpr_column_visibility', JSON.stringify(visibility));
+    } catch (e) {
+      console.error('Failed to save column visibility:', e);
+    }
+  }
+};
+
+// Load section visibility from localStorage
+const loadSectionVisibility = (): SectionVisibility => {
+  if (typeof window === 'undefined') {
+    return DEFAULT_SECTION_VISIBILITY;
+  }
+  
+  try {
+    const saved = localStorage.getItem('dpr_section_visibility');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('Failed to load section visibility:', e);
+  }
+  
+  return DEFAULT_SECTION_VISIBILITY;
+};
+
+// Save section visibility to localStorage
+const saveSectionVisibility = (visibility: SectionVisibility) => {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('dpr_section_visibility', JSON.stringify(visibility));
+    } catch (e) {
+      console.error('Failed to save section visibility:', e);
+    }
+  }
+};
+
+// Load shift total metrics visibility from localStorage
+const loadShiftTotalMetrics = (): ShiftTotalMetrics => {
+  if (typeof window === 'undefined') {
+    return DEFAULT_SHIFT_TOTAL_METRICS;
+  }
+  
+  try {
+    const saved = localStorage.getItem('dpr_shift_total_metrics');
+    if (saved) {
+      return { ...DEFAULT_SHIFT_TOTAL_METRICS, ...JSON.parse(saved) };
+    }
+  } catch (e) {
+    console.error('Failed to load shift total metrics:', e);
+  }
+  
+  return DEFAULT_SHIFT_TOTAL_METRICS;
+};
+
+// Save shift total metrics visibility to localStorage
+const saveShiftTotalMetrics = (metrics: ShiftTotalMetrics) => {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('dpr_shift_total_metrics', JSON.stringify(metrics));
+    } catch (e) {
+      console.error('Failed to save shift total metrics:', e);
+    }
+  }
+};
+
+// Load achievement metrics visibility from localStorage
+const loadAchievementMetrics = (): AchievementMetrics => {
+  if (typeof window === 'undefined') {
+    return DEFAULT_ACHIEVEMENT_METRICS;
+  }
+  
+  try {
+    const saved = localStorage.getItem('dpr_achievement_metrics');
+    if (saved) {
+      return { ...DEFAULT_ACHIEVEMENT_METRICS, ...JSON.parse(saved) };
+    }
+  } catch (e) {
+    console.error('Failed to load achievement metrics:', e);
+  }
+  
+  return DEFAULT_ACHIEVEMENT_METRICS;
+};
+
+// Save achievement metrics visibility to localStorage
+const saveAchievementMetrics = (metrics: AchievementMetrics) => {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('dpr_achievement_metrics', JSON.stringify(metrics));
+    } catch (e) {
+      console.error('Failed to save achievement metrics:', e);
+    }
+  }
+};
+
+const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedShift, setSelectedShift] = useState<'DAY' | 'NIGHT'>('DAY');
   const [showExcelReader, setShowExcelReader] = useState(false);
   const [dprData, setDprData] = useState<DPRData[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(loadColumnVisibility);
+  const [sectionVisibility, setSectionVisibility] = useState<SectionVisibility>(loadSectionVisibility);
+  const [shiftTotalMetrics, setShiftTotalMetrics] = useState<ShiftTotalMetrics>(loadShiftTotalMetrics);
+  const [achievementMetrics, setAchievementMetrics] = useState<AchievementMetrics>(loadAchievementMetrics);
+  const [showSettingsPanel, setShowSettingsPanel] = useState(false);
+  const [showFullView, setShowFullView] = useState(false);
+  const [dprPermissions, setDprPermissions] = useState<Record<string, boolean>>({});
+  const [canManageSettings, setCanManageSettings] = useState(false);
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [molds, setMolds] = useState<Mold[]>([]);
+  const [machines, setMachines] = useState<Machine[]>([]);
+  const [lines, setLines] = useState<Line[]>([]);
+  
+  // Check if user is Yogesh Deora
+  const userEmail = user?.email?.toLowerCase() || '';
+  const userName = user?.fullName?.toLowerCase() || '';
+  const isYogeshDeora = 
+    userEmail.includes('yogesh') || 
+    userEmail.includes('deora') ||
+    userName.includes('yogesh') ||
+    userName.includes('deora') ||
+    user?.isRootAdmin || false;
+  
+  const isSuperUser = isYogeshDeora || canManageSettings;
+
+  // Load DPR permissions on mount
+  useEffect(() => {
+    const loadDprPermissions = async () => {
+      try {
+        const response = await fetch('/api/user/dpr-permissions', {
+          credentials: 'include'
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setDprPermissions(data.permissions || {});
+          setCanManageSettings(data.canManageSettings || false);
+        }
+      } catch (error) {
+        console.error('Error loading DPR permissions:', error);
+      }
+    };
+    
+    if (user) {
+      loadDprPermissions();
+    }
+  }, [user]);
+
+  // Load molds, machines, and lines for manual entry
+  useEffect(() => {
+    const loadMasters = async () => {
+      try {
+        const [moldsData, machinesData, linesData] = await Promise.all([
+          moldAPI.getAll(),
+          machineAPI.getAll(),
+          lineAPI.getAll()
+        ]);
+        setMolds(moldsData);
+        setMachines(machinesData);
+        setLines(linesData);
+      } catch (error) {
+        console.error('Error loading masters:', error);
+      }
+    };
+    loadMasters();
+  }, []);
 
   // Excel Import Handler - Handles 63 sheets structure
   const handleExcelImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -683,12 +1011,15 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
       partWeight: 0,
       actualPartWeight: 0,
       actualCycle: 0,
+      shotsStart: 0,
+      shotsEnd: 0,
       targetQty: 0,
       actualQty: 0,
       okProdQty: 0,
       okProdKgs: 0,
       okProdPercent: 0,
       rejKgs: 0,
+      lumps: 0,
       runTime: 0,
       downTime: 0,
       stoppageReason: '',
@@ -696,7 +1027,9 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
       endTime: '',
       totalTime: 0,
       mouldChange: '',
-      remark: ''
+      remark: '',
+      partWeightCheck: '',
+      cycleTimeCheck: ''
     };
 
     if (!sheetData || sheetData.length === 0) {
@@ -981,21 +1314,38 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
       partWeight: getNumberValue(['part wt', 'part weight', 'part wt.', 'part wt (gm)'], 0),
       actualPartWeight: getNumberValue(['act part wt', 'actual part weight', 'act part wt.', 'act part wt (gm)'], 0),
       actualCycle: getNumberValue(['act cycle', 'actual cycle', 'act cycle (sec)'], 0),
+      shotsStart: getNumberValue(['shot start', 'shots start', 'start shot'], 0),
+      shotsEnd: getNumberValue(['shot end', 'shots end', 'end shot'], 0),
       targetQty: getNumberValue(['target qty', 'target quantity', 'target qty (nos)'], 0),
       actualQty: getNumberValue(['actual qty', 'actual quantity', 'actual qty (nos)'], 0),
       okProdQty: getNumberValue(['ok prod qty', 'ok production qty', 'ok prod qty (nos)'], 0),
       okProdKgs: getNumberValue(['ok prod (kgs)', 'ok prod', 'ok production (kgs)'], 0),
       okProdPercent: getNumberValue(['ok prod (%)', 'ok prod %', 'ok prod percent'], 0),
       rejKgs: getNumberValue(['rej (kgs)', 'rej', 'rejection (kgs)'], 0),
+      lumps: getNumberValue(['lumps', 'lump', 'lumps (nos)'], 0),
       runTime: getNumberValue(['run time (mins)', 'run time', 'run time (minutes)'], 0),
       downTime: getNumberValue(['down time (min)', 'down time', 'downtime'], 0),
       stoppageReason: String(getValue(['reason', 'stoppage', 'stoppage reason'], '')),
-      startTime: String(getValue(['start time', 'start'], '')),
-      endTime: String(getValue(['end time', 'end'], '')),
+      startTime: String(getValue(['stoppage start time', 'start time'], '')),
+      endTime: String(getValue(['stoppage end time', 'end time'], '')),
       totalTime: getNumberValue(['total time (min)', 'total time'], 0),
       mouldChange: String(getValue(['mould change', 'mold change', 'mould'], '')),
-      remark: String(getValue(['remark', 'remarks', 'remarks'], ''))
+      remark: String(getValue(['remark', 'remarks', 'remarks'], '')),
+      // Quality Check - Part Weight: If (Part Wt - Act Part Wt) > 0.5, "NOT OK", else "OK"
+      partWeightCheck: '' as 'OK' | 'NOT OK' | '',
+      // Quality Check - Cycle Time: If (Trg Cycle - Act Cycle) > 0.5, "NOT OK", else "OK"
+      cycleTimeCheck: '' as 'OK' | 'NOT OK' | ''
     };
+
+    // Calculate quality checks
+    if (parsedData.partWeight > 0 && parsedData.actualPartWeight > 0) {
+      const partWeightDiff = Math.abs(parsedData.partWeight - parsedData.actualPartWeight);
+      parsedData.partWeightCheck = partWeightDiff > 0.5 ? 'NOT OK' : 'OK';
+    }
+    if (parsedData.targetCycle > 0 && parsedData.actualCycle > 0) {
+      const cycleDiff = Math.abs(parsedData.targetCycle - parsedData.actualCycle);
+      parsedData.cycleTimeCheck = cycleDiff > 0.5 ? 'NOT OK' : 'OK';
+    }
 
     console.log(`✅ Parsed data from ${sheetName}:`, {
       product: parsedData.product,
@@ -1046,12 +1396,15 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
         partWeight: 0,
         actualPartWeight: 0,
         actualCycle: 0,
+        shotsStart: 0,
+        shotsEnd: 0,
         targetQty: 0,
         actualQty: 0,
         okProdQty: 0,
         okProdKgs: 0,
         okProdPercent: 0,
         rejKgs: 0,
+        lumps: 0,
         runTime: 0,
         downTime: 0,
         stoppageReason: '',
@@ -1059,7 +1412,9 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
         endTime: '',
         totalTime: 0,
         mouldChange: '',
-        remark: ''
+        remark: '',
+        partWeightCheck: '',
+        cycleTimeCheck: ''
       };
 
       // Parse sheet "b" for changeover
@@ -1071,12 +1426,15 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
         partWeight: 0,
         actualPartWeight: 0,
         actualCycle: 0,
+        shotsStart: 0,
+        shotsEnd: 0,
         targetQty: 0,
         actualQty: 0,
         okProdQty: 0,
         okProdKgs: 0,
         okProdPercent: 0,
         rejKgs: 0,
+        lumps: 0,
         runTime: 0,
         downTime: 0,
         stoppageReason: '',
@@ -1084,7 +1442,9 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
         endTime: '',
         totalTime: 0,
         mouldChange: '',
-        remark: ''
+        remark: '',
+        partWeightCheck: '',
+        cycleTimeCheck: ''
       };
 
       let operatorName = '';
@@ -1268,6 +1628,137 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
     alert('Excel export functionality will be implemented with xlsx library.');
   };
 
+  // Handle column visibility toggle
+  const handleColumnVisibilityToggle = (columnId: string) => {
+    const newVisibility = {
+      ...columnVisibility,
+      [columnId]: !columnVisibility[columnId]
+    };
+    setColumnVisibility(newVisibility);
+    saveColumnVisibility(newVisibility);
+  };
+
+  // Reset to defaults
+  const handleResetToDefaults = () => {
+    const defaults: Record<string, boolean> = {};
+    DPR_COLUMNS.forEach(col => {
+      defaults[col.id] = col.defaultVisible;
+    });
+    setColumnVisibility(defaults);
+    saveColumnVisibility(defaults);
+    
+    // Reset section visibility to defaults
+    setSectionVisibility(DEFAULT_SECTION_VISIBILITY);
+    saveSectionVisibility(DEFAULT_SECTION_VISIBILITY);
+    
+    // Reset metrics visibility to defaults
+    setShiftTotalMetrics(DEFAULT_SHIFT_TOTAL_METRICS);
+    saveShiftTotalMetrics(DEFAULT_SHIFT_TOTAL_METRICS);
+    setAchievementMetrics(DEFAULT_ACHIEVEMENT_METRICS);
+    saveAchievementMetrics(DEFAULT_ACHIEVEMENT_METRICS);
+  };
+
+  // Show all columns
+  const handleShowAllColumns = () => {
+    const allVisible: Record<string, boolean> = {};
+    DPR_COLUMNS.forEach(col => {
+      allVisible[col.id] = true;
+    });
+    setColumnVisibility(allVisible);
+    saveColumnVisibility(allVisible);
+  };
+
+  // Handle section visibility toggle
+  const handleSectionVisibilityToggle = (section: keyof SectionVisibility) => {
+    const newVisibility = {
+      ...sectionVisibility,
+      [section]: !sectionVisibility[section]
+    };
+    setSectionVisibility(newVisibility);
+    saveSectionVisibility(newVisibility);
+  };
+
+  // Handle shift total metric visibility toggle
+  const handleShiftTotalMetricToggle = (metric: keyof ShiftTotalMetrics) => {
+    const newMetrics = {
+      ...shiftTotalMetrics,
+      [metric]: !shiftTotalMetrics[metric]
+    };
+    setShiftTotalMetrics(newMetrics);
+    saveShiftTotalMetrics(newMetrics);
+  };
+
+  // Handle achievement metric visibility toggle
+  const handleAchievementMetricToggle = (metric: keyof AchievementMetrics) => {
+    const newMetrics = {
+      ...achievementMetrics,
+      [metric]: !achievementMetrics[metric]
+    };
+    setAchievementMetrics(newMetrics);
+    saveAchievementMetrics(newMetrics);
+  };
+
+  // Helper to check if column should be visible based on permissions
+  // IMPORTANT: This function should be used for:
+  // 1. Viewing past DPR data (current implementation)
+  // 2. Manual entry forms for new DPR data (when filling up new data)
+  // 3. Excel upload preview/validation for new data (not past data upload which is perfect)
+  // When manually entering data: MC number = line number, Product = from product master
+  const isColumnVisible = (columnId: string, isFullView: boolean = false): boolean => {
+    if (isFullView) return true; // Full view shows all columns
+    
+    // Check if column is enabled in visibility settings
+    const isEnabled = columnVisibility[columnId] ?? DPR_COLUMNS.find(c => c.id === columnId)?.defaultVisible ?? false;
+    if (!isEnabled) return false;
+    
+    // Check permissions for the column's category
+    const column = DPR_COLUMNS.find(c => c.id === columnId);
+    if (!column) return false;
+    
+    // Yogesh Deora always has access
+    if (isYogeshDeora) return true;
+    
+    // Map column category to permission name
+    const permissionMap: Record<string, string> = {
+      'basic': 'dpr.basic_info.view',
+      'process': 'dpr.process_params.view',
+      'shots': 'dpr.shots.view',
+      'production': 'dpr.production_data.view',
+      'runtime': 'dpr.runtime.view',
+      'stoppage': 'dpr.stoppage.view'
+    };
+    
+    const permissionName = permissionMap[column.category];
+    if (!permissionName) return true; // Default to visible if no permission defined
+    
+    // Check if user has permission
+    return dprPermissions[permissionName] === true;
+  };
+
+  // Helper to count visible columns in a group
+  const countVisibleColumns = (columnIds: string[]): number => {
+    return columnIds.filter(id => isColumnVisible(id)).length;
+  };
+
+  // Helper to get clean product name (remove merged product names with "/")
+  const getCleanProductName = (productName: string | undefined, isChangeover: boolean = false): string => {
+    if (!productName) return '';
+    const trimmed = productName.trim();
+    
+    // If product name contains "/", it's a merged name
+    if (trimmed.includes(' / ')) {
+      const parts = trimmed.split(' / ');
+      // For current production, return only the first part
+      // For changeover, return only the second part (if exists)
+      if (isChangeover && parts.length > 1) {
+        return parts[1].trim();
+      }
+      return parts[0].trim();
+    }
+    
+    return trimmed;
+  };
+
   const tabs = [
     {
       id: 'overview',
@@ -1276,28 +1767,22 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
       description: 'Daily production report and key metrics'
     },
     {
-      id: 'schedule',
-      label: 'Production Schedule',
-      icon: Calendar,
-      description: 'Daily and weekly production planning'
+      id: 'mould-reports',
+      label: 'Mould Loading & Unloading',
+      icon: Cog,
+      description: 'Mould changeover reports and procedures'
     },
     {
-      id: 'analytics',
-      label: 'Production Analytics',
-      icon: BarChart3,
-      description: 'Performance metrics and reporting'
+      id: 'silo-management',
+      label: 'Silo Management',
+      icon: Layers,
+      description: 'Monitor and manage material inventory in silos'
     },
     {
-      id: 'resources',
-      label: 'Resource Management',
-      icon: Users,
-      description: 'Manage production resources and capacity'
-    },
-    {
-      id: 'settings',
-      label: 'Production Settings',
-      icon: Settings,
-      description: 'Configure production parameters'
+      id: 'fg-transfer-note',
+      label: 'FG Transfer Note',
+      icon: FileText,
+      description: 'Finished Goods Transfer Note management'
     }
   ];
 
@@ -1345,6 +1830,50 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
                 </div>
                 
                 <div className="flex items-center space-x-3">
+                  {/* Add DPR Entry Button - Only show when there's existing data */}
+                  {getCurrentDPRData() && (
+                  <button
+                    onClick={() => setShowManualEntry(true)}
+                    className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                    title="Add/Edit DPR Entry"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Edit Entry
+                  </button>
+                  )}
+                  
+                  {/* Full View Button */}
+                  {getCurrentDPRData() && (
+                    <button
+                      onClick={() => setShowFullView(true)}
+                      className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+                      title="View Full Report"
+                    >
+                      <Eye className="w-4 h-4 mr-2" />
+                      Full View
+                    </button>
+                  )}
+                  
+                  {/* Settings Panel Toggle - Always visible, but only functional for authorized users */}
+                  <button
+                    onClick={() => {
+                      if (isSuperUser) {
+                        setShowSettingsPanel(!showSettingsPanel);
+                      } else {
+                        alert('Column settings are only available for authorized users. Please contact Yogesh Deora for access.');
+                      }
+                    }}
+                    className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                      isSuperUser 
+                        ? 'bg-gray-600 text-white hover:bg-gray-700' 
+                        : 'bg-gray-400 text-white cursor-not-allowed opacity-60'
+                    }`}
+                    title={isSuperUser ? "Column Settings" : "Column Settings (Authorized Users Only)"}
+                  >
+                    <Settings className="w-4 h-4 mr-2" />
+                    {showSettingsPanel ? 'Hide Settings' : 'Column Settings'}
+                  </button>
+                  
                   {/* Import Excel */}
                   <button
                     onClick={() => setShowExcelReader(true)}
@@ -1383,6 +1912,1020 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
                   {/* Table Header */}
                   <thead>
                     <tr className="bg-gray-100">
+                      {isColumnVisible('machineNo') && <th rowSpan={2} className="border border-gray-300 p-2 text-center font-bold">M/c No.</th>}
+                      {isColumnVisible('operatorName') && <th rowSpan={2} className="border border-gray-300 p-2 text-center font-bold">Opt Name</th>}
+                      {isColumnVisible('product') && <th rowSpan={2} className="border border-gray-300 p-2 text-center font-bold">Product</th>}
+                      {isColumnVisible('cavity') && <th rowSpan={2} className="border border-gray-300 p-2 text-center font-bold">Cavity</th>}
+                      {isColumnVisible('targetCycle') && <th rowSpan={2} className="border border-gray-300 p-2 text-center font-bold">Trg Cycle (sec)</th>}
+                      {isColumnVisible('targetRunTime') && <th rowSpan={2} className="border border-gray-300 p-2 text-center font-bold">Trg Run Time (min)</th>}
+                      {isColumnVisible('partWeight') && <th rowSpan={2} className="border border-gray-300 p-2 text-center font-bold">Part Wt (gm)</th>}
+                      {isColumnVisible('actualPartWeight') && <th rowSpan={2} className="border border-gray-300 p-2 text-center font-bold">Act part wt (gm)</th>}
+                      {isColumnVisible('actualCycle') && <th rowSpan={2} className="border border-gray-300 p-2 text-center font-bold">Act Cycle (sec)</th>}
+                      {isColumnVisible('partWeightCheck') && <th rowSpan={2} className="border border-gray-300 p-2 text-center font-bold">Part Wt Check</th>}
+                      {isColumnVisible('cycleTimeCheck') && <th rowSpan={2} className="border border-gray-300 p-2 text-center font-bold">Cycle Time Check</th>}
+                      {(() => {
+                        const shotsCount = countVisibleColumns(['shotsStart', 'shotsEnd']);
+                        return shotsCount > 0 && (
+                          <th colSpan={shotsCount} className="border border-gray-300 p-2 text-center font-bold">No of Shots</th>
+                        );
+                      })()}
+                      {(() => {
+                        const productionCount = countVisibleColumns(['targetQty', 'actualQty', 'okProdQty', 'okProdKgs', 'okProdPercent', 'rejKgs']);
+                        return productionCount > 0 && (
+                          <th colSpan={productionCount} className="border border-gray-300 p-2 text-center font-bold">Production Data</th>
+                        );
+                      })()}
+                      {(() => {
+                        const runtimeCount = countVisibleColumns(['runTime', 'downTime']);
+                        return runtimeCount > 0 && (
+                          <th colSpan={runtimeCount} className="border border-gray-300 p-2 text-center font-bold">Run Time</th>
+                        );
+                      })()}
+                      {(() => {
+                        const stoppageCount = countVisibleColumns(['stoppageReason', 'startTime', 'endTime', 'totalTime', 'mouldChange', 'remark']);
+                        return stoppageCount > 0 && (
+                          <th colSpan={stoppageCount} className="border border-gray-300 p-2 text-center font-bold">Stoppage Time and Remarks</th>
+                        );
+                      })()}
+                    </tr>
+                    <tr className="bg-gray-100">
+                      {isColumnVisible('shotsStart') && <th className="border border-gray-300 p-1 text-center font-bold">Start</th>}
+                      {isColumnVisible('shotsEnd') && <th className="border border-gray-300 p-1 text-center font-bold">End</th>}
+                      {isColumnVisible('targetQty') && <th className="border border-gray-300 p-1 text-center font-bold">Target Qty (Nos)</th>}
+                      {isColumnVisible('actualQty') && <th className="border border-gray-300 p-1 text-center font-bold">Actual Qty (Nos)</th>}
+                      {isColumnVisible('okProdQty') && <th className="border border-gray-300 p-1 text-center font-bold">Ok Prod Qty (Nos)</th>}
+                      {isColumnVisible('okProdKgs') && <th className="border border-gray-300 p-1 text-center font-bold">Ok Prod (Kgs)</th>}
+                      {isColumnVisible('okProdPercent') && <th className="border border-gray-300 p-1 text-center font-bold">Ok Prod (%)</th>}
+                      {isColumnVisible('rejKgs') && <th className="border border-gray-300 p-1 text-center font-bold">Rej (Kgs)</th>}
+                      {isColumnVisible('runTime') && <th className="border border-gray-300 p-1 text-center font-bold">Run Time (mins)</th>}
+                      {isColumnVisible('downTime') && <th className="border border-gray-300 p-1 text-center font-bold">Down time (min)</th>}
+                      {isColumnVisible('stoppageReason') && <th className="border border-gray-300 p-1 text-center font-bold">Reason</th>}
+                      {isColumnVisible('startTime') && <th className="border border-gray-300 p-1 text-center font-bold">Start Time</th>}
+                      {isColumnVisible('endTime') && <th className="border border-gray-300 p-1 text-center font-bold">End Time</th>}
+                      {isColumnVisible('totalTime') && <th className="border border-gray-300 p-1 text-center font-bold">Total Time (min)</th>}
+                      {isColumnVisible('mouldChange') && <th className="border border-gray-300 p-1 text-center font-bold">Mould change</th>}
+                      {isColumnVisible('remark') && <th className="border border-gray-300 p-1 text-center font-bold">REMARK</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {getCurrentDPRData()?.machines.map((machine, index) => {
+                      // Check if there's a REAL changeover - only show changeover rows (3-4) if:
+                      // 1. The changeover.product exists AND is DIFFERENT from currentProduction.product
+                      // 2. AND there's actual changeover data (quantities, times, etc.)
+                      // This means a different mold/product was run after the initial one
+                      const currentProduct = machine.currentProduction.product?.trim() || '';
+                      const changeoverProduct = machine.changeover.product?.trim() || '';
+                      
+                      // Check if product is different
+                      const hasDifferentProduct = changeoverProduct !== '' && 
+                                                  changeoverProduct !== currentProduct;
+                      
+                      // Check if there's actual changeover data (not just empty/default values)
+                      const hasChangeoverData = machine.changeover.targetQty > 0 || 
+                                                machine.changeover.actualQty > 0 || 
+                                                machine.changeover.okProdQty > 0 ||
+                                                machine.changeover.runTime > 0 ||
+                                                (machine.changeover.stoppageReason && machine.changeover.stoppageReason.trim() !== '') ||
+                                                (machine.changeover.mouldChange && machine.changeover.mouldChange.trim() !== '') ||
+                                                (machine.changeover.remark && machine.changeover.remark.trim() !== '');
+                      
+                      // Changeover exists ONLY if product is different AND there's actual data
+                      // Don't show changeover rows if product is same, empty, or no data exists
+                      const hasChangeover = hasDifferentProduct && hasChangeoverData;
+                      
+                      return (
+                        <React.Fragment key={machine.machineNo}>
+                          {/* Row 1: Current Production */}
+                          <tr>
+                            {isColumnVisible('machineNo') && (
+                            <td rowSpan={hasChangeover ? 2 : 1} className="border border-gray-300 p-2 text-center font-bold bg-blue-50">
+                              {machine.machineNo}
+                            </td>
+                            )}
+                            {isColumnVisible('operatorName') && (
+                            <td rowSpan={hasChangeover ? 2 : 1} className="border border-gray-300 p-2 text-center">
+                              {machine.operatorName}
+                            </td>
+                            )}
+                            {isColumnVisible('product') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {getCleanProductName(machine.currentProduction.product, false)}
+                            </td>
+                            )}
+                            {isColumnVisible('cavity') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {machine.currentProduction.cavity.toFixed(2)}
+                            </td>
+                            )}
+                            {isColumnVisible('targetCycle') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {machine.currentProduction.targetCycle.toFixed(2)}
+                            </td>
+                            )}
+                            {isColumnVisible('targetRunTime') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {machine.currentProduction.targetRunTime.toFixed(2)}
+                            </td>
+                            )}
+                            {isColumnVisible('partWeight') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {machine.currentProduction.partWeight.toFixed(2)}
+                            </td>
+                            )}
+                            {isColumnVisible('actualPartWeight') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {machine.currentProduction.actualPartWeight.toFixed(2)}
+                            </td>
+                            )}
+                            {isColumnVisible('actualCycle') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {machine.currentProduction.actualCycle.toFixed(2)}
+                            </td>
+                            )}
+                            {isColumnVisible('partWeightCheck') && (
+                            <td className={`border border-gray-300 p-2 text-center font-medium ${
+                              machine.currentProduction.partWeightCheck === 'OK' ? 'text-green-600 bg-green-50' : 
+                              machine.currentProduction.partWeightCheck === 'NOT OK' ? 'text-red-600 bg-red-50' : ''
+                            }`}>
+                              {machine.currentProduction.partWeightCheck || '-'}
+                            </td>
+                            )}
+                            {isColumnVisible('cycleTimeCheck') && (
+                            <td className={`border border-gray-300 p-2 text-center font-medium ${
+                              machine.currentProduction.cycleTimeCheck === 'OK' ? 'text-green-600 bg-green-50' : 
+                              machine.currentProduction.cycleTimeCheck === 'NOT OK' ? 'text-red-600 bg-red-50' : ''
+                            }`}>
+                              {machine.currentProduction.cycleTimeCheck || '-'}
+                            </td>
+                            )}
+                            {isColumnVisible('shotsStart') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {machine.currentProduction.shotsStart > 0
+                                ? machine.currentProduction.shotsStart.toLocaleString()
+                                : ''}
+                            </td>
+                            )}
+                            {isColumnVisible('shotsEnd') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {machine.currentProduction.shotsEnd > 0
+                                ? machine.currentProduction.shotsEnd.toLocaleString()
+                                : ''}
+                            </td>
+                            )}
+                            {isColumnVisible('targetQty') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {machine.currentProduction.targetQty % 1 === 0 
+                                ? machine.currentProduction.targetQty.toLocaleString() 
+                                : machine.currentProduction.targetQty.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}
+                            </td>
+                            )}
+                            {isColumnVisible('actualQty') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {Math.round(machine.currentProduction.actualQty).toLocaleString()}
+                            </td>
+                            )}
+                            {isColumnVisible('okProdQty') && (
+                            <td className="border border-gray-300 p-2 text-center bg-yellow-200 font-bold">
+                              {Math.round(machine.currentProduction.okProdQty).toLocaleString()}
+                            </td>
+                            )}
+                            {isColumnVisible('okProdKgs') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {machine.currentProduction.okProdKgs.toFixed(2)}
+                            </td>
+                            )}
+                            {isColumnVisible('okProdPercent') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {machine.currentProduction.targetQty > 0 
+                                ? Math.round((machine.currentProduction.okProdQty / machine.currentProduction.targetQty) * 100)
+                                : Math.round(machine.currentProduction.okProdPercent)}%
+                            </td>
+                            )}
+                            {isColumnVisible('rejKgs') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {machine.currentProduction.rejKgs.toFixed(2)}
+                            </td>
+                            )}
+                            {isColumnVisible('runTime') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {Math.round(machine.currentProduction.runTime)}
+                            </td>
+                            )}
+                            {isColumnVisible('downTime') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              ({machine.currentProduction.downTime > 0 ? machine.currentProduction.downTime.toFixed(2) : '0.00'})
+                            </td>
+                            )}
+                            {isColumnVisible('stoppageReason') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {machine.currentProduction.stoppageReason}
+                            </td>
+                            )}
+                            {isColumnVisible('startTime') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {machine.currentProduction.startTime || ''}
+                            </td>
+                            )}
+                            {isColumnVisible('endTime') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {machine.currentProduction.endTime || ''}
+                            </td>
+                            )}
+                            {isColumnVisible('totalTime') && (
+                            <td className="border border-gray-300 p-2 text-center">
+                              {machine.currentProduction.totalTime > 0 ? Math.round(machine.currentProduction.totalTime).toFixed(2) : ''}
+                            </td>
+                            )}
+                            {isColumnVisible('mouldChange') && (
+                            <td className={`border border-gray-300 p-2 text-center ${machine.currentProduction.mouldChange ? 'bg-green-200' : ''}`}>
+                              {machine.currentProduction.mouldChange}
+                            </td>
+                            )}
+                            {isColumnVisible('remark') && (
+                            <td className={`border border-gray-300 p-2 text-center ${machine.currentProduction.remark ? 'bg-green-200' : ''}`}>
+                              {machine.currentProduction.remark}
+                            </td>
+                            )}
+                          </tr>
+                          {/* Changeover - Show if there's any changeover data */}
+                          {hasChangeover && (
+                            <>
+                              {/* Changeover Row */}
+                              <tr>
+                                {isColumnVisible('product') && (
+                                <td className="border border-gray-300 p-2 text-center bg-orange-50">
+                                  {getCleanProductName(machine.changeover.product, true) || machine.changeover.product}
+                                </td>
+                                )}
+                                {isColumnVisible('cavity') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {machine.changeover.cavity.toFixed(2)}
+                                </td>
+                                )}
+                                {isColumnVisible('targetCycle') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {machine.changeover.targetCycle.toFixed(2)}
+                                </td>
+                                )}
+                                {isColumnVisible('targetRunTime') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {machine.changeover.targetRunTime.toFixed(2)}
+                                </td>
+                                )}
+                                {isColumnVisible('partWeight') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {machine.changeover.partWeight.toFixed(2)}
+                                </td>
+                                )}
+                                {isColumnVisible('actualPartWeight') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {machine.changeover.actualPartWeight.toFixed(2)}
+                                </td>
+                                )}
+                                {isColumnVisible('actualCycle') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {machine.changeover.actualCycle.toFixed(2)}
+                                </td>
+                                )}
+                                {isColumnVisible('partWeightCheck') && (
+                                <td className={`border border-gray-300 p-2 text-center font-medium ${
+                                  machine.changeover.partWeightCheck === 'OK' ? 'text-green-600 bg-green-50' : 
+                                  machine.changeover.partWeightCheck === 'NOT OK' ? 'text-red-600 bg-red-50' : ''
+                                }`}>
+                                  {machine.changeover.partWeightCheck || '-'}
+                                </td>
+                                )}
+                                {isColumnVisible('cycleTimeCheck') && (
+                                <td className={`border border-gray-300 p-2 text-center font-medium ${
+                                  machine.changeover.cycleTimeCheck === 'OK' ? 'text-green-600 bg-green-50' : 
+                                  machine.changeover.cycleTimeCheck === 'NOT OK' ? 'text-red-600 bg-red-50' : ''
+                                }`}>
+                                  {machine.changeover.cycleTimeCheck || '-'}
+                                </td>
+                                )}
+                                {isColumnVisible('shotsStart') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {machine.changeover.shotsStart > 0
+                                    ? machine.changeover.shotsStart.toLocaleString()
+                                    : ''}
+                                </td>
+                                )}
+                                {isColumnVisible('shotsEnd') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {machine.changeover.shotsEnd > 0
+                                    ? machine.changeover.shotsEnd.toLocaleString()
+                                    : ''}
+                                </td>
+                                )}
+                                {isColumnVisible('targetQty') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {machine.changeover.targetQty % 1 === 0 
+                                    ? machine.changeover.targetQty.toLocaleString() 
+                                    : machine.changeover.targetQty.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}
+                                </td>
+                                )}
+                                {isColumnVisible('actualQty') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {Math.round(machine.changeover.actualQty).toLocaleString()}
+                                </td>
+                                )}
+                                {isColumnVisible('okProdQty') && (
+                                <td className="border border-gray-300 p-2 text-center bg-yellow-200 font-bold">
+                                  {Math.round(machine.changeover.okProdQty).toLocaleString()}
+                                </td>
+                                )}
+                                {isColumnVisible('okProdKgs') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {machine.changeover.okProdKgs.toFixed(2)}
+                                </td>
+                                )}
+                                {isColumnVisible('okProdPercent') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {machine.changeover.targetQty > 0 
+                                    ? Math.round((machine.changeover.okProdQty / machine.changeover.targetQty) * 100)
+                                    : Math.round(machine.changeover.okProdPercent)}%
+                                </td>
+                                )}
+                                {isColumnVisible('rejKgs') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {machine.changeover.rejKgs.toFixed(2)}
+                                </td>
+                                )}
+                                {isColumnVisible('runTime') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {Math.round(machine.changeover.runTime)}
+                                </td>
+                                )}
+                                {isColumnVisible('downTime') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  ({machine.changeover.downTime > 0 ? machine.changeover.downTime.toFixed(2) : '0.00'})
+                                </td>
+                                )}
+                                {isColumnVisible('stoppageReason') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {machine.changeover.stoppageReason}
+                                </td>
+                                )}
+                                {isColumnVisible('startTime') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {machine.changeover.startTime || ''}
+                                </td>
+                                )}
+                                {isColumnVisible('endTime') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {machine.changeover.endTime || ''}
+                                </td>
+                                )}
+                                {isColumnVisible('totalTime') && (
+                                <td className="border border-gray-300 p-2 text-center">
+                                  {machine.changeover.totalTime > 0 ? Math.round(machine.changeover.totalTime).toFixed(2) : ''}
+                                </td>
+                                )}
+                                {isColumnVisible('mouldChange') && (
+                                <td className={`border border-gray-300 p-2 text-center ${machine.changeover.mouldChange ? 'bg-green-200' : ''}`}>
+                                  {machine.changeover.mouldChange}
+                                </td>
+                                )}
+                                {isColumnVisible('remark') && (
+                                <td className={`border border-gray-300 p-2 text-center ${machine.changeover.remark ? 'bg-green-200' : ''}`}>
+                                  {machine.changeover.remark}
+                                </td>
+                                )}
+                              </tr>
+                            </>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              ) : (
+                <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-12 text-center">
+                  <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No Data Available</h3>
+                  <p className="text-gray-600 mb-4">
+                    No DPR data found for <strong>{new Date(selectedDate).toLocaleDateString('en-GB', { 
+                      day: '2-digit', 
+                      month: 'short', 
+                      year: 'numeric' 
+                    })}</strong> - <strong>{selectedShift}</strong> shift
+                  </p>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Please import an Excel file or create a new DPR entry manually.
+                  </p>
+                  <div className="flex gap-3 justify-center">
+                    <button
+                      onClick={() => setShowManualEntry(true)}
+                      className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create New DPR Entry
+                    </button>
+                    <button
+                      onClick={() => setShowExcelReader(true)}
+                      className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Import Excel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Shift Total Section - Enhanced */}
+              {sectionVisibility.shiftTotal && (() => {
+                const currentData = getCurrentDPRData();
+                if (!currentData) return null;
+                
+                // Count visible metrics to determine layout
+                const visibleCount = [
+                  shiftTotalMetrics.targetQty,
+                  shiftTotalMetrics.actualQty,
+                  shiftTotalMetrics.okProdQty,
+                  shiftTotalMetrics.okProdKgs,
+                  shiftTotalMetrics.okProdPercent,
+                  shiftTotalMetrics.rejKgs,
+                  shiftTotalMetrics.lumps,
+                  shiftTotalMetrics.runTime,
+                  shiftTotalMetrics.downTime,
+                  shiftTotalMetrics.totalTime
+                ].filter(Boolean).length;
+                
+                // Dynamic grid columns based on visible count
+                const gridCols = visibleCount <= 2 ? 'grid-cols-1 sm:grid-cols-2' :
+                                 visibleCount <= 4 ? 'grid-cols-2 lg:grid-cols-4' :
+                                 visibleCount <= 6 ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-6' :
+                                 'grid-cols-2 md:grid-cols-4 lg:grid-cols-5';
+                
+                return (
+              <div className="mt-8 bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 p-6 rounded-xl border-2 border-slate-300 shadow-xl">
+                <div className="flex items-center justify-center mb-6">
+                  <div className="bg-blue-600 p-2 rounded-lg mr-3">
+                    <Target className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 tracking-tight">SHIFT TOTAL</h3>
+                </div>
+                
+                {/* Dynamic Metrics Grid */}
+                <div className={`grid ${gridCols} gap-4`}>
+                  {/* Target Quantity */}
+                  {shiftTotalMetrics.targetQty && (
+                  <div className="bg-white p-5 rounded-xl border-2 border-blue-200 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <Target className="w-5 h-5 text-blue-600" />
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-semibold">TARGET</span>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2 font-medium">Target Qty (Nos)</p>
+                    <p className="text-3xl font-bold text-gray-900">{currentData.summary.targetQty.toLocaleString()}</p>
+                  </div>
+                  )}
+
+                  {/* Actual Quantity */}
+                  {shiftTotalMetrics.actualQty && (
+                  <div className="bg-white p-5 rounded-xl border-2 border-purple-200 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <Activity className="w-5 h-5 text-purple-600" />
+                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-semibold">ACTUAL</span>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2 font-medium">Actual Qty (Nos)</p>
+                    <p className="text-3xl font-bold text-gray-900">{currentData.summary.actualQty.toLocaleString()}</p>
+                    <div className="mt-3 flex items-center">
+                      <div className="flex-1 bg-gray-200 rounded-full h-2 mr-3">
+                        <div className="bg-purple-600 h-2 rounded-full" style={{ width: `${Math.min((currentData.summary.actualQty / currentData.summary.targetQty * 100), 100)}%` }}></div>
+                      </div>
+                      <span className="text-sm font-bold text-purple-600">{currentData.summary.targetQty > 0 ? Math.round(currentData.summary.actualQty / currentData.summary.targetQty * 100) : 0}%</span>
+                    </div>
+                  </div>
+                  )}
+
+                  {/* OK Production Quantity - Highlighted */}
+                  {shiftTotalMetrics.okProdQty && (
+                  <div className="bg-gradient-to-br from-yellow-100 to-amber-100 p-5 rounded-xl border-2 border-yellow-400 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <Award className="w-5 h-5 text-yellow-700" />
+                      <span className="text-xs bg-yellow-400 text-yellow-900 px-2 py-1 rounded-full font-bold">KEY METRIC</span>
+                    </div>
+                    <p className="text-sm text-gray-700 mb-2 font-medium">Ok Prod Qty (Nos)</p>
+                    <p className="text-3xl font-bold text-yellow-900">{currentData.summary.okProdQty.toLocaleString()}</p>
+                    <div className="mt-3 flex items-center text-sm">
+                      <CheckCircle className="w-4 h-4 text-green-600 mr-2" />
+                      <span className="text-gray-700 font-medium">{currentData.summary.actualQty > 0 ? Math.round(currentData.summary.okProdQty / currentData.summary.actualQty * 100 * 10) / 10 : 0}% of Actual</span>
+                    </div>
+                  </div>
+                  )}
+
+                  {/* OK Production in Kgs */}
+                  {shiftTotalMetrics.okProdKgs && (
+                  <div className="bg-white p-5 rounded-xl border-2 border-green-200 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <Package className="w-5 h-5 text-green-600" />
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-semibold">WEIGHT</span>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2 font-medium">Ok Prod (Kgs)</p>
+                    <p className="text-3xl font-bold text-gray-900">{currentData.summary.okProdKgs.toFixed(2)}</p>
+                  </div>
+                  )}
+
+                  {/* OK Production Percentage */}
+                  {shiftTotalMetrics.okProdPercent && (
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-100 p-5 rounded-xl border-2 border-green-300 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="flex items-center mb-3">
+                      <Zap className="w-5 h-5 text-green-600 mr-2" />
+                      <p className="text-sm text-gray-700 font-semibold">Ok Prod (%)</p>
+                    </div>
+                    <p className="text-3xl font-bold text-green-700">{currentData.summary.okProdPercent.toFixed(1)}%</p>
+                    <div className="mt-3 bg-green-200 rounded-full h-2">
+                      <div className="bg-green-600 h-2 rounded-full" style={{ width: `${Math.min(currentData.summary.okProdPercent, 100)}%` }}></div>
+                    </div>
+                  </div>
+                  )}
+
+                  {/* Rejection */}
+                  {shiftTotalMetrics.rejKgs && (
+                  <div className="bg-gradient-to-br from-red-50 to-rose-100 p-5 rounded-xl border-2 border-red-300 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="flex items-center mb-3">
+                      <AlertTriangle className="w-5 h-5 text-red-600 mr-2" />
+                      <p className="text-sm text-gray-700 font-semibold">Rej (Kgs)</p>
+                    </div>
+                    <p className="text-3xl font-bold text-red-700">{currentData.summary.rejKgs.toFixed(2)}</p>
+                    <p className="text-sm text-gray-600 mt-2">{currentData.summary.okProdKgs > 0 ? (currentData.summary.rejKgs / currentData.summary.okProdKgs * 100).toFixed(1) : 0}% rejection rate</p>
+                  </div>
+                  )}
+
+                  {/* Lumps */}
+                  {shiftTotalMetrics.lumps && currentData.shiftTotal?.lumps !== undefined && (
+                  <div className="bg-gradient-to-br from-amber-50 to-yellow-100 p-5 rounded-xl border-2 border-yellow-300 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="flex items-center mb-3">
+                      <Package className="w-5 h-5 text-yellow-600 mr-2" />
+                      <p className="text-sm text-gray-700 font-semibold">Lumps (Kgs)</p>
+                    </div>
+                    <p className="text-3xl font-bold text-yellow-700">{currentData.shiftTotal.lumps.toFixed(2)}</p>
+                  </div>
+                  )}
+
+                  {/* Run Time */}
+                  {shiftTotalMetrics.runTime && (
+                  <div className="bg-gradient-to-br from-blue-50 to-sky-100 p-5 rounded-xl border-2 border-blue-300 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="flex items-center mb-3">
+                      <Clock className="w-5 h-5 text-blue-600 mr-2" />
+                      <p className="text-sm text-gray-700 font-semibold">Run Time (mins)</p>
+                    </div>
+                    <p className="text-3xl font-bold text-blue-700">{currentData.summary.runTime.toLocaleString()}</p>
+                    <p className="text-sm text-gray-600 mt-2">≈ {(currentData.summary.runTime / 60).toFixed(1)} hours</p>
+                  </div>
+                  )}
+
+                  {/* Down Time */}
+                  {shiftTotalMetrics.downTime && (
+                  <div className="bg-gradient-to-br from-orange-50 to-amber-100 p-5 rounded-xl border-2 border-orange-300 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="flex items-center mb-3">
+                      <AlertTriangle className="w-5 h-5 text-orange-600 mr-2" />
+                      <p className="text-sm text-gray-700 font-semibold">Down Time (min)</p>
+                    </div>
+                    <p className="text-3xl font-bold text-orange-700">{currentData.summary.downTime.toFixed(0)}</p>
+                    <p className="text-sm text-gray-600 mt-2">≈ {(currentData.summary.downTime / 60).toFixed(1)} hours</p>
+                  </div>
+                  )}
+
+                  {/* Total Time */}
+                  {shiftTotalMetrics.totalTime && (
+                  <div className="bg-gradient-to-br from-purple-50 to-violet-100 p-5 rounded-xl border-2 border-purple-300 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="flex items-center mb-3">
+                      <Clock className="w-5 h-5 text-purple-600 mr-2" />
+                      <p className="text-sm text-gray-700 font-semibold">Stoppage Time (min)</p>
+                    </div>
+                    <p className="text-3xl font-bold text-purple-700">{currentData.shiftTotal?.totalTime ? currentData.shiftTotal.totalTime.toFixed(0) : '0'}</p>
+                  </div>
+                  )}
+                </div>
+              </div>
+                );
+              })()}
+
+              {/* Achievement Section - Enhanced */}
+              {sectionVisibility.achievementMetrics && (() => {
+                const currentData = getCurrentDPRData();
+                if (!currentData) return null;
+                
+                // Count visible achievement metrics
+                const visibleAchievementCount = [
+                  achievementMetrics.actualVsTarget,
+                  achievementMetrics.rejVsOkProd,
+                  achievementMetrics.runTimeVsTotal,
+                  achievementMetrics.downTimeVsTotal
+                ].filter(Boolean).length;
+                
+                // Dynamic grid columns based on visible count
+                const achievementGridCols = visibleAchievementCount <= 2 ? 'grid-cols-1 sm:grid-cols-2' :
+                                            visibleAchievementCount <= 3 ? 'grid-cols-1 sm:grid-cols-3' :
+                                            'grid-cols-2 lg:grid-cols-4';
+                
+                // Calculate totals safely
+                const totalTime = currentData.summary.runTime + currentData.summary.downTime;
+                const runTimePercent = totalTime > 0 ? Math.round(currentData.summary.runTime / totalTime * 100) : 0;
+                const downTimePercent = totalTime > 0 ? Math.round(currentData.summary.downTime / totalTime * 100) : 0;
+                const rejPercent = currentData.summary.okProdKgs > 0 ? (currentData.summary.rejKgs / currentData.summary.okProdKgs * 100).toFixed(1) : '0.0';
+                
+                return (
+              <div className="mt-6 bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 p-6 rounded-xl border-2 border-indigo-400 shadow-xl">
+                <div className="flex items-center justify-center mb-6">
+                  <div className="bg-indigo-600 p-2 rounded-lg mr-3">
+                    <Award className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 tracking-tight">ACHIEVEMENT METRICS</h3>
+                </div>
+                
+                <div className={`grid ${achievementGridCols} gap-4`}>
+                  {/* Actual vs Target */}
+                  {achievementMetrics.actualVsTarget && (
+                  <div className="bg-white p-5 rounded-xl border-2 border-green-300 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <Target className="w-5 h-5 text-green-600" />
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-semibold">PERFORMANCE</span>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-3 font-medium">Actual vs Target</p>
+                    {currentData.shiftTotal && currentData.shiftTotal.targetQty > 0 ? (
+                      <>
+                        <p className="text-4xl font-bold text-green-600 mb-3">{Math.round((currentData.shiftTotal.okProdQty / currentData.shiftTotal.targetQty) * 100)}%</p>
+                        <div className="bg-gray-200 rounded-full h-3">
+                          <div className="bg-gradient-to-r from-green-500 to-green-600 h-3 rounded-full transition-all" style={{ width: `${Math.min(Math.round((currentData.shiftTotal.okProdQty / currentData.shiftTotal.targetQty) * 100), 100)}%` }}></div>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-2xl text-gray-400">-</p>
+                    )}
+                  </div>
+                  )}
+
+                  {/* Rejection vs OK Production */}
+                  {achievementMetrics.rejVsOkProd && (
+                  <div className="bg-white p-5 rounded-xl border-2 border-red-300 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <AlertTriangle className="w-5 h-5 text-red-600" />
+                      <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-semibold">QUALITY</span>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-3 font-medium">Rej vs Ok Prod</p>
+                    <p className="text-4xl font-bold text-red-600 mb-3">{rejPercent}%</p>
+                    <div className="bg-gray-200 rounded-full h-3">
+                      <div className="bg-gradient-to-r from-red-500 to-red-600 h-3 rounded-full transition-all" style={{ width: `${Math.min(parseFloat(rejPercent), 100)}%` }}></div>
+                    </div>
+                  </div>
+                  )}
+
+                  {/* Run Time vs Total */}
+                  {achievementMetrics.runTimeVsTotal && (
+                  <div className="bg-white p-5 rounded-xl border-2 border-blue-300 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <Activity className="w-5 h-5 text-blue-600" />
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-semibold">EFFICIENCY</span>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-3 font-medium">Run Time vs Total</p>
+                    <p className="text-4xl font-bold text-blue-600 mb-3">{runTimePercent}%</p>
+                    <div className="bg-gray-200 rounded-full h-3">
+                      <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all" style={{ width: `${runTimePercent}%` }}></div>
+                    </div>
+                  </div>
+                  )}
+
+                  {/* Down Time vs Total */}
+                  {achievementMetrics.downTimeVsTotal && (
+                  <div className="bg-white p-5 rounded-xl border-2 border-orange-300 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <Clock className="w-5 h-5 text-orange-600" />
+                      <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full font-semibold">DOWNTIME</span>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-3 font-medium">Down Time vs Total</p>
+                    <p className="text-4xl font-bold text-orange-600 mb-3">{downTimePercent}%</p>
+                    <div className="bg-gray-200 rounded-full h-3">
+                      <div className="bg-gradient-to-r from-orange-500 to-orange-600 h-3 rounded-full transition-all" style={{ width: `${downTimePercent}%` }}></div>
+                    </div>
+                  </div>
+                  )}
+                </div>
+              </div>
+                );
+              })()}
+            </div>
+          </div>
+        );
+
+      case 'mould-reports':
+        return <MouldLoadingUnloadingReport />;
+
+      case 'silo-management':
+        return <SiloManagement />;
+
+      case 'fg-transfer-note':
+        return (
+          <div className="space-y-6">
+            <FGNForm />
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-200 bg-white">
+        <nav className="flex space-x-8 px-6 overflow-x-auto">
+          {tabs.map((tab) => {
+            const IconComponent = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  // Collapse sidebar when sub nav tab is clicked
+                  if (onSubNavClick) {
+                    onSubNavClick();
+                  }
+                }}
+                className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <IconComponent className="w-5 h-5 inline mr-2" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* Content */}
+      <div className={`flex-1 overflow-auto p-6 transition-all duration-300 ${showSettingsPanel && isSuperUser ? 'pr-[340px]' : ''}`}>
+        {renderTabContent()}
+      </div>
+
+      {/* Column Settings Panel (Super User Only) */}
+      {isSuperUser && showSettingsPanel && (
+        <div className="fixed right-0 top-[57px] h-[calc(100vh-57px)] w-80 bg-white shadow-2xl z-40 border-l border-gray-300 overflow-y-auto">
+          <div className="p-4 border-b border-gray-200 bg-gray-50">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                <Settings className="w-5 h-5 mr-2" />
+                Column Settings
+              </h3>
+              <button
+                onClick={() => setShowSettingsPanel(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={handleResetToDefaults}
+                className="flex-1 px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
+              >
+                Reset to Defaults
+              </button>
+              <button
+                onClick={handleShowAllColumns}
+                className="flex-1 px-3 py-2 text-sm bg-blue-200 text-blue-700 rounded-md hover:bg-blue-300 transition-colors"
+              >
+                Show All
+              </button>
+            </div>
+          </div>
+          
+          <div className="p-4">
+            <p className="text-sm text-gray-600 mb-4">
+              Select which columns to display in the first glance view. Full view always shows all columns.
+            </p>
+            
+            {/* Summary Sections */}
+            <div className="mb-6 pb-6 border-b border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">Summary Sections</h4>
+              <div className="space-y-2">
+                <label className="flex items-center p-2 hover:bg-gray-50 rounded-md cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sectionVisibility.shiftTotal}
+                    onChange={() => handleSectionVisibilityToggle('shiftTotal')}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="ml-3 text-sm text-gray-700 font-medium">SHIFT TOTAL</span>
+                </label>
+                {sectionVisibility.shiftTotal && (
+                  <div className="ml-7 mt-2 space-y-1.5">
+                    <label className="flex items-center p-1.5 hover:bg-gray-50 rounded-md cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={shiftTotalMetrics.targetQty}
+                        onChange={() => handleShiftTotalMetricToggle('targetQty')}
+                        className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-xs text-gray-600">Target Qty (Nos)</span>
+                    </label>
+                    <label className="flex items-center p-1.5 hover:bg-gray-50 rounded-md cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={shiftTotalMetrics.actualQty}
+                        onChange={() => handleShiftTotalMetricToggle('actualQty')}
+                        className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-xs text-gray-600">Actual Qty (Nos)</span>
+                    </label>
+                    <label className="flex items-center p-1.5 hover:bg-gray-50 rounded-md cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={shiftTotalMetrics.okProdQty}
+                        onChange={() => handleShiftTotalMetricToggle('okProdQty')}
+                        className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-xs text-gray-600">Ok Prod Qty (Nos)</span>
+                    </label>
+                    <label className="flex items-center p-1.5 hover:bg-gray-50 rounded-md cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={shiftTotalMetrics.okProdKgs}
+                        onChange={() => handleShiftTotalMetricToggle('okProdKgs')}
+                        className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-xs text-gray-600">Ok Prod (Kgs)</span>
+                    </label>
+                    <label className="flex items-center p-1.5 hover:bg-gray-50 rounded-md cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={shiftTotalMetrics.okProdPercent}
+                        onChange={() => handleShiftTotalMetricToggle('okProdPercent')}
+                        className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-xs text-gray-600">Ok Prod (%)</span>
+                    </label>
+                    <label className="flex items-center p-1.5 hover:bg-gray-50 rounded-md cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={shiftTotalMetrics.rejKgs}
+                        onChange={() => handleShiftTotalMetricToggle('rejKgs')}
+                        className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-xs text-gray-600">Rej (Kgs)</span>
+                    </label>
+                    <label className="flex items-center p-1.5 hover:bg-gray-50 rounded-md cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={shiftTotalMetrics.lumps}
+                        onChange={() => handleShiftTotalMetricToggle('lumps')}
+                        className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-xs text-gray-600">Lumps (Kgs)</span>
+                    </label>
+                    <label className="flex items-center p-1.5 hover:bg-gray-50 rounded-md cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={shiftTotalMetrics.runTime}
+                        onChange={() => handleShiftTotalMetricToggle('runTime')}
+                        className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-xs text-gray-600">Run Time (mins)</span>
+                    </label>
+                    <label className="flex items-center p-1.5 hover:bg-gray-50 rounded-md cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={shiftTotalMetrics.downTime}
+                        onChange={() => handleShiftTotalMetricToggle('downTime')}
+                        className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-xs text-gray-600">Down Time (min)</span>
+                    </label>
+                    <label className="flex items-center p-1.5 hover:bg-gray-50 rounded-md cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={shiftTotalMetrics.totalTime}
+                        onChange={() => handleShiftTotalMetricToggle('totalTime')}
+                        className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-xs text-gray-600">Total Time (min)</span>
+                    </label>
+                  </div>
+                )}
+                <label className="flex items-center p-2 hover:bg-gray-50 rounded-md cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sectionVisibility.achievementMetrics}
+                    onChange={() => handleSectionVisibilityToggle('achievementMetrics')}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="ml-3 text-sm text-gray-700 font-medium">ACHIEVEMENT METRICS</span>
+                </label>
+                {sectionVisibility.achievementMetrics && (
+                  <div className="ml-7 mt-2 space-y-1.5">
+                    <label className="flex items-center p-1.5 hover:bg-gray-50 rounded-md cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={achievementMetrics.actualVsTarget}
+                        onChange={() => handleAchievementMetricToggle('actualVsTarget')}
+                        className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-xs text-gray-600">Actual vs Target</span>
+                    </label>
+                    <label className="flex items-center p-1.5 hover:bg-gray-50 rounded-md cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={achievementMetrics.rejVsOkProd}
+                        onChange={() => handleAchievementMetricToggle('rejVsOkProd')}
+                        className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-xs text-gray-600">Rej vs Ok Prod</span>
+                    </label>
+                    <label className="flex items-center p-1.5 hover:bg-gray-50 rounded-md cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={achievementMetrics.runTimeVsTotal}
+                        onChange={() => handleAchievementMetricToggle('runTimeVsTotal')}
+                        className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-xs text-gray-600">Run Time vs Total</span>
+                    </label>
+                    <label className="flex items-center p-1.5 hover:bg-gray-50 rounded-md cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={achievementMetrics.downTimeVsTotal}
+                        onChange={() => handleAchievementMetricToggle('downTimeVsTotal')}
+                        className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-xs text-gray-600">Down Time vs Total</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Column Categories */}
+            <div className="mb-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">Table Columns</h4>
+            </div>
+            
+            {['basic', 'process', 'shots', 'production', 'runtime', 'stoppage'].map((category) => (
+              <div key={category} className="mb-6">
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">
+                  {category === 'basic' ? 'Basic Info' :
+                   category === 'process' ? 'Process Parameters' :
+                   category === 'shots' ? 'No of Shots' :
+                   category === 'production' ? 'Production Data' :
+                   category === 'runtime' ? 'Run Time' :
+                   'Stoppage Time and Remarks'}
+                </h4>
+                <div className="space-y-2">
+                  {DPR_COLUMNS.filter(col => col.category === category).map((column) => (
+                    <label
+                      key={column.id}
+                      className="flex items-center p-2 hover:bg-gray-50 rounded-md cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={columnVisibility[column.id] ?? column.defaultVisible}
+                        onChange={() => handleColumnVisibilityToggle(column.id)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-3 text-sm text-gray-700">{column.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Full View Modal */}
+      {showFullView && getCurrentDPRData() && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-[95vw] max-h-[95vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Full DPR View</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  {new Date(selectedDate).toLocaleDateString('en-GB', { 
+                    day: '2-digit', 
+                    month: 'short', 
+                    year: 'numeric' 
+                  })} | {selectedShift} Shift
+                </p>
+              </div>
+              <button
+                onClick={() => setShowFullView(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-4">
+              {/* Full View Table - Shows All Columns */}
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-gray-300 text-xs">
+                  {/* Table Header */}
+                  <thead>
+                    <tr className="bg-gray-100">
                       <th rowSpan={2} className="border border-gray-300 p-2 text-center font-bold">M/c No.</th>
                       <th rowSpan={2} className="border border-gray-300 p-2 text-center font-bold">Opt Name</th>
                       <th rowSpan={2} className="border border-gray-300 p-2 text-center font-bold">Product</th>
@@ -1417,19 +2960,10 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {getCurrentDPRData()?.machines.map((machine, index) => {
-                      // Check if there's a REAL changeover - only show changeover rows (3-4) if:
-                      // 1. The changeover.product exists AND is DIFFERENT from currentProduction.product
-                      // 2. AND there's actual changeover data (quantities, times, etc.)
-                      // This means a different mold/product was run after the initial one
+                    {getCurrentDPRData()?.machines.map((machine) => {
                       const currentProduct = machine.currentProduction.product?.trim() || '';
                       const changeoverProduct = machine.changeover.product?.trim() || '';
-                      
-                      // Check if product is different
-                      const hasDifferentProduct = changeoverProduct !== '' && 
-                                                  changeoverProduct !== currentProduct;
-                      
-                      // Check if there's actual changeover data (not just empty/default values)
+                      const hasDifferentProduct = changeoverProduct !== '' && changeoverProduct !== currentProduct;
                       const hasChangeoverData = machine.changeover.targetQty > 0 || 
                                                 machine.changeover.actualQty > 0 || 
                                                 machine.changeover.okProdQty > 0 ||
@@ -1437,96 +2971,55 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
                                                 (machine.changeover.stoppageReason && machine.changeover.stoppageReason.trim() !== '') ||
                                                 (machine.changeover.mouldChange && machine.changeover.mouldChange.trim() !== '') ||
                                                 (machine.changeover.remark && machine.changeover.remark.trim() !== '');
-                      
-                      // Changeover exists ONLY if product is different AND there's actual data
-                      // Don't show changeover rows if product is same, empty, or no data exists
                       const hasChangeover = hasDifferentProduct && hasChangeoverData;
-                      const totalRows = hasChangeover ? 4 : 2; // 2 rows for current only, 4 rows if changeover exists with DIFFERENT product AND data
                       
                       return (
                         <React.Fragment key={machine.machineNo}>
-                          {/* Row 1: Current Production - First Row */}
                           <tr>
-                            <td rowSpan={totalRows} className="border border-gray-300 p-2 text-center font-bold bg-blue-50">
+                            <td rowSpan={hasChangeover ? 2 : 1} className="border border-gray-300 p-2 text-center font-bold bg-blue-50">
                               {machine.machineNo}
                             </td>
-                            <td rowSpan={totalRows} className="border border-gray-300 p-2 text-center">
+                            <td rowSpan={hasChangeover ? 2 : 1} className="border border-gray-300 p-2 text-center">
                               {machine.operatorName}
                             </td>
-                            <td rowSpan={2} className="border border-gray-300 p-2 text-center">
-                              {machine.currentProduction.product}
-                            </td>
-                            <td rowSpan={2} className="border border-gray-300 p-2 text-center">
-                              {machine.currentProduction.cavity.toFixed(2)}
-                            </td>
-                            <td rowSpan={2} className="border border-gray-300 p-2 text-center">
-                              {machine.currentProduction.targetCycle.toFixed(2)}
-                            </td>
-                            <td rowSpan={2} className="border border-gray-300 p-2 text-center">
-                              {machine.currentProduction.targetRunTime.toFixed(2)}
-                            </td>
-                            <td rowSpan={2} className="border border-gray-300 p-2 text-center">
-                              {machine.currentProduction.partWeight.toFixed(2)}
-                            </td>
-                            <td rowSpan={2} className="border border-gray-300 p-2 text-center">
-                              {machine.currentProduction.actualPartWeight.toFixed(2)}
-                            </td>
-                            <td rowSpan={2} className="border border-gray-300 p-2 text-center">
-                              {machine.currentProduction.actualCycle.toFixed(2)}
+                            <td className="border border-gray-300 p-2 text-center">{getCleanProductName(machine.currentProduction.product, false)}</td>
+                            <td className="border border-gray-300 p-2 text-center">{machine.currentProduction.cavity.toFixed(2)}</td>
+                            <td className="border border-gray-300 p-2 text-center">{machine.currentProduction.targetCycle.toFixed(2)}</td>
+                            <td className="border border-gray-300 p-2 text-center">{machine.currentProduction.targetRunTime.toFixed(2)}</td>
+                            <td className="border border-gray-300 p-2 text-center">{machine.currentProduction.partWeight.toFixed(2)}</td>
+                            <td className="border border-gray-300 p-2 text-center">{machine.currentProduction.actualPartWeight.toFixed(2)}</td>
+                            <td className="border border-gray-300 p-2 text-center">{machine.currentProduction.actualCycle.toFixed(2)}</td>
+                            <td className="border border-gray-300 p-2 text-center">
+                              {machine.currentProduction.shotsStart > 0 ? machine.currentProduction.shotsStart.toLocaleString() : ''}
                             </td>
                             <td className="border border-gray-300 p-2 text-center">
-                              {machine.currentProduction.startTime && machine.currentProduction.startTime.toString() !== '0' && machine.currentProduction.startTime !== ''
-                                ? (typeof machine.currentProduction.startTime === 'number' 
-                                    ? Math.round(machine.currentProduction.startTime).toLocaleString() 
-                                    : machine.currentProduction.startTime)
-                                : ''}
-                            </td>
-                            <td className="border border-gray-300 p-2 text-center">
-                              {machine.currentProduction.endTime && machine.currentProduction.endTime.toString() !== '0' && machine.currentProduction.endTime !== ''
-                                ? (typeof machine.currentProduction.endTime === 'number' 
-                                    ? Math.round(machine.currentProduction.endTime).toLocaleString() 
-                                    : machine.currentProduction.endTime)
-                                : ''}
+                              {machine.currentProduction.shotsEnd > 0 ? machine.currentProduction.shotsEnd.toLocaleString() : ''}
                             </td>
                             <td className="border border-gray-300 p-2 text-center">
                               {machine.currentProduction.targetQty % 1 === 0 
                                 ? machine.currentProduction.targetQty.toLocaleString() 
                                 : machine.currentProduction.targetQty.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}
                             </td>
-                            <td className="border border-gray-300 p-2 text-center">
-                              {Math.round(machine.currentProduction.actualQty).toLocaleString()}
-                            </td>
+                            <td className="border border-gray-300 p-2 text-center">{Math.round(machine.currentProduction.actualQty).toLocaleString()}</td>
                             <td className="border border-gray-300 p-2 text-center bg-yellow-200 font-bold">
                               {Math.round(machine.currentProduction.okProdQty).toLocaleString()}
                             </td>
-                            <td className="border border-gray-300 p-2 text-center">
-                              {machine.currentProduction.okProdKgs.toFixed(2)}
-                            </td>
+                            <td className="border border-gray-300 p-2 text-center">{machine.currentProduction.okProdKgs.toFixed(2)}</td>
                             <td className="border border-gray-300 p-2 text-center">
                               {machine.currentProduction.targetQty > 0 
                                 ? Math.round((machine.currentProduction.okProdQty / machine.currentProduction.targetQty) * 100)
                                 : Math.round(machine.currentProduction.okProdPercent)}%
                             </td>
+                            <td className="border border-gray-300 p-2 text-center">{machine.currentProduction.rejKgs.toFixed(2)}</td>
+                            <td className="border border-gray-300 p-2 text-center">{Math.round(machine.currentProduction.runTime)}</td>
                             <td className="border border-gray-300 p-2 text-center">
-                              {machine.currentProduction.rejKgs.toFixed(2)}
+                              ({machine.currentProduction.downTime > 0 ? machine.currentProduction.downTime.toFixed(2) : '0.00'})
                             </td>
+                            <td className="border border-gray-300 p-2 text-center">{machine.currentProduction.stoppageReason}</td>
+                            <td className="border border-gray-300 p-2 text-center">{machine.currentProduction.startTime || ''}</td>
+                            <td className="border border-gray-300 p-2 text-center">{machine.currentProduction.endTime || ''}</td>
                             <td className="border border-gray-300 p-2 text-center">
-                              {Math.round(machine.currentProduction.runTime)}
-                            </td>
-                            <td className="border border-gray-300 p-2 text-center">
-                              ({machine.currentProduction.downTime.toFixed(2)})
-                            </td>
-                            <td className="border border-gray-300 p-2 text-center">
-                              {machine.currentProduction.stoppageReason}
-                            </td>
-                            <td className="border border-gray-300 p-2 text-center">
-                              {machine.currentProduction.startTime}
-                            </td>
-                            <td className="border border-gray-300 p-2 text-center">
-                              {machine.currentProduction.endTime}
-                            </td>
-                            <td className="border border-gray-300 p-2 text-center">
-                              {machine.currentProduction.totalTime > 0 ? machine.currentProduction.totalTime.toFixed(2) : ''}
+                              {machine.currentProduction.totalTime > 0 ? Math.round(machine.currentProduction.totalTime).toFixed(2) : ''}
                             </td>
                             <td className={`border border-gray-300 p-2 text-center ${machine.currentProduction.mouldChange ? 'bg-green-200' : ''}`}>
                               {machine.currentProduction.mouldChange}
@@ -1535,132 +3028,54 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
                               {machine.currentProduction.remark}
                             </td>
                           </tr>
-                          {/* Row 2: Current Production - Second Row (Empty) */}
-                          <tr>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                          </tr>
-                          {/* Row 3 & 4: Changeover - Show if there's any changeover data */}
                           {hasChangeover && (
-                            <>
-                              {/* Row 3: Changeover - First Row */}
-                              <tr>
-                                <td rowSpan={2} className="border border-gray-300 p-2 text-center">
-                                  {machine.changeover.product}
-                                </td>
-                                <td rowSpan={2} className="border border-gray-300 p-2 text-center">
-                                  {machine.changeover.cavity.toFixed(2)}
-                                </td>
-                                <td rowSpan={2} className="border border-gray-300 p-2 text-center">
-                                  {machine.changeover.targetCycle.toFixed(2)}
-                                </td>
-                                <td rowSpan={2} className="border border-gray-300 p-2 text-center">
-                                  {machine.changeover.targetRunTime.toFixed(2)}
-                                </td>
-                                <td rowSpan={2} className="border border-gray-300 p-2 text-center">
-                                  {machine.changeover.partWeight.toFixed(2)}
-                                </td>
-                                <td rowSpan={2} className="border border-gray-300 p-2 text-center">
-                                  {machine.changeover.actualPartWeight.toFixed(2)}
-                                </td>
-                                <td rowSpan={2} className="border border-gray-300 p-2 text-center">
-                                  {machine.changeover.actualCycle.toFixed(2)}
-                                </td>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  {machine.changeover.startTime && machine.changeover.startTime.toString() !== '0' && machine.changeover.startTime !== ''
-                                    ? (typeof machine.changeover.startTime === 'number' 
-                                        ? Math.round(machine.changeover.startTime).toLocaleString() 
-                                        : machine.changeover.startTime)
-                                    : ''}
-                                </td>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  {machine.changeover.endTime && machine.changeover.endTime.toString() !== '0' && machine.changeover.endTime !== ''
-                                    ? (typeof machine.changeover.endTime === 'number' 
-                                        ? Math.round(machine.changeover.endTime).toLocaleString() 
-                                        : machine.changeover.endTime)
-                                    : ''}
-                                </td>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  {machine.changeover.targetQty % 1 === 0 
-                                    ? machine.changeover.targetQty.toLocaleString() 
-                                    : machine.changeover.targetQty.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}
-                                </td>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  {Math.round(machine.changeover.actualQty).toLocaleString()}
-                                </td>
-                                <td className="border border-gray-300 p-2 text-center bg-yellow-200 font-bold">
-                                  {Math.round(machine.changeover.okProdQty).toLocaleString()}
-                                </td>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  {machine.changeover.okProdKgs.toFixed(2)}
-                                </td>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  {machine.changeover.targetQty > 0 
-                                    ? Math.round((machine.changeover.okProdQty / machine.changeover.targetQty) * 100)
-                                    : Math.round(machine.changeover.okProdPercent)}%
-                                </td>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  {machine.changeover.rejKgs.toFixed(2)}
-                                </td>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  {Math.round(machine.changeover.runTime)}
-                                </td>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  ({machine.changeover.downTime.toFixed(2)})
-                                </td>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  {machine.changeover.stoppageReason}
-                                </td>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  {machine.changeover.startTime}
-                                </td>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  {machine.changeover.endTime}
-                                </td>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  {machine.changeover.totalTime > 0 ? machine.changeover.totalTime.toFixed(2) : ''}
-                                </td>
-                                <td className={`border border-gray-300 p-2 text-center ${machine.changeover.mouldChange ? 'bg-green-200' : ''}`}>
-                                  {machine.changeover.mouldChange}
-                                </td>
-                                <td className={`border border-gray-300 p-2 text-center ${machine.changeover.remark ? 'bg-green-200' : ''}`}>
-                                  {machine.changeover.remark}
-                                </td>
-                              </tr>
-                              {/* Row 4: Changeover - Second Row (Empty) */}
-                              <tr>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                              </tr>
-                            </>
+                            <tr className="bg-orange-50">
+                              <td className="border border-gray-300 p-2 text-center">{getCleanProductName(machine.changeover.product, true) || machine.changeover.product}</td>
+                              <td className="border border-gray-300 p-2 text-center">{machine.changeover.cavity.toFixed(2)}</td>
+                              <td className="border border-gray-300 p-2 text-center">{machine.changeover.targetCycle.toFixed(2)}</td>
+                              <td className="border border-gray-300 p-2 text-center">{machine.changeover.targetRunTime.toFixed(2)}</td>
+                              <td className="border border-gray-300 p-2 text-center">{machine.changeover.partWeight.toFixed(2)}</td>
+                              <td className="border border-gray-300 p-2 text-center">{machine.changeover.actualPartWeight.toFixed(2)}</td>
+                              <td className="border border-gray-300 p-2 text-center">{machine.changeover.actualCycle.toFixed(2)}</td>
+                              <td className="border border-gray-300 p-2 text-center">
+                                {machine.changeover.shotsStart > 0 ? machine.changeover.shotsStart.toLocaleString() : ''}
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center">
+                                {machine.changeover.shotsEnd > 0 ? machine.changeover.shotsEnd.toLocaleString() : ''}
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center">
+                                {machine.changeover.targetQty % 1 === 0 
+                                  ? machine.changeover.targetQty.toLocaleString() 
+                                  : machine.changeover.targetQty.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center">{Math.round(machine.changeover.actualQty).toLocaleString()}</td>
+                              <td className="border border-gray-300 p-2 text-center bg-yellow-200 font-bold">
+                                {Math.round(machine.changeover.okProdQty).toLocaleString()}
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center">{machine.changeover.okProdKgs.toFixed(2)}</td>
+                              <td className="border border-gray-300 p-2 text-center">
+                                {machine.changeover.targetQty > 0 
+                                  ? Math.round((machine.changeover.okProdQty / machine.changeover.targetQty) * 100)
+                                  : Math.round(machine.changeover.okProdPercent)}%
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center">{machine.changeover.rejKgs.toFixed(2)}</td>
+                              <td className="border border-gray-300 p-2 text-center">{Math.round(machine.changeover.runTime)}</td>
+                              <td className="border border-gray-300 p-2 text-center">
+                                ({machine.changeover.downTime > 0 ? machine.changeover.downTime.toFixed(2) : '0.00'})
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center">{machine.changeover.stoppageReason}</td>
+                              <td className="border border-gray-300 p-2 text-center">{machine.changeover.startTime || ''}</td>
+                              <td className="border border-gray-300 p-2 text-center">{machine.changeover.endTime || ''}</td>
+                              <td className="border border-gray-300 p-2 text-center">
+                                {machine.changeover.totalTime > 0 ? Math.round(machine.changeover.totalTime).toFixed(2) : ''}
+                              </td>
+                              <td className={`border border-gray-300 p-2 text-center ${machine.changeover.mouldChange ? 'bg-green-200' : ''}`}>
+                                {machine.changeover.mouldChange}
+                              </td>
+                              <td className={`border border-gray-300 p-2 text-center ${machine.changeover.remark ? 'bg-green-200' : ''}`}>
+                                {machine.changeover.remark}
+                              </td>
+                            </tr>
                           )}
                         </React.Fragment>
                       );
@@ -1668,315 +3083,10 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
                   </tbody>
                 </table>
               </div>
-              ) : (
-                <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-12 text-center">
-                  <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No Data Available</h3>
-                  <p className="text-gray-600 mb-4">
-                    No DPR data found for <strong>{new Date(selectedDate).toLocaleDateString('en-GB', { 
-                      day: '2-digit', 
-                      month: 'short', 
-                      year: 'numeric' 
-                    })}</strong> - <strong>{selectedShift}</strong> shift
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Please import an Excel file to view production data.
-                  </p>
-                </div>
-              )}
-
-              {/* Shift Total Section - Enhanced */}
-              {(() => {
-                const currentData = getCurrentDPRData();
-                if (!currentData) return null;
-                return (
-              <div className="mt-6 bg-gradient-to-br from-gray-50 to-gray-100 p-6 rounded-lg border-2 border-gray-300 shadow-lg">
-                <div className="flex items-center justify-center mb-6">
-                  <Target className="w-6 h-6 mr-2 text-blue-600" />
-                  <h3 className="text-2xl font-bold text-gray-900">SHIFT TOTAL</h3>
-                </div>
-                
-                {/* Primary Metrics Row */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                  {/* Target Quantity */}
-                  <div className="bg-white p-5 rounded-lg border-2 border-blue-200 shadow-md hover:shadow-lg transition-shadow">
-                    <div className="flex items-center justify-between mb-3">
-                      <Target className="w-5 h-5 text-blue-600" />
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium">TARGET</span>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-1 font-medium">Target Qty (Nos)</p>
-                    <p className="text-3xl font-bold text-gray-900">{currentData.summary.targetQty.toLocaleString()}</p>
-                  </div>
-
-                  {/* Actual Quantity */}
-                  <div className="bg-white p-5 rounded-lg border-2 border-purple-200 shadow-md hover:shadow-lg transition-shadow">
-                    <div className="flex items-center justify-between mb-3">
-                      <Activity className="w-5 h-5 text-purple-600" />
-                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded font-medium">ACTUAL</span>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-1 font-medium">Actual Qty (Nos)</p>
-                    <p className="text-3xl font-bold text-gray-900">{currentData.summary.actualQty.toLocaleString()}</p>
-                    <div className="mt-2 flex items-center">
-                      <div className="flex-1 bg-gray-200 rounded-full h-2 mr-2">
-                        <div className="bg-purple-600 h-2 rounded-full" style={{ width: `${(currentData.summary.actualQty / currentData.summary.targetQty * 100)}%` }}></div>
-                      </div>
-                      <span className="text-xs font-semibold text-purple-600">{Math.round(currentData.summary.actualQty / currentData.summary.targetQty * 100)}%</span>
-                    </div>
-                  </div>
-
-                  {/* OK Production Quantity - Highlighted */}
-                  <div className="bg-gradient-to-br from-yellow-100 to-yellow-200 p-5 rounded-lg border-2 border-yellow-400 shadow-md hover:shadow-lg transition-shadow">
-                    <div className="flex items-center justify-between mb-3">
-                      <Award className="w-5 h-5 text-yellow-700" />
-                      <span className="text-xs bg-yellow-300 text-yellow-900 px-2 py-1 rounded font-bold">KEY METRIC</span>
-                    </div>
-                    <p className="text-sm text-gray-700 mb-1 font-medium">Ok Prod Qty (Nos)</p>
-                    <p className="text-3xl font-bold text-yellow-900">{currentData.summary.okProdQty.toLocaleString()}</p>
-                    <div className="mt-2 flex items-center text-xs">
-                      <CheckCircle className="w-4 h-4 text-green-600 mr-1" />
-                      <span className="text-gray-700 font-medium">{Math.round(currentData.summary.okProdQty / currentData.summary.actualQty * 100 * 10) / 10}% of Actual</span>
-                    </div>
-                  </div>
-
-                  {/* OK Production in Kgs */}
-                  <div className="bg-white p-5 rounded-lg border-2 border-green-200 shadow-md hover:shadow-lg transition-shadow">
-                    <div className="flex items-center justify-between mb-3">
-                      <Package className="w-5 h-5 text-green-600" />
-                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-medium">WEIGHT</span>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-1 font-medium">Ok Prod (Kgs)</p>
-                    <p className="text-3xl font-bold text-gray-900">{currentData.summary.okProdKgs.toFixed(2)}</p>
-                    <p className="text-xs text-gray-500 mt-1">kg</p>
-                  </div>
-                </div>
-
-                {/* Secondary Metrics Row */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {/* OK Production Percentage */}
-                  <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg border-2 border-green-300 shadow-sm">
-                    <div className="flex items-center mb-2">
-                      <Zap className="w-4 h-4 text-green-600 mr-2" />
-                      <p className="text-sm text-gray-700 font-medium">Ok Prod (%)</p>
-                    </div>
-                    <div className="flex items-end">
-                      <p className="text-3xl font-bold text-green-700">{currentData.summary.okProdPercent}%</p>
-                      <TrendingUp className="w-5 h-5 text-green-600 ml-2 mb-1" />
-                    </div>
-                    <div className="mt-2 bg-green-200 rounded-full h-2">
-                      <div className="bg-green-600 h-2 rounded-full" style={{ width: `${currentData.summary.okProdPercent}%` }}></div>
-                    </div>
-                  </div>
-
-                  {/* Rejection */}
-                  <div className="bg-gradient-to-br from-red-50 to-red-100 p-4 rounded-lg border-2 border-red-300 shadow-sm">
-                    <div className="flex items-center mb-2">
-                      <AlertTriangle className="w-4 h-4 text-red-600 mr-2" />
-                      <p className="text-sm text-gray-700 font-medium">Rej (Kgs)</p>
-                    </div>
-                    <div className="flex items-end">
-                      <p className="text-3xl font-bold text-red-700">{currentData.summary.rejKgs.toFixed(2)}</p>
-                      <TrendingDown className="w-5 h-5 text-red-600 ml-2 mb-1" />
-                    </div>
-                    <p className="text-xs text-gray-600 mt-1">{(currentData.summary.rejKgs / currentData.summary.okProdKgs * 100).toFixed(1)}% rejection rate</p>
-                  </div>
-
-                  {/* Run Time */}
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border-2 border-blue-300 shadow-sm">
-                    <div className="flex items-center mb-2">
-                      <Clock className="w-4 h-4 text-blue-600 mr-2" />
-                      <p className="text-sm text-gray-700 font-medium">Run Time (mins)</p>
-                    </div>
-                    <p className="text-3xl font-bold text-blue-700">{currentData.summary.runTime.toLocaleString()}</p>
-                    <p className="text-xs text-gray-600 mt-1">≈ {(currentData.summary.runTime / 60).toFixed(1)} hours</p>
-                  </div>
-
-                  {/* Down Time */}
-                  <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-lg border-2 border-orange-300 shadow-sm">
-                    <div className="flex items-center mb-2">
-                      <AlertTriangle className="w-4 h-4 text-orange-600 mr-2" />
-                      <p className="text-sm text-gray-700 font-medium">Down Time (min)</p>
-                    </div>
-                    <p className="text-3xl font-bold text-orange-700">{currentData.summary.downTime}</p>
-                    <p className="text-xs text-gray-600 mt-1">≈ {(currentData.summary.downTime / 60).toFixed(1)} hours</p>
-                  </div>
-                </div>
-              </div>
-                );
-              })()}
-
-              {/* Achievement Section - Enhanced */}
-              {(() => {
-                const currentData = getCurrentDPRData();
-                if (!currentData) return null;
-                return (
-              <div className="mt-6 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-6 rounded-lg border-2 border-blue-400 shadow-lg">
-                <div className="flex items-center justify-center mb-6">
-                  <Award className="w-6 h-6 mr-2 text-blue-600" />
-                  <h3 className="text-2xl font-bold text-gray-900">ACHIEVEMENT METRICS</h3>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {/* Actual vs Target */}
-                  <div className="bg-white p-6 rounded-lg border-2 border-green-300 shadow-md">
-                    <div className="flex items-center justify-between mb-4">
-                      <Target className="w-5 h-5 text-green-600" />
-                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-medium">PERFORMANCE</span>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-3 font-medium">Actual vs Target</p>
-                    <div className="relative">
-                      <p className="text-4xl font-bold text-green-600 mb-2">{Math.round(currentData.summary.actualQty / currentData.summary.targetQty * 100)}%</p>
-                      <div className="flex items-center mb-3">
-                        <TrendingUp className="w-5 h-5 text-green-600 mr-1" />
-                        <span className="text-sm font-semibold text-green-600">On Track</span>
-                      </div>
-                      <div className="bg-gray-200 rounded-full h-3">
-                        <div className="bg-gradient-to-r from-green-500 to-green-600 h-3 rounded-full" style={{ width: `${Math.round(currentData.summary.actualQty / currentData.summary.targetQty * 100)}%` }}></div>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-2">{(currentData.summary.targetQty - currentData.summary.actualQty).toLocaleString()} units short of target</p>
-                    </div>
-                  </div>
-
-                  {/* Rejection vs OK Production */}
-                  <div className="bg-white p-6 rounded-lg border-2 border-red-300 shadow-md">
-                    <div className="flex items-center justify-between mb-4">
-                      <AlertTriangle className="w-5 h-5 text-red-600" />
-                      <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded font-medium">QUALITY</span>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-3 font-medium">Rej vs Ok Prod</p>
-                    <div className="relative">
-                      <p className="text-4xl font-bold text-red-600 mb-2">{(currentData.summary.rejKgs / currentData.summary.okProdKgs * 100).toFixed(1)}%</p>
-                      <div className="flex items-center mb-3">
-                        <TrendingDown className="w-5 h-5 text-green-600 mr-1" />
-                        <span className="text-sm font-semibold text-green-600">Excellent</span>
-                      </div>
-                      <div className="bg-gray-200 rounded-full h-3">
-                        <div className="bg-gradient-to-r from-red-500 to-red-600 h-3 rounded-full" style={{ width: `${(currentData.summary.rejKgs / currentData.summary.okProdKgs * 100)}%` }}></div>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-2">Low rejection rate</p>
-                    </div>
-                  </div>
-
-                  {/* Run Time vs Total */}
-                  <div className="bg-white p-6 rounded-lg border-2 border-blue-300 shadow-md">
-                    <div className="flex items-center justify-between mb-4">
-                      <Activity className="w-5 h-5 text-blue-600" />
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium">EFFICIENCY</span>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-3 font-medium">Run Time vs Total</p>
-                    <div className="relative">
-                      <p className="text-4xl font-bold text-blue-600 mb-2">{Math.round(currentData.summary.runTime / (currentData.summary.runTime + currentData.summary.downTime) * 100)}%</p>
-                      <div className="flex items-center mb-3">
-                        <TrendingUp className="w-5 h-5 text-blue-600 mr-1" />
-                        <span className="text-sm font-semibold text-blue-600">High</span>
-                      </div>
-                      <div className="bg-gray-200 rounded-full h-3">
-                        <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full" style={{ width: `${Math.round(currentData.summary.runTime / (currentData.summary.runTime + currentData.summary.downTime) * 100)}%` }}></div>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-2">Only {Math.round(currentData.summary.downTime / (currentData.summary.runTime + currentData.summary.downTime) * 100)}% downtime</p>
-                    </div>
-                  </div>
-
-                  {/* Down Time vs Total */}
-                  <div className="bg-white p-6 rounded-lg border-2 border-orange-300 shadow-md">
-                    <div className="flex items-center justify-between mb-4">
-                      <Clock className="w-5 h-5 text-orange-600" />
-                      <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded font-medium">DOWNTIME</span>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-3 font-medium">Down Time vs Total</p>
-                    <div className="relative">
-                      <p className="text-4xl font-bold text-orange-600 mb-2">{Math.round(currentData.summary.downTime / (currentData.summary.runTime + currentData.summary.downTime) * 100)}%</p>
-                      <div className="flex items-center mb-3">
-                        <TrendingDown className="w-5 h-5 text-green-600 mr-1" />
-                        <span className="text-sm font-semibold text-green-600">Minimal</span>
-                      </div>
-                      <div className="bg-gray-200 rounded-full h-3">
-                        <div className="bg-gradient-to-r from-orange-500 to-orange-600 h-3 rounded-full" style={{ width: `${Math.round(currentData.summary.downTime / (currentData.summary.runTime + currentData.summary.downTime) * 100)}%` }}></div>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-2">{currentData.summary.downTime} minutes downtime</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-                );
-              })()}
             </div>
           </div>
-        );
-
-      case 'schedule':
-        return (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Production Schedule</h3>
-              <p className="text-gray-600">Production scheduling interface will be implemented here.</p>
-            </div>
-          </div>
-        );
-
-      case 'analytics':
-        return (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Production Analytics</h3>
-              <p className="text-gray-600">Production analytics and reporting will be implemented here.</p>
-            </div>
-          </div>
-        );
-
-      case 'resources':
-        return (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Resource Management</h3>
-              <p className="text-gray-600">Resource management interface will be implemented here.</p>
-            </div>
-          </div>
-        );
-
-      case 'settings':
-        return (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Production Settings</h3>
-              <p className="text-gray-600">Production configuration settings will be implemented here.</p>
-            </div>
-          </div>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <div className="h-full flex flex-col">
-      {/* Tab Navigation */}
-      <div className="border-b border-gray-200 bg-white">
-        <nav className="flex space-x-8 px-6 overflow-x-auto">
-          {tabs.map((tab) => {
-            const IconComponent = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <IconComponent className="w-5 h-5 inline mr-2" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-auto p-6">
-        {renderTabContent()}
-      </div>
+        </div>
+      )}
 
       {/* Excel File Reader Modal for DPR Import */}
       {showExcelReader && (
@@ -1999,18 +3109,13 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
                 onDataImported={(importData) => {
                   // Convert ExcelFileReader's DPR format to ProductionModule's DPRData format
                   if (importData.dpr) {
-                    const dprData = importData.dpr;
+                    // Handle both single object and array of objects
+                    const dprArray = Array.isArray(importData.dpr) ? importData.dpr : [importData.dpr];
                     
-                    // Update date and shift from imported data
-                    if (dprData.date) {
-                      setSelectedDate(dprData.date);
-                    }
-                    if (dprData.shift) {
-                      setSelectedShift(dprData.shift as 'DAY' | 'NIGHT');
-                    }
-
-                    // Convert to DPRData format expected by ProductionModule
-                    const convertedData: DPRData = {
+                    console.log('📊 Imported DPR data:', dprArray);
+                    
+                    // Convert all DPR objects
+                    const convertedDataArray: DPRData[] = dprArray.map(dprData => ({
                       id: dprData.id || `${dprData.date}-${dprData.shift}-${Date.now()}`,
                       date: dprData.date,
                       shift: dprData.shift,
@@ -2025,16 +3130,31 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
                         rejKgs: 0,
                         runTime: 0,
                         downTime: 0
-                      }
-                    };
+                      },
+                      shiftTotal: dprData.shiftTotal || null,
+                      achievement: dprData.achievement || null
+                    }));
+                    
+                    console.log('📊 Converted DPR data:', convertedDataArray);
 
-                    // Check if data for this date+shift already exists and replace it
+                    // Update date and shift from first imported data
+                    if (convertedDataArray.length > 0) {
+                      setSelectedDate(convertedDataArray[0].date);
+                      setSelectedShift(convertedDataArray[0].shift as 'DAY' | 'NIGHT');
+                    }
+
+                    // Add all DPR objects, replacing any existing ones for same date+shift
                     setDprData(prev => {
-                      const filtered = prev.filter(dpr => !(dpr.date === convertedData.date && dpr.shift === convertedData.shift));
-                      return [...filtered, convertedData];
+                      let filtered = prev;
+                      // Remove existing entries for each imported shift
+                      convertedDataArray.forEach(converted => {
+                        filtered = filtered.filter(dpr => !(dpr.date === converted.date && dpr.shift === converted.shift));
+                      });
+                      return [...filtered, ...convertedDataArray];
                     });
 
-                    alert(`DPR imported successfully!\n\nImported:\n- ${convertedData.machines.length} machines\n- Date: ${new Date(convertedData.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}\n- Shift: ${convertedData.shift}\n- Shift Incharge: ${convertedData.shiftIncharge}`);
+                    const shiftsInfo = convertedDataArray.map(d => `${d.shift} (${d.machines.length} machines)`).join(', ');
+                    alert(`DPR imported successfully!\n\nImported:\n- ${shiftsInfo}\n- Date: ${new Date(convertedDataArray[0].date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}\n- Shift Incharge: ${convertedDataArray[0].shiftIncharge}`);
                     
                     // Close the modal
                     setShowExcelReader(false);
@@ -2046,6 +3166,1171 @@ const ProductionModule: React.FC<ProductionModuleProps> = () => {
           </div>
         </div>
       )}
+
+      {/* Manual Entry Form Modal */}
+      {showManualEntry && (
+        <ManualDPREntryForm
+          date={selectedDate}
+          shift={selectedShift}
+          molds={molds}
+          lines={lines}
+          columnVisibility={columnVisibility}
+          isColumnVisible={isColumnVisible}
+          existingData={getCurrentDPRData() || undefined}
+          onSave={(dprData) => {
+            // Add the new DPR data
+            setDprData(prev => {
+              // Remove existing entry for same date+shift
+              const filtered = prev.filter(dpr => !(dpr.date === dprData.date && dpr.shift === dprData.shift));
+              return [...filtered, dprData];
+            });
+            setShowManualEntry(false);
+            alert(`DPR created successfully for ${new Date(dprData.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} - ${dprData.shift} shift`);
+          }}
+          onClose={() => setShowManualEntry(false)}
+        />
+      )}
+    </div>
+  );
+};
+
+// Manual DPR Entry Form Component
+interface ManualDPREntryFormProps {
+  date: string;
+  shift: 'DAY' | 'NIGHT';
+  molds: Mold[];
+  lines: Line[];
+  columnVisibility: Record<string, boolean>;
+  isColumnVisible: (columnId: string, isFullView?: boolean) => boolean;
+  existingData?: DPRData;
+  onSave: (dprData: DPRData) => void;
+  onClose: () => void;
+}
+
+const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
+  date,
+  shift,
+  molds,
+  lines,
+  columnVisibility,
+  isColumnVisible,
+  existingData,
+  onSave,
+  onClose
+}) => {
+  const [shiftIncharge, setShiftIncharge] = useState(existingData?.shiftIncharge || 'CHANDAN/DHIRAJ');
+  
+  // Initialize machine entries from existing data or start with empty entry
+  const [machineEntries, setMachineEntries] = useState<Array<{
+    id: string;
+    machineNo: string; // Keep as machineNo for DPR compatibility, but will store line_id
+    operatorName: string;
+    currentProduction: Partial<ProductionRun>;
+    changeover: Partial<ProductionRun>;
+  }>>(() => {
+    if (existingData && existingData.machines && existingData.machines.length > 0) {
+      // Convert existing machines to entry format
+      return existingData.machines.map((machine, index) => ({
+        id: `existing-${index}-${Date.now()}`,
+        machineNo: machine.machineNo,
+        operatorName: machine.operatorName,
+        currentProduction: { ...machine.currentProduction },
+        changeover: { ...machine.changeover }
+      }));
+    }
+    // Start with one empty entry with default numeric values
+    return [{
+      id: Date.now().toString(),
+      machineNo: '',
+      operatorName: '',
+      currentProduction: {
+        product: '',
+        shotsStart: 0,
+        shotsEnd: 0,
+        targetRunTime: 0,
+        actualCycle: 0,
+        actualPartWeight: 0,
+        okProdQty: 0,
+        lumps: 0
+      },
+      changeover: {
+        product: '',
+        shotsStart: 0,
+        shotsEnd: 0,
+        targetRunTime: 0,
+        actualCycle: 0,
+        actualPartWeight: 0,
+        okProdQty: 0,
+        lumps: 0
+      }
+    }];
+  });
+
+  // Get molds that are currently in use (in current production but NOT released via changeover)
+  const getUsedMolds = (): Set<string> => {
+    const usedMolds = new Set<string>();
+    machineEntries.forEach(entry => {
+      // Add current production mold to used list
+      if (entry.currentProduction.product) {
+        usedMolds.add(entry.currentProduction.product);
+      }
+    });
+    return usedMolds;
+  };
+
+  // Get molds that have been released (have a changeover entry with a different mold)
+  const getReleasedMolds = (): Set<string> => {
+    const releasedMolds = new Set<string>();
+    machineEntries.forEach(entry => {
+      // If there's a changeover product, the current production mold is being released
+      if (entry.changeover.product && entry.currentProduction.product) {
+        releasedMolds.add(entry.currentProduction.product);
+      }
+    });
+    return releasedMolds;
+  };
+
+  // Check if a mold is available for selection
+  const isMoldAvailable = (moldName: string, currentEntryId: string, isChangeover: boolean): boolean => {
+    const usedMolds = getUsedMolds();
+    const releasedMolds = getReleasedMolds();
+    
+    // Get current entry
+    const currentEntry = machineEntries.find(e => e.id === currentEntryId);
+    
+    // If checking for current production
+    if (!isChangeover) {
+      // Allow if it's the same mold already selected for this entry
+      if (currentEntry?.currentProduction.product === moldName) return true;
+      // Block if mold is in use by another line (and not released)
+      if (usedMolds.has(moldName) && !releasedMolds.has(moldName)) return false;
+    }
+    
+    // If checking for changeover
+    if (isChangeover) {
+      // Allow if it's the same mold already selected for this changeover
+      if (currentEntry?.changeover.product === moldName) return true;
+      // Block if mold is in use by another line's current production (and not released)
+      // But allow if this mold was released by another line
+      if (usedMolds.has(moldName) && !releasedMolds.has(moldName)) return false;
+    }
+    
+    return true;
+  };
+
+  // Helper to calculate field values based on formulas
+  const calculateField = (field: string, run: Partial<ProductionRun>, isChangeover: boolean = false): number => {
+    const prod = run;
+    
+    switch (field) {
+      case 'targetQty':
+        // Formula: Trg Run Time (min) * 60 / Trg Cycle (sec) * Cavity
+        // Round to nearest whole number
+        if (prod.targetRunTime !== undefined && prod.targetCycle !== undefined && prod.cavity !== undefined &&
+            prod.targetRunTime > 0 && prod.targetCycle > 0 && prod.cavity > 0) {
+          return Math.round(prod.targetRunTime * 60 / prod.targetCycle * prod.cavity);
+        }
+        return 0;
+      
+      case 'actualQty':
+        // Formula: (No of Shots (end) - No of Shots (start)) * Cavity
+        // Treat undefined/empty shotsStart as 0
+        if (typeof prod.shotsEnd === 'number' && typeof prod.cavity === 'number' && prod.cavity > 0) {
+          const shotsStart = typeof prod.shotsStart === 'number' ? prod.shotsStart : 0;
+          const diff = prod.shotsEnd - shotsStart;
+          return diff * prod.cavity;
+        }
+        return 0;
+      
+      case 'okProdKgs':
+        // Formula: Ok Prod Qty (Nos) * (Part Wt (gm) / 1000)
+        if (prod.okProdQty && prod.partWeight) {
+          return (prod.okProdQty * prod.partWeight / 1000) || 0;
+        }
+        return 0;
+      
+      case 'okProdPercent':
+        // Formula: Ok Prod Qty (Nos) / Target Qty (Nos)
+        // Returns ratio as decimal (0-1), we'll multiply by 100 for display
+        if (prod.okProdQty && prod.targetQty) {
+          return prod.targetQty > 0 ? (prod.okProdQty / prod.targetQty) : 0;
+        }
+        return 0;
+      
+      case 'rejKgs':
+        // Formula: (Actual Qty (Nos) - Ok Prod Qty (Nos)) * Part Wt (gm) / 1000
+        if (prod.actualQty !== undefined && prod.okProdQty !== undefined && prod.partWeight !== undefined && prod.partWeight > 0) {
+          const diff = (prod.actualQty || 0) - (prod.okProdQty || 0);
+          return (diff * prod.partWeight) / 1000;
+        }
+        return 0;
+      
+      case 'runTime':
+        // Formula: (No of Shots (end) - No of Shots (start)) * Act Cycle (sec) / 60
+        // Treat undefined/empty shotsStart as 0
+        if (typeof prod.shotsEnd === 'number' && typeof prod.actualCycle === 'number' && prod.actualCycle > 0) {
+          const shotsStart = typeof prod.shotsStart === 'number' ? prod.shotsStart : 0;
+          const diff = prod.shotsEnd - shotsStart;
+          return (diff * prod.actualCycle) / 60;
+        }
+        return 0;
+      
+      case 'downTime':
+        // Formula: Trg Run Time (min) - Run Time (mins)
+        if (prod.targetRunTime !== undefined && prod.runTime !== undefined) {
+          return (prod.targetRunTime || 0) - (prod.runTime || 0);
+        }
+        return 0;
+      
+      case 'totalTime':
+        // Formula: (Stoppage Time (end) - Stoppage Time (start)) * 1440
+        // Excel stores times as fractions of a day, so we multiply by 1440 (minutes in a day)
+        if (prod.endTime && prod.startTime) {
+          try {
+            // Parse time strings (HH:MM format)
+            const parseTime = (timeStr: string): number => {
+              const [hours, minutes] = timeStr.split(':').map(Number);
+              return (hours * 60 + minutes) / 1440; // Convert to fraction of day
+            };
+            
+            const start = parseTime(prod.startTime);
+            const end = parseTime(prod.endTime);
+            const diffMinutes = (end - start) * 1440;
+            
+            // Return 0 if difference is 0, otherwise return the minutes
+            return diffMinutes === 0 ? 0 : diffMinutes;
+          } catch {
+            return 0;
+          }
+        }
+        return 0;
+      
+      default:
+        return 0;
+    }
+  };
+
+  // Helper to calculate quality check fields
+  // Quality Check - Part Weight: If (Part Wt (gm) - Act part wt (gm)) > 0.5, then "NOT OK", else "OK"
+  // Quality Check - Cycle Time: If (Trg Cycle (sec) - Act Cycle (sec)) > 0.5, then "NOT OK", else "OK"
+  const calculateQualityCheck = (field: 'partWeightCheck' | 'cycleTimeCheck', run: Partial<ProductionRun>): 'OK' | 'NOT OK' | '' => {
+    const prod = run;
+    
+    switch (field) {
+      case 'partWeightCheck':
+        // Formula: If (Part Wt (gm) - Act part wt (gm)) > 0.5, then "NOT OK", else "OK"
+        // Checks if actual part weight deviates more than 0.5g from target (in either direction)
+        if (prod.partWeight !== undefined && prod.actualPartWeight !== undefined && 
+            prod.partWeight > 0 && prod.actualPartWeight > 0) {
+          const diff = prod.partWeight - prod.actualPartWeight;
+          // Check deviation in either direction (underweight or overweight by more than 0.5g)
+          return Math.abs(diff) > 0.5 ? 'NOT OK' : 'OK';
+        }
+        return '';
+      
+      case 'cycleTimeCheck':
+        // Formula: If (Trg Cycle (sec) - Act Cycle (sec)) > 0.5, then "NOT OK", else "OK"
+        // Checks if actual cycle time deviates more than 0.5 sec from target (in either direction)
+        if (prod.targetCycle !== undefined && prod.actualCycle !== undefined && 
+            prod.targetCycle > 0 && prod.actualCycle > 0) {
+          const diff = prod.targetCycle - prod.actualCycle;
+          // Check deviation in either direction (slower or faster by more than 0.5 sec)
+          return Math.abs(diff) > 0.5 ? 'NOT OK' : 'OK';
+        }
+        return '';
+      
+      default:
+        return '';
+    }
+  };
+
+  // Handle product/mold selection - auto-populate fields
+  const handleProductSelect = (entryId: string, productName: string, isChangeover: boolean) => {
+    const mold = molds.find(m => m.mold_name === productName || m.item_name === productName);
+    if (!mold) return;
+
+    setMachineEntries(prev => prev.map(entry => {
+      if (entry.id !== entryId) return entry;
+      
+      const run = isChangeover ? entry.changeover : entry.currentProduction;
+      const updatedRun = {
+        ...run,
+        product: productName,
+        cavity: mold.cavity || mold.cavities || 0,
+        targetCycle: mold.cycle_time || 0,
+        partWeight: mold.std_wt || mold.dwg_wt || 0
+      };
+
+      // Recalculate dependent fields in correct order
+      // First calculate targetQty (needed for okProdPercent)
+      updatedRun.targetQty = calculateField('targetQty', updatedRun, isChangeover);
+      // Then actualQty (needed for rejKgs)
+      updatedRun.actualQty = calculateField('actualQty', updatedRun, isChangeover);
+      // Then runTime (needed for downTime)
+      updatedRun.runTime = calculateField('runTime', updatedRun, isChangeover);
+      // Then okProdKgs (uses okProdQty and Part Wt (gm) from mold master)
+      updatedRun.okProdKgs = calculateField('okProdKgs', updatedRun, isChangeover);
+      // Then okProdPercent (needs targetQty and okProdQty)
+      updatedRun.okProdPercent = calculateField('okProdPercent', updatedRun, isChangeover);
+      // Then rejKgs (needs actualQty, okProdQty, and Part Wt (gm) from mold master)
+      updatedRun.rejKgs = calculateField('rejKgs', updatedRun, isChangeover);
+      // Then downTime (needs runTime)
+      updatedRun.downTime = calculateField('downTime', updatedRun, isChangeover);
+      // Finally totalTime (calculated from startTime and endTime)
+      updatedRun.totalTime = calculateField('totalTime', updatedRun, isChangeover);
+      // Quality Checks - Part Weight Check: If (Part Wt - Act Part Wt) > 0.5, "NOT OK", else "OK"
+      updatedRun.partWeightCheck = calculateQualityCheck('partWeightCheck', updatedRun);
+      // Quality Checks - Cycle Time Check: If (Trg Cycle - Act Cycle) > 0.5, "NOT OK", else "OK"
+      updatedRun.cycleTimeCheck = calculateQualityCheck('cycleTimeCheck', updatedRun);
+
+      return {
+        ...entry,
+        [isChangeover ? 'changeover' : 'currentProduction']: updatedRun
+      };
+    }));
+  };
+
+  // Handle field change with auto-calculation
+  const handleFieldChange = (entryId: string, field: string, value: any, isChangeover: boolean) => {
+    setMachineEntries(prev => prev.map(entry => {
+      if (entry.id !== entryId) return entry;
+      
+      const run = isChangeover ? entry.changeover : entry.currentProduction;
+      // Ensure numeric fields are stored as numbers (not undefined/null)
+      const numericFields = ['shotsStart', 'shotsEnd', 'targetRunTime', 'actualCycle', 'okProdQty', 
+                            'actualPartWeight', 'lumps', 'cavity', 'targetCycle', 'partWeight'];
+      let processedValue = value;
+      if (numericFields.includes(field)) {
+        processedValue = typeof value === 'number' ? value : (value === '' || value === null || value === undefined ? 0 : parseFloat(value) || 0);
+      }
+      
+      // Create updated run with new value
+      const updatedRun: Partial<ProductionRun> = { ...run, [field]: processedValue };
+
+      // If updating Trg Run Time for current production, auto-calculate changeover Trg Run Time
+      // Formula: Trg Run Time (changeover) = 720 - Trg Run Time (current)
+      // Only auto-calculate if changeover Trg Run Time hasn't been manually set yet
+      if (!isChangeover && field === 'targetRunTime') {
+        const currentRunTime = parseFloat(value) || 0;
+        // Only auto-set if changeover Trg Run Time is empty or 0
+        if (!entry.changeover.targetRunTime || entry.changeover.targetRunTime === 0) {
+          entry.changeover.targetRunTime = 720 - currentRunTime;
+          // Recalculate changeover fields if changeover has product selected
+          if (entry.changeover.product) {
+            entry.changeover.targetQty = calculateField('targetQty', entry.changeover, true);
+          }
+        }
+      }
+
+      // Recalculate dependent fields in correct order
+      // First calculate targetQty (needed for okProdPercent)
+      updatedRun.targetQty = calculateField('targetQty', updatedRun, isChangeover);
+      // Then actualQty (needed for rejKgs)
+      updatedRun.actualQty = calculateField('actualQty', updatedRun, isChangeover);
+      // Then runTime (needed for downTime)
+      updatedRun.runTime = calculateField('runTime', updatedRun, isChangeover);
+      // Then okProdKgs (uses okProdQty and Part Wt (gm) from mold master)
+      updatedRun.okProdKgs = calculateField('okProdKgs', updatedRun, isChangeover);
+      // Then okProdPercent (needs targetQty and okProdQty)
+      updatedRun.okProdPercent = calculateField('okProdPercent', updatedRun, isChangeover);
+      // Then rejKgs (needs actualQty, okProdQty, and Part Wt (gm) from mold master)
+      updatedRun.rejKgs = calculateField('rejKgs', updatedRun, isChangeover);
+      // Then downTime (needs runTime)
+      updatedRun.downTime = calculateField('downTime', updatedRun, isChangeover);
+      // Finally totalTime
+      updatedRun.totalTime = calculateField('totalTime', updatedRun, isChangeover);
+      // Quality Checks - Part Weight Check: If (Part Wt - Act Part Wt) > 0.5, "NOT OK", else "OK"
+      updatedRun.partWeightCheck = calculateQualityCheck('partWeightCheck', updatedRun);
+      // Quality Checks - Cycle Time Check: If (Trg Cycle - Act Cycle) > 0.5, "NOT OK", else "OK"
+      updatedRun.cycleTimeCheck = calculateQualityCheck('cycleTimeCheck', updatedRun);
+
+      return {
+        ...entry,
+        [isChangeover ? 'changeover' : 'currentProduction']: updatedRun
+      };
+    }));
+  };
+
+  const addMachineEntry = () => {
+    setMachineEntries(prev => [...prev, {
+      id: Date.now().toString(),
+      machineNo: '',
+      operatorName: '',
+      currentProduction: {
+        product: '',
+        shotsStart: 0,
+        shotsEnd: 0,
+        targetRunTime: 0,
+        actualCycle: 0,
+        actualPartWeight: 0,
+        okProdQty: 0,
+        lumps: 0
+      },
+      changeover: {
+        product: '',
+        shotsStart: 0,
+        shotsEnd: 0,
+        targetRunTime: 0,
+        actualCycle: 0,
+        actualPartWeight: 0,
+        okProdQty: 0,
+        lumps: 0
+      }
+    }]);
+  };
+
+  const removeMachineEntry = (entryId: string) => {
+    if (machineEntries.length > 1) {
+      setMachineEntries(prev => prev.filter(entry => entry.id !== entryId));
+    }
+  };
+
+  const handleSave = () => {
+    // Convert entries to MachineData format
+    // Note: machineNo field stores line_id for new manual entries
+    const machinesData: MachineData[] = machineEntries
+      .filter(entry => entry.machineNo) // Only include entries with line selected
+      .map(entry => ({
+        machineNo: entry.machineNo, // This is actually line_id for manual entries
+        operatorName: entry.operatorName || '',
+        currentProduction: {
+          product: entry.currentProduction.product || '',
+          cavity: entry.currentProduction.cavity || 0,
+          targetCycle: entry.currentProduction.targetCycle || 0,
+          targetRunTime: entry.currentProduction.targetRunTime || 0,
+          partWeight: entry.currentProduction.partWeight || 0,
+          actualPartWeight: entry.currentProduction.actualPartWeight || 0,
+          actualCycle: entry.currentProduction.actualCycle || 0,
+          shotsStart: entry.currentProduction.shotsStart || 0,
+          shotsEnd: entry.currentProduction.shotsEnd || 0,
+          targetQty: entry.currentProduction.targetQty || 0,
+          actualQty: entry.currentProduction.actualQty || 0,
+          okProdQty: entry.currentProduction.okProdQty || 0,
+          okProdKgs: entry.currentProduction.okProdKgs || 0,
+          okProdPercent: entry.currentProduction.okProdPercent || 0, // Keep as ratio (0-1), display will multiply by 100
+          rejKgs: entry.currentProduction.rejKgs || 0,
+          lumps: entry.currentProduction.lumps || 0,
+          runTime: entry.currentProduction.runTime || 0,
+          downTime: entry.currentProduction.downTime || 0,
+          stoppageReason: entry.currentProduction.stoppageReason || '',
+          startTime: entry.currentProduction.startTime || '',
+          endTime: entry.currentProduction.endTime || '',
+          totalTime: entry.currentProduction.totalTime || 0,
+          mouldChange: entry.currentProduction.mouldChange || '',
+          remark: entry.currentProduction.remark || '',
+          partWeightCheck: entry.currentProduction.partWeightCheck || '',
+          cycleTimeCheck: entry.currentProduction.cycleTimeCheck || ''
+        } as ProductionRun,
+        changeover: {
+          product: entry.changeover.product || '',
+          cavity: entry.changeover.cavity || 0,
+          targetCycle: entry.changeover.targetCycle || 0,
+          targetRunTime: entry.changeover.targetRunTime || 0,
+          partWeight: entry.changeover.partWeight || 0,
+          actualPartWeight: entry.changeover.actualPartWeight || 0,
+          actualCycle: entry.changeover.actualCycle || 0,
+          shotsStart: entry.changeover.shotsStart || 0,
+          shotsEnd: entry.changeover.shotsEnd || 0,
+          targetQty: entry.changeover.targetQty || 0,
+          actualQty: entry.changeover.actualQty || 0,
+          okProdQty: entry.changeover.okProdQty || 0,
+          okProdKgs: entry.changeover.okProdKgs || 0,
+          okProdPercent: entry.changeover.okProdPercent || 0, // Keep as ratio (0-1), display will multiply by 100
+          rejKgs: entry.changeover.rejKgs || 0,
+          lumps: entry.changeover.lumps || 0,
+          runTime: entry.changeover.runTime || 0,
+          downTime: entry.changeover.downTime || 0,
+          stoppageReason: entry.changeover.stoppageReason || '',
+          startTime: entry.changeover.startTime || '',
+          endTime: entry.changeover.endTime || '',
+          totalTime: entry.changeover.totalTime || 0,
+          mouldChange: entry.changeover.mouldChange || '',
+          remark: entry.changeover.remark || '',
+          partWeightCheck: entry.changeover.partWeightCheck || '',
+          cycleTimeCheck: entry.changeover.cycleTimeCheck || ''
+        } as ProductionRun
+      }));
+
+    // Calculate summary
+    const summary: SummaryData = {
+      targetQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.targetQty || 0) + (m.changeover.targetQty || 0), 0),
+      actualQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.actualQty || 0) + (m.changeover.actualQty || 0), 0),
+      okProdQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.okProdQty || 0) + (m.changeover.okProdQty || 0), 0),
+      okProdKgs: machinesData.reduce((sum, m) => sum + (m.currentProduction.okProdKgs || 0) + (m.changeover.okProdKgs || 0), 0),
+      okProdPercent: 0, // Will calculate below
+      rejKgs: machinesData.reduce((sum, m) => sum + (m.currentProduction.rejKgs || 0) + (m.changeover.rejKgs || 0), 0),
+      runTime: machinesData.reduce((sum, m) => sum + (m.currentProduction.runTime || 0) + (m.changeover.runTime || 0), 0),
+      downTime: machinesData.reduce((sum, m) => sum + (m.currentProduction.downTime || 0) + (m.changeover.downTime || 0), 0)
+    };
+
+    // Calculate target qty in kgs for okProdPercent
+    const targetQtyKgs = machinesData.reduce((sum, m) => {
+      const current = (m.currentProduction.targetQty || 0) * (m.currentProduction.partWeight || 0) / 1000;
+      const changeover = (m.changeover.targetQty || 0) * (m.changeover.partWeight || 0) / 1000;
+      return sum + current + changeover;
+    }, 0);
+
+    summary.okProdPercent = targetQtyKgs > 0 ? (summary.okProdKgs / targetQtyKgs * 100) : 0;
+
+    // Calculate Shift Total (sum of all columns as per formulas)
+    const shiftTotal: ShiftTotalData = {
+      type: 'shift_total',
+      label: `${shift} Shift Total`,
+      // Total Target Qty (Nos) = Sum of Target Qty (Nos) column
+      targetQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.targetQty || 0) + (m.changeover.targetQty || 0), 0),
+      // Total Actual Qty (Nos) = Sum of Actual Qty (Nos) column
+      actualQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.actualQty || 0) + (m.changeover.actualQty || 0), 0),
+      // Total Ok Prod Qty (Nos) = Sum of Ok Prod Qty (Nos) column
+      okProdQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.okProdQty || 0) + (m.changeover.okProdQty || 0), 0),
+      // Total Ok Prod (Kgs) = Sum of Ok Prod (Kgs) column
+      okProdKgs: machinesData.reduce((sum, m) => sum + (m.currentProduction.okProdKgs || 0) + (m.changeover.okProdKgs || 0), 0),
+      // Ok Prod (%) calculated from totals
+      okProdPercent: 0, // Will calculate below
+      // Total Rej (Kgs) = Sum of Rej (Kgs) column
+      rejKgs: machinesData.reduce((sum, m) => sum + (m.currentProduction.rejKgs || 0) + (m.changeover.rejKgs || 0), 0),
+      // Total lumps (KG) = Sum of lumps (KG) column
+      lumps: machinesData.reduce((sum, m) => sum + (m.currentProduction.lumps || 0) + (m.changeover.lumps || 0), 0),
+      // Total Run Time (mins) = Sum of Run Time (mins) column
+      runTime: machinesData.reduce((sum, m) => sum + (m.currentProduction.runTime || 0) + (m.changeover.runTime || 0), 0),
+      // Total Down time (min) = Sum of Down time (min) column
+      downTime: machinesData.reduce((sum, m) => sum + (m.currentProduction.downTime || 0) + (m.changeover.downTime || 0), 0),
+      // Total Stoppage Time = Sum of Stoppage Time column (totalTime)
+      totalTime: machinesData.reduce((sum, m) => sum + (m.currentProduction.totalTime || 0) + (m.changeover.totalTime || 0), 0)
+    };
+    // Calculate Ok Prod (%) for shift total
+    shiftTotal.okProdPercent = shiftTotal.targetQty > 0 ? (shiftTotal.okProdQty / shiftTotal.targetQty * 100) : 0;
+
+    const dprData: DPRData = {
+      id: `${date}-${shift}-${Date.now()}`,
+      date,
+      shift,
+      shiftIncharge,
+      machines: machinesData,
+      summary,
+      shiftTotal,
+      achievement: null
+    };
+
+    onSave(dprData);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-900">Create New DPR Entry</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="mb-4 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  value={date}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Shift
+                </label>
+                <input
+                  type="text"
+                  value={shift}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Shift Incharge
+                </label>
+                <input
+                  type="text"
+                  value={shiftIncharge}
+                  onChange={(e) => setShiftIncharge(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  placeholder="Enter shift incharge name"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Form-based Entry for DPR */}
+          <div className="space-y-6">
+            {machineEntries.map((entry, index) => (
+              <div key={entry.id} className="border border-gray-300 rounded-lg p-6 bg-white shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900">Line Entry {index + 1}</h3>
+                  {machineEntries.length > 1 && (
+                    <button
+                      onClick={() => removeMachineEntry(entry.id)}
+                      className="text-red-600 hover:text-red-800 p-2"
+                      title="Remove line"
+                    >
+                      <Minus className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Basic Information */}
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Line *
+                    </label>
+                    <select
+                      value={entry.machineNo}
+                      onChange={(e) => {
+                        setMachineEntries(prev => prev.map(en => 
+                          en.id === entry.id ? { ...en, machineNo: e.target.value } : en
+                        ));
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      required
+                    >
+                      <option value="">Select Line</option>
+                      {lines.filter(line => line.status === 'Active').map(line => (
+                        <option key={line.line_id} value={line.line_id}>
+                          {line.description || line.line_id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Operator Name
+                    </label>
+                    <input
+                      type="text"
+                      value={entry.operatorName}
+                      onChange={(e) => {
+                        setMachineEntries(prev => prev.map(en => 
+                          en.id === entry.id ? { ...en, operatorName: e.target.value } : en
+                        ));
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      placeholder="Enter operator name"
+                    />
+                  </div>
+                </div>
+
+                {/* Product Selection */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Product (Mold) * <span className="text-xs text-gray-500">(Unavailable molds shown in red)</span>
+                  </label>
+                  <select
+                    value={entry.currentProduction.product || ''}
+                    onChange={(e) => handleProductSelect(entry.id, e.target.value, false)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  >
+                    <option value="">Select Mold</option>
+                    {molds.map(mold => {
+                      const moldName = mold.mold_name || mold.item_name || '';
+                      if (!moldName) return null;
+                      const isAvailable = isMoldAvailable(moldName, entry.id, false);
+                      return (
+                        <option 
+                          key={mold.mold_id} 
+                          value={moldName}
+                          disabled={!isAvailable}
+                          className={!isAvailable ? 'text-red-500 bg-red-50' : ''}
+                        >
+                          {moldName} {!isAvailable ? '(In Use)' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {/* Auto-filled fields from Mold */}
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Cavity</label>
+                    <input
+                      type="number"
+                      value={entry.currentProduction.cavity || ''}
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Trg Cycle (sec)</label>
+                    <input
+                      type="number"
+                      value={entry.currentProduction.targetCycle || ''}
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Part Wt (gm)</label>
+                    <input
+                      type="number"
+                      value={entry.currentProduction.partWeight || ''}
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                    />
+                  </div>
+                </div>
+
+                {/* Employee Input Fields */}
+                <div className="mb-6">
+                  <h4 className="text-md font-semibold text-gray-800 mb-4">Production Input Fields</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Trg Run Time (min) *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={entry.currentProduction.targetRunTime || ''}
+                        onChange={(e) => handleFieldChange(entry.id, 'targetRunTime', parseFloat(e.target.value) || 0, false)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Act part wt (gm) *</label>
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={entry.currentProduction.actualPartWeight || ''}
+                          onChange={(e) => handleFieldChange(entry.id, 'actualPartWeight', parseFloat(e.target.value) || 0, false)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          required
+                        />
+                        {entry.currentProduction.partWeightCheck === 'OK' && (
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
+                            OK
+                          </span>
+                        )}
+                        {entry.currentProduction.partWeightCheck === 'NOT OK' && (
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
+                            NOT OK
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Act Cycle (sec) *</label>
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={entry.currentProduction.actualCycle || ''}
+                          onChange={(e) => handleFieldChange(entry.id, 'actualCycle', parseFloat(e.target.value) || 0, false)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          required
+                        />
+                        {entry.currentProduction.cycleTimeCheck === 'OK' && (
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
+                            OK
+                          </span>
+                        )}
+                        {entry.currentProduction.cycleTimeCheck === 'NOT OK' && (
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
+                            NOT OK
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Shots Start *</label>
+                      <input
+                        type="number"
+                        value={entry.currentProduction.shotsStart !== undefined ? entry.currentProduction.shotsStart : 0}
+                        onChange={(e) => {
+                          const numVal = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                          handleFieldChange(entry.id, 'shotsStart', isNaN(numVal) ? 0 : numVal, false);
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Shots End *</label>
+                      <input
+                        type="number"
+                        value={entry.currentProduction.shotsEnd !== undefined ? entry.currentProduction.shotsEnd : 0}
+                        onChange={(e) => {
+                          const numVal = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                          handleFieldChange(entry.id, 'shotsEnd', isNaN(numVal) ? 0 : numVal, false);
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Ok Prod Qty (Nos) *</label>
+                      <input
+                        type="number"
+                        value={entry.currentProduction.okProdQty || ''}
+                        onChange={(e) => handleFieldChange(entry.id, 'okProdQty', parseFloat(e.target.value) || 0, false)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">lumps (KG)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={entry.currentProduction.lumps || ''}
+                        onChange={(e) => handleFieldChange(entry.id, 'lumps', parseFloat(e.target.value) || 0, false)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Calculated Fields Display */}
+                <div className="mb-6">
+                  <h4 className="text-md font-semibold text-gray-800 mb-4">Calculated Fields</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Target Qty (Nos)</label>
+                      <input
+                        type="number"
+                        value={entry.currentProduction.targetQty?.toFixed(0) || '0'}
+                        readOnly
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Actual Qty (Nos)</label>
+                      <input
+                        type="number"
+                        value={entry.currentProduction.actualQty?.toFixed(0) || '0'}
+                        readOnly
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Ok Prod (Kgs)</label>
+                      <input
+                        type="number"
+                        value={entry.currentProduction.okProdKgs?.toFixed(2) || '0.00'}
+                        readOnly
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Ok Prod (%)</label>
+                      <input
+                        type="number"
+                        value={entry.currentProduction.okProdPercent ? (entry.currentProduction.okProdPercent * 100).toFixed(2) : '0.00'}
+                        readOnly
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Rej (Kgs)</label>
+                      <input
+                        type="number"
+                        value={entry.currentProduction.rejKgs?.toFixed(2) || '0.00'}
+                        readOnly
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Run Time (mins)</label>
+                      <input
+                        type="number"
+                        value={entry.currentProduction.runTime?.toFixed(2) || '0.00'}
+                        readOnly
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Down time (min)</label>
+                      <input
+                        type="number"
+                        value={entry.currentProduction.downTime?.toFixed(2) || '0.00'}
+                        readOnly
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stoppage Time and Remarks */}
+                <div className="mb-6">
+                  <h4 className="text-md font-semibold text-gray-800 mb-4">Stoppage Time and Remarks</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Reason</label>
+                      <input
+                        type="text"
+                        value={entry.currentProduction.stoppageReason || ''}
+                        onChange={(e) => handleFieldChange(entry.id, 'stoppageReason', e.target.value, false)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        placeholder="Enter stoppage reason"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+                      <input
+                        type="time"
+                        value={entry.currentProduction.startTime || ''}
+                        onChange={(e) => handleFieldChange(entry.id, 'startTime', e.target.value, false)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
+                      <input
+                        type="time"
+                        value={entry.currentProduction.endTime || ''}
+                        onChange={(e) => handleFieldChange(entry.id, 'endTime', e.target.value, false)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Total Time (min)</label>
+                      <input
+                        type="number"
+                        value={entry.currentProduction.totalTime?.toFixed(2) || '0.00'}
+                        readOnly
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Mould change</label>
+                      <input
+                        type="text"
+                        value={entry.currentProduction.mouldChange || ''}
+                        onChange={(e) => handleFieldChange(entry.id, 'mouldChange', e.target.value, false)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        placeholder="Enter mould change details"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">REMARK</label>
+                      <input
+                        type="text"
+                        value={entry.currentProduction.remark || ''}
+                        onChange={(e) => handleFieldChange(entry.id, 'remark', e.target.value, false)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        placeholder="Enter remarks"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Changeover Section */}
+                <div className="mt-6 border-t-2 border-orange-200 pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-md font-semibold text-orange-800 flex items-center">
+                      <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded mr-2 text-xs">CHANGEOVER</span>
+                      Mold Change (Optional)
+                    </h4>
+                    <span className="text-xs text-gray-500">Select a different mold if there was a changeover during the shift</span>
+                  </div>
+                  
+                  {/* Changeover Product Selection */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Changeover Product (Mold) <span className="text-xs text-gray-500">(Selecting releases current mold for other lines)</span>
+                    </label>
+                    <select
+                      value={entry.changeover.product || ''}
+                      onChange={(e) => handleProductSelect(entry.id, e.target.value, true)}
+                      className="w-full px-3 py-2 border border-orange-300 rounded-md text-sm bg-orange-50"
+                    >
+                      <option value="">No Changeover</option>
+                      {molds.map(mold => {
+                        const moldName = mold.mold_name || mold.item_name || '';
+                        if (!moldName) return null;
+                        const isAvailable = isMoldAvailable(moldName, entry.id, true);
+                        // Don't allow selecting the same mold as current production
+                        const isSameAsCurrent = moldName === entry.currentProduction.product;
+                        return (
+                          <option 
+                            key={mold.mold_id} 
+                            value={moldName}
+                            disabled={!isAvailable || isSameAsCurrent}
+                            className={(!isAvailable || isSameAsCurrent) ? 'text-red-500 bg-red-50' : ''}
+                          >
+                            {moldName} {isSameAsCurrent ? '(Current)' : !isAvailable ? '(In Use)' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  {/* Changeover Fields - Only show if changeover product is selected */}
+                  {entry.changeover.product && (
+                    <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                      <div className="grid grid-cols-3 gap-4 mb-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Cavity</label>
+                          <input
+                            type="number"
+                            value={entry.changeover.cavity || ''}
+                            readOnly
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Trg Cycle (sec)</label>
+                          <input
+                            type="number"
+                            value={entry.changeover.targetCycle || ''}
+                            readOnly
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Part Wt (gm)</label>
+                          <input
+                            type="number"
+                            value={entry.changeover.partWeight || ''}
+                            readOnly
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Trg Run Time (min) *</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={entry.changeover.targetRunTime || ''}
+                            onChange={(e) => handleFieldChange(entry.id, 'targetRunTime', parseFloat(e.target.value) || 0, true)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Act part wt (gm)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={entry.changeover.actualPartWeight || ''}
+                            onChange={(e) => handleFieldChange(entry.id, 'actualPartWeight', parseFloat(e.target.value) || 0, true)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Act Cycle (sec)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={entry.changeover.actualCycle || ''}
+                            onChange={(e) => handleFieldChange(entry.id, 'actualCycle', parseFloat(e.target.value) || 0, true)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Shots Start</label>
+                          <input
+                            type="number"
+                            value={entry.changeover.shotsStart !== undefined ? entry.changeover.shotsStart : 0}
+                            onChange={(e) => {
+                              const numVal = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                              handleFieldChange(entry.id, 'shotsStart', isNaN(numVal) ? 0 : numVal, true);
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Shots End</label>
+                          <input
+                            type="number"
+                            value={entry.changeover.shotsEnd !== undefined ? entry.changeover.shotsEnd : 0}
+                            onChange={(e) => {
+                              const numVal = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                              handleFieldChange(entry.id, 'shotsEnd', isNaN(numVal) ? 0 : numVal, true);
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Ok Prod Qty (Nos)</label>
+                          <input
+                            type="number"
+                            value={entry.changeover.okProdQty || ''}
+                            onChange={(e) => handleFieldChange(entry.id, 'okProdQty', parseFloat(e.target.value) || 0, true)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Changeover Calculated Fields */}
+                      <div className="mt-4 pt-4 border-t border-orange-200">
+                        <p className="text-sm font-medium text-gray-700 mb-2">Calculated Fields</p>
+                        <div className="grid grid-cols-4 gap-3 text-sm">
+                          <div>
+                            <span className="text-gray-600">Target Qty:</span>
+                            <span className="ml-2 font-semibold">{entry.changeover.targetQty?.toFixed(0) || '0'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Actual Qty:</span>
+                            <span className="ml-2 font-semibold">{entry.changeover.actualQty?.toFixed(0) || '0'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Ok Prod (Kgs):</span>
+                            <span className="ml-2 font-semibold">{entry.changeover.okProdKgs?.toFixed(2) || '0.00'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Run Time:</span>
+                            <span className="ml-2 font-semibold">{entry.changeover.runTime?.toFixed(2) || '0.00'} min</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            <button
+              onClick={addMachineEntry}
+              className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              Add Line
+            </button>
+          </div>
+        </div>
+
+        <div className="flex justify-end space-x-3 p-4 border-t border-gray-200">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Save DPR
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

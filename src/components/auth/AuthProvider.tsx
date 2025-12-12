@@ -14,6 +14,10 @@ interface AuthUser {
   requiresPasswordReset?: boolean;
   lastLogin?: string;
   createdAt: string;
+  updatedAt?: string;
+  department?: string;
+  jobTitle?: string;
+  permissions?: Record<string, boolean>;
 }
 
 interface AuthContextType {
@@ -26,6 +30,7 @@ interface AuthContextType {
   signup: (data: SignupData) => Promise<{ success: boolean; error?: string }>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
   refreshUser: () => Promise<void>;
+  refreshPermissions: () => Promise<void>;
 }
 
 interface SignupData {
@@ -43,6 +48,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+
+  // Fetch user permissions
+  const fetchPermissions = async (): Promise<Record<string, boolean>> => {
+    try {
+      const response = await fetch('/api/user/permissions', {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        return data.permissions || {};
+      }
+      return {};
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+      return {};
+    }
+  };
 
   // Check authentication status on mount
   useEffect(() => {
@@ -103,7 +126,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.ok) {
         const data = await response.json();
         console.log('✅ Auth successful, user data:', data.user);
-        setUser(data.user);
+        
+        // Fetch user permissions
+        const permissions = await fetchPermissions();
+        console.log('✅ Permissions loaded:', Object.keys(permissions).length, 'permissions');
+        
+        setUser({ ...data.user, permissions });
         setError(null);
       } else {
         setUser(null);
@@ -154,7 +182,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await response.json();
 
       if (response.ok) {
-        setUser(data.user);
+        // Fetch user permissions after successful login
+        const permissions = await fetchPermissions();
+        
+        setUser({ ...data.user, permissions });
         setError(null);
         
         // Clear console errors after successful login
@@ -166,6 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log('✅ Login successful - Console cleared');
           console.log('👤 User:', data.user.username);
           console.log('🔐 Role:', data.user.isRootAdmin ? 'Root Admin' : 'User');
+          console.log('🔑 Permissions loaded:', Object.keys(permissions).length, 'permissions');
           
           // Clear any lingering extension errors by refreshing console state
           setTimeout(() => {
@@ -308,6 +340,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await checkAuth();
   };
 
+  const refreshPermissions = async () => {
+    if (user) {
+      const permissions = await fetchPermissions();
+      setUser({ ...user, permissions });
+      console.log('🔄 Permissions refreshed:', Object.keys(permissions).length, 'permissions');
+    }
+  };
+
   const clearError = () => {
     setError(null);
   };
@@ -321,7 +361,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     signup,
     changePassword,
-    refreshUser
+    refreshUser,
+    refreshPermissions
   };
 
   return (
