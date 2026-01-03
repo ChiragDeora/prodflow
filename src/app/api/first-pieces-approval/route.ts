@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '../../../lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 import { verifySession } from '../../../lib/auth-utils';
 import { validateObject } from '../../../lib/validation';
 
+const getSupabase = () => createClient();
+
 export async function GET(request: NextRequest) {
   try {
+    const supabase = getSupabase();
     // Verify authentication
     const sessionData = await verifySession(request);
     if (!sessionData) {
@@ -131,6 +134,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = getSupabase();
     // Verify authentication
     const sessionData = await verifySession(request);
     if (!sessionData) {

@@ -1,0 +1,4 @@
+Test: test_machine_tab_loads
+Timestamp: 20251217_160634
+Error:
+Machine Master content should load

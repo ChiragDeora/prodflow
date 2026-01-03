@@ -169,6 +169,9 @@ export function generateFGLocalCode(
  * Removes "100" prefix from item name and formats it to match the code pattern
  * Example: "100Ro10-C" -> "RpRo10-C"
  * If code is "RpRo10-B-C", item name becomes "RpRo10-C" (first part + last part)
+ * 
+ * IMPORTANT: If the code is numeric (like "110110001"), return empty string
+ * to prevent converting numeric codes into item names.
  */
 export function updateItemNameWithRPOrCK(itemName: string, code: string): string {
   if (!itemName) return itemName;
@@ -191,6 +194,13 @@ export function updateItemNameWithRPOrCK(itemName: string, code: string): string
   // Clean the code too - remove 100 prefix if present
   let cleanCode = code ? removeOldPrefix(code) : '';
   
+  // CRITICAL FIX: If the code is numeric (all digits, 9+ characters), don't use it
+  // This prevents numeric codes like "110110001" from being converted to item names
+  if (cleanCode && /^\d{9,}$/.test(cleanCode)) {
+    // Code is numeric - return empty string to prevent using code as item name
+    return '';
+  }
+  
   // If we have a code, extract the pattern from it
   if (cleanCode) {
     // Split code by dashes (e.g., "RpRo10-B-C" -> ["RpRo10", "B", "C"])
@@ -205,8 +215,12 @@ export function updateItemNameWithRPOrCK(itemName: string, code: string): string
         return `${firstPart}-${lastPart}`; // "RpRo10-C"
       }
       
-      // If code has only one part, use it as is
-      return firstPart;
+      // If code has only one part, use it as is (but only if it's not numeric)
+      if (!/^\d+$/.test(firstPart)) {
+        return firstPart;
+      }
+      // If it's numeric, return empty
+      return '';
     }
   }
   

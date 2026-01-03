@@ -1,5 +1,16 @@
 import { NextRequest } from 'next/server';
-import { supabase } from './supabase';
+import { createClient } from './supabase/server';
+
+// Access Scope Types
+export type AccessScope = 'FACTORY_ONLY' | 'UNIVERSAL';
+
+// Factory IPs - configurable via environment variable
+// Format: comma-separated list of IPs or CIDR ranges (e.g., "103.243.184.31,192.168.0.0/16,10.0.0.0/8")
+// Also supports common private IP ranges: 192.168.x.x, 10.x.x.x, 172.16-31.x.x
+export function getFactoryIPs(): string[] {
+  const factoryIPs = process.env.FACTORY_ALLOWED_IPS || '103.243.184.31,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12';
+  return factoryIPs.split(',').map(ip => ip.trim()).filter(ip => ip.length > 0);
+}
 
 export interface AuthUser {
   id: string;
@@ -12,6 +23,7 @@ export interface AuthUser {
   requiresPasswordReset?: boolean;
   lastLogin?: string;
   createdAt: string;
+  accessScope?: AccessScope;
 }
 
 export interface SessionData {
@@ -20,6 +32,9 @@ export interface SessionData {
   expiresAt: string;
   lastActivity: string;
 }
+
+// Lazy Supabase client getter for auth utilities
+const getSupabase = () => createClient();
 
 /**
  * Get session token from request
@@ -35,6 +50,7 @@ export function getSessionToken(request: NextRequest): string | null {
  */
 export async function verifySession(request: NextRequest): Promise<SessionData | null> {
   try {
+    const supabase = getSupabase();
     const sessionToken = getSessionToken(request);
     
     if (!sessionToken) {
@@ -75,7 +91,8 @@ export async function verifySession(request: NextRequest): Promise<SessionData |
         password_reset_required,
         temporary_password,
         last_login,
-        created_at
+        created_at,
+        access_scope
       `)
       .eq('id', session.user_id)
       .single();
@@ -100,6 +117,21 @@ export async function verifySession(request: NextRequest): Promise<SessionData |
       return null;
     }
 
+    // Check network access scope
+    const clientIP = getClientIP(request);
+    console.log(`[Session Verification] Checking network access for user ${user.email} (IP: ${clientIP || 'unknown'}, Access Scope: ${user.access_scope || 'FACTORY_ONLY'})`);
+    const accessCheck = verifyAccessScope(
+      user.is_root_admin,
+      user.access_scope as AccessScope,
+      clientIP
+    );
+    
+    if (!accessCheck.allowed) {
+      // Network access denied - invalidate session access
+      console.log(`[Session Verification] Network access denied for user ${user.email}: ${accessCheck.reason}`);
+      return null;
+    }
+
     // Update session activity
     await supabase
       .from('auth_sessions')
@@ -120,7 +152,8 @@ export async function verifySession(request: NextRequest): Promise<SessionData |
         requiresPasswordReset: user.password_reset_required || 
                               (user.temporary_password && user.temporary_password.length > 0),
         lastLogin: user.last_login,
-        createdAt: user.created_at
+        createdAt: user.created_at,
+        accessScope: user.is_root_admin ? 'UNIVERSAL' : (user.access_scope as AccessScope || 'FACTORY_ONLY')
       },
       sessionToken: session.session_token,
       expiresAt: session.expires_at,
@@ -157,6 +190,7 @@ export async function checkUserPermission(
   recordConditions?: any
 ): Promise<boolean> {
   try {
+    const supabase = getSupabase();
     const { data, error } = await supabase
       .rpc('check_user_permission', {
         p_user_id: userId,
@@ -191,6 +225,7 @@ export async function logAuditAction(
   request?: NextRequest
 ): Promise<void> {
   try {
+    const supabase = getSupabase();
     await supabase
       .rpc('log_audit_action', {
         p_user_id: userId,
@@ -251,6 +286,7 @@ export async function requireRootAdmin(request: NextRequest): Promise<AuthUser |
  */
 export async function getUserRoles(userId: string): Promise<string[]> {
   try {
+    const supabase = getSupabase();
     const { data, error } = await supabase
       .from('auth_user_roles')
       .select(`
@@ -287,4 +323,242 @@ export async function hashPassword(password: string): Promise<string> {
 export async function verifyPassword(password: string, hash: string): Promise<boolean> {
   const bcrypt = require('bcrypt');
   return await bcrypt.compare(password, hash);
+}
+
+/**
+ * Get client IP from request
+ * 
+ * For testing in development, you can use the 'x-test-client-ip' header to simulate different IPs.
+ * Example: curl -H "x-test-client-ip: 203.0.113.50" http://localhost:3000/api/auth/login
+ * 
+ * Test IPs to try:
+ * - "192.168.1.100" - Private IP (should be allowed as factory network)
+ * - "10.0.0.50" - Private IP (should be allowed as factory network)
+ * - "203.0.113.50" - Public IP (should be blocked for FACTORY_ONLY users)
+ * - "103.243.184.31" - Configured factory IP (should be allowed)
+ */
+export function getClientIP(request: NextRequest): string | null {
+  // In development, allow testing with custom IP header
+  if (process.env.NODE_ENV === 'development') {
+    const testIP = request.headers.get('x-test-client-ip');
+    if (testIP) {
+      console.log(`[getClientIP] 🧪 TEST MODE: Using simulated IP from x-test-client-ip header: ${testIP}`);
+      return testIP.trim();
+    }
+  }
+  
+  // Check various headers for the real IP (in order of priority)
+  const xForwardedFor = request.headers.get('x-forwarded-for');
+  if (xForwardedFor) {
+    // x-forwarded-for may contain multiple IPs, get the first one (original client)
+    const ip = xForwardedFor.split(',')[0].trim();
+    console.log(`[getClientIP] Found x-forwarded-for: ${ip}`);
+    return ip;
+  }
+  
+  const xRealIP = request.headers.get('x-real-ip');
+  if (xRealIP) {
+    console.log(`[getClientIP] Found x-real-ip: ${xRealIP}`);
+    return xRealIP.trim();
+  }
+  
+  const cfConnectingIP = request.headers.get('cf-connecting-ip');
+  if (cfConnectingIP) {
+    console.log(`[getClientIP] Found cf-connecting-ip: ${cfConnectingIP}`);
+    return cfConnectingIP.trim();
+  }
+  
+  // Try to get IP from request URL/connection info
+  // In Next.js, we can check the host header
+  const host = request.headers.get('host');
+  console.log(`[getClientIP] No IP headers found. Host: ${host}`);
+  
+  // For local development, return localhost indicator
+  if (host?.includes('localhost') || host?.includes('127.0.0.1')) {
+    console.log(`[getClientIP] Local development detected via host header`);
+    return 'localhost';
+  }
+  
+  return null;
+}
+
+/**
+ * Convert IP address to number for range comparison
+ */
+function ipToNumber(ip: string): number {
+  const parts = ip.split('.').map(Number);
+  return (parts[0] << 24) + (parts[1] << 16) + (parts[2] << 8) + parts[3];
+}
+
+/**
+ * Check if IP is in CIDR range
+ */
+function isIPInCIDR(ip: string, cidr: string): boolean {
+  const [network, prefixLength] = cidr.split('/');
+  const prefix = parseInt(prefixLength, 10);
+  const mask = (0xFFFFFFFF << (32 - prefix)) >>> 0;
+  const ipNum = ipToNumber(ip);
+  const networkNum = ipToNumber(network);
+  return (ipNum & mask) === (networkNum & mask);
+}
+
+/**
+ * Check if IP is a private/local network IP (common factory networks)
+ */
+function isPrivateIP(ip: string): boolean {
+  const parts = ip.split('.').map(Number);
+  
+  // 192.168.0.0/16 (192.168.0.0 - 192.168.255.255)
+  if (parts[0] === 192 && parts[1] === 168) {
+    return true;
+  }
+  
+  // 10.0.0.0/8 (10.0.0.0 - 10.255.255.255)
+  if (parts[0] === 10) {
+    return true;
+  }
+  
+  // 172.16.0.0/12 (172.16.0.0 - 172.31.255.255)
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Check if IP is localhost (for development)
+ */
+function isLocalhost(ip: string): boolean {
+  const localhostIPs = ['localhost', '127.0.0.1', '::1', '::ffff:127.0.0.1'];
+  return localhostIPs.includes(ip.toLowerCase());
+}
+
+/**
+ * Check if IP matches any of the allowed factory IPs
+ * Supports exact IPs, CIDR ranges, and automatically allows private IPs
+ */
+export function isFactoryIP(clientIP: string | null): boolean {
+  if (!clientIP) {
+    console.log('[Factory Network Check] No client IP detected');
+    return false;
+  }
+  
+  // Allow localhost for development
+  if (isLocalhost(clientIP)) {
+    console.log(`[Factory Network Check] Client IP ${clientIP} is localhost - allowing access for development`);
+    return true;
+  }
+  
+  // Automatically allow private IPs (common in factory networks)
+  if (isPrivateIP(clientIP)) {
+    console.log(`[Factory Network Check] Client IP ${clientIP} is a private IP - allowing access`);
+    return true;
+  }
+  
+  const factoryIPs = getFactoryIPs();
+  
+  // Check exact matches and CIDR ranges
+  for (const factoryIP of factoryIPs) {
+    // Check exact match
+    if (factoryIP === clientIP) {
+      console.log(`[Factory Network Check] Client IP ${clientIP} matches exact factory IP ${factoryIP}`);
+      return true;
+    }
+    
+    // Check CIDR range
+    if (factoryIP.includes('/')) {
+      try {
+        if (isIPInCIDR(clientIP, factoryIP)) {
+          console.log(`[Factory Network Check] Client IP ${clientIP} is within CIDR range ${factoryIP}`);
+          return true;
+        }
+      } catch (error) {
+        console.warn(`[Factory Network Check] Invalid CIDR format: ${factoryIP}`, error);
+      }
+    }
+  }
+  
+  console.log(`[Factory Network Check] Client IP ${clientIP} does not match any factory IPs. Configured IPs: ${factoryIPs.join(', ')}`);
+  return false;
+}
+
+/**
+ * Verify access scope for a user based on their access_scope setting and client IP
+ * Root admin always passes (UNIVERSAL access)
+ * @returns { allowed: boolean, reason?: string }
+ */
+export function verifyAccessScope(
+  isRootAdmin: boolean,
+  accessScope: AccessScope | undefined | null,
+  clientIP: string | null
+): { allowed: boolean; reason?: string } {
+  // Root admin always has universal access
+  if (isRootAdmin) {
+    return { allowed: true };
+  }
+  
+  // Default to FACTORY_ONLY if not set
+  const scope = accessScope || 'FACTORY_ONLY';
+  
+  // UNIVERSAL access - allow from any IP
+  if (scope === 'UNIVERSAL') {
+    return { allowed: true };
+  }
+  
+  // FACTORY_ONLY - must be from factory IP
+  if (scope === 'FACTORY_ONLY') {
+    console.log(`[Access Scope Check] Checking FACTORY_ONLY access for IP: ${clientIP || 'unknown'}`);
+    if (isFactoryIP(clientIP)) {
+      console.log(`[Access Scope Check] Factory network access granted for IP: ${clientIP}`);
+      return { allowed: true };
+    }
+    
+    const reason = `Access denied. Your account is restricted to factory network only. Detected IP: ${clientIP || 'unknown'}. Please connect to the factory network (dppl) to access ProdFlow.`;
+    console.log(`[Access Scope Check] ${reason}`);
+    return {
+      allowed: false,
+      reason
+    };
+  }
+  
+  // Unknown scope - deny by default
+  return {
+    allowed: false,
+    reason: 'Invalid access scope configuration. Please contact administrator.'
+  };
+}
+
+/**
+ * Check if user can access the system based on access scope
+ * This function fetches user data and validates against the request IP
+ */
+export async function checkUserNetworkAccess(
+  userId: string,
+  request: NextRequest
+): Promise<{ allowed: boolean; reason?: string }> {
+  try {
+    const supabase = getSupabase();
+    // Get user with access_scope
+    const { data: user, error } = await supabase
+      .from('auth_users')
+      .select('id, is_root_admin, access_scope')
+      .eq('id', userId)
+      .single();
+    
+    if (error || !user) {
+      return { allowed: false, reason: 'User not found' };
+    }
+    
+    const clientIP = getClientIP(request);
+    
+    return verifyAccessScope(
+      user.is_root_admin,
+      user.access_scope as AccessScope,
+      clientIP
+    );
+  } catch (error) {
+    console.error('Network access check error:', error);
+    return { allowed: false, reason: 'Error checking network access' };
+  }
 }

@@ -1,0 +1,11 @@
+Test: test_machine_edit_button
+Timestamp: 20251217_161732
+Error:
+Traceback (most recent call last):
+  File "/Users/chiragdeora/Developer/production-scheduler/tests/helium/run.py", line 69, in run_single_test
+    test_func()
+  File "/Users/chiragdeora/Developer/production-scheduler/tests/helium/test_masters.py", line 152, in test_machine_edit_button
+    edit_buttons = driver.find_elements_by_xpath("//button[contains(text(), 'Edit')] | //button[@aria-label='Edit'] | //button[contains(@class, 'edit')]")
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'WebDriver' object has no attribute 'find_elements_by_xpath'
+

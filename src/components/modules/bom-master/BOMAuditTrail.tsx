@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { X, History, User, Clock, FileText, AlertCircle } from 'lucide-react';
-import { BOMMasterWithVersions, BOMAudit } from '@/lib/supabase';
+import type { BOMMasterWithVersions, BOMAudit } from '@/lib/supabase';
 
 interface BOMAuditTrailProps {
   bom: BOMMasterWithVersions;

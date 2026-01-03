@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, Search, Filter, FileText, Eye, Package, ArrowRightCircle } from 'lucide-react';
-import { grnAPI, jwAnnexureGRNAPI } from '../../../lib/supabase';
+import { Calendar, Search, Filter, FileText, Eye, Package, ArrowRightCircle, X, Printer, Download } from 'lucide-react';
+import { grnAPI, jwAnnexureGRNAPI, GRN, JWAnnexureGRN, GRNItem, JWAnnexureGRNItem } from '../../../lib/supabase';
+import HistoryDetailView from './HistoryDetailView';
 
 interface StoreForm {
   id: string;
@@ -23,6 +24,9 @@ const StoreHistory: React.FC = () => {
   const [selectedType, setSelectedType] = useState<'all' | 'normal-grn' | 'jw-annexure-grn'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedForm, setSelectedForm] = useState<StoreForm | null>(null);
+  const [detailedForm, setDetailedForm] = useState<GRN | JWAnnexureGRN | null>(null);
+  const [detailedItems, setDetailedItems] = useState<GRNItem[] | JWAnnexureGRNItem[]>([]);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   // Get available years from forms
   const availableYears = React.useMemo(() => {
@@ -137,8 +141,31 @@ const StoreHistory: React.FC = () => {
     setFilteredForms(filtered);
   }, [forms, selectedYear, selectedDate, selectedType, searchTerm]);
 
-  const handleViewForm = (form: StoreForm) => {
+  const handleViewForm = async (form: StoreForm) => {
     setSelectedForm(form);
+    setLoadingDetails(true);
+    setDetailedForm(null);
+    setDetailedItems([]);
+    
+    try {
+      if (form.type === 'normal-grn') {
+        const data = await grnAPI.getById(form.id);
+        if (data) {
+          setDetailedForm(data.grn);
+          setDetailedItems(data.items || []);
+        }
+      } else if (form.type === 'jw-annexure-grn') {
+        const data = await jwAnnexureGRNAPI.getById(form.id);
+        if (data) {
+          setDetailedForm(data.grn);
+          setDetailedItems(data.items || []);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading form details:', error);
+    } finally {
+      setLoadingDetails(false);
+    }
   };
 
   const handleCloseView = () => {
@@ -167,23 +194,59 @@ const StoreHistory: React.FC = () => {
   const jwGrns = filteredForms.filter(f => f.type === 'jw-annexure-grn');
 
   if (selectedForm) {
+    // Prepare document info
+    const documentInfo: Array<{ label: string; value: string | number | null | undefined }> = [
+      { label: 'Document Number', value: detailedForm?.doc_no || selectedForm.docNo },
+      { label: 'Date', value: formatDate(detailedForm?.date || selectedForm.date || selectedForm.createdAt) }
+    ];
+
+    if (selectedForm.type === 'normal-grn' && detailedForm) {
+      const grn = detailedForm as GRN;
+      if (grn.supplier_name) documentInfo.push({ label: 'Supplier', value: grn.supplier_name });
+      if (grn.po_no) documentInfo.push({ label: 'PO Number', value: grn.po_no });
+      if (grn.grn_no) documentInfo.push({ label: 'GRN Number', value: grn.grn_no });
+    } else if (selectedForm.type === 'jw-annexure-grn' && detailedForm) {
+      const jwGrn = detailedForm as JWAnnexureGRN;
+      if (jwGrn.party_name) documentInfo.push({ label: 'Party Name', value: jwGrn.party_name });
+      if (jwGrn.jw_no) documentInfo.push({ label: 'JW Number', value: jwGrn.jw_no });
+      if (jwGrn.indent_no) documentInfo.push({ label: 'Indent Number', value: jwGrn.indent_no });
+      if (jwGrn.challan_no) documentInfo.push({ label: 'Challan Number', value: jwGrn.challan_no });
+      if (jwGrn.gst_no) documentInfo.push({ label: 'GST Number', value: jwGrn.gst_no });
+      if (jwGrn.total_value) documentInfo.push({ 
+        label: 'Total Value', 
+        value: `₹${jwGrn.total_value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` 
+      });
+    }
+
+    // Prepare item columns
+    const itemColumns = selectedForm.type === 'normal-grn' 
+      ? [
+          { key: 'sr_no', label: 'Sr. No.' },
+          { key: 'item_description', label: 'Item Description' },
+          { key: 'total_qty', label: 'Quantity', format: (v: any) => v || 'N/A' },
+          { key: 'uom', label: 'UOM' },
+          { key: 'remarks', label: 'Remarks', format: (v: any) => v || '-' }
+        ]
+      : [
+          { key: 'sr_no', label: 'Sr. No.' },
+          { key: 'item_code', label: 'Item Code' },
+          { key: 'item_name', label: 'Item Name' },
+          { key: 'indent_qty', label: 'Indent Qty' },
+          { key: 'rcd_qty', label: 'Received Qty' },
+          { key: 'rate', label: 'Rate', format: (v: any) => v ? `₹${v}` : 'N/A' },
+          { key: 'net_value', label: 'Net Value', format: (v: any) => v ? `₹${v.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : 'N/A' }
+        ];
+
     return (
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">{getFormTitle(selectedForm)}</h2>
-          <button
-            onClick={handleCloseView}
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-          >
-            Close
-          </button>
-        </div>
-        <div className="border border-gray-300 rounded-lg p-6 bg-gray-50">
-          <pre className="whitespace-pre-wrap text-sm">
-            {JSON.stringify(selectedForm, null, 2)}
-          </pre>
-        </div>
-      </div>
+      <HistoryDetailView
+        title={getFormTitle(selectedForm)}
+        date={selectedForm.date || selectedForm.createdAt}
+        onClose={handleCloseView}
+        documentInfo={documentInfo}
+        items={detailedItems}
+        itemColumns={itemColumns}
+        loading={loadingDetails}
+      />
     );
   }
 

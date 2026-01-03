@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 import { verifyRootAdmin } from '@/lib/auth-utils';
+
+const getSupabase = () => createClient();
 
 export async function GET(request: NextRequest) {
   try {
+    const supabase = getSupabase();
     const adminUser = await verifyRootAdmin(request);
     if (!adminUser) {
       return NextResponse.json(

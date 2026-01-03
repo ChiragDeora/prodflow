@@ -16,6 +16,7 @@ interface OpenIndentItem {
 
 const OpenIndent: React.FC = () => {
   const [openIndentItems, setOpenIndentItems] = useState<OpenIndentItem[]>([]);
+  const [completedIndentItems, setCompletedIndentItems] = useState<OpenIndentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'partial' | 'completed'>('all');
@@ -29,9 +30,8 @@ const OpenIndent: React.FC = () => {
     try {
       setLoading(true);
       
-      // Use the new getOpenIndents API method that handles the database logic
+      // Fetch open indents
       const openIndentsData = await materialIndentSlipAPI.getOpenIndents();
-      
       const openIndentItems: OpenIndentItem[] = [];
 
       // Process each open indent slip
@@ -64,8 +64,41 @@ const OpenIndent: React.FC = () => {
       }
 
       setOpenIndentItems(openIndentItems);
+
+      // Fetch completed indents
+      try {
+        const completedIndentsData = await materialIndentSlipAPI.getCompletedIndents();
+        const completedIndentItems: OpenIndentItem[] = [];
+
+        // Process each completed indent slip
+        for (const { slip, items } of completedIndentsData) {
+          // Process each item in the indent slip
+          for (const indentItem of items) {
+            const requestedQty = indentItem.qty || 0;
+            const receivedQty = indentItem.received_qty || 0;
+            const pendingQty = indentItem.pending_qty || 0;
+            
+            // All items in completed indents are marked as completed
+            completedIndentItems.push({
+              indentSlip: slip,
+              indentItem,
+              requestedQty,
+              receivedQty,
+              pendingQty: Math.abs(pendingQty),
+              status: 'completed',
+              lastReceived: slip.updated_at
+            });
+          }
+        }
+
+        setCompletedIndentItems(completedIndentItems);
+        console.log('Completed indents fetched:', completedIndentsData.length, 'slips,', completedIndentItems.length, 'items');
+      } catch (error) {
+        console.error('Error fetching completed indents:', error);
+        setCompletedIndentItems([]);
+      }
     } catch (error) {
-      console.error('Error fetching open indent data:', error);
+      console.error('Error fetching indent data:', error);
     } finally {
       setLoading(false);
     }
@@ -89,7 +122,7 @@ const OpenIndent: React.FC = () => {
     }
   };
 
-  const filteredItems = openIndentItems.filter(item => {
+  const filteredOpenItems = openIndentItems.filter(item => {
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch = 
       (item.indentItem.item_name || item.indentItem.description_specification || '').toLowerCase().includes(searchLower) ||
@@ -98,6 +131,20 @@ const OpenIndent: React.FC = () => {
       (item.indentSlip.party_name || item.indentSlip.department_name || '').toLowerCase().includes(searchLower);
     
     const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  const filteredCompletedItems = completedIndentItems.filter(item => {
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = 
+      (item.indentItem.item_name || item.indentItem.description_specification || '').toLowerCase().includes(searchLower) ||
+      (item.indentItem.item_code || '').toLowerCase().includes(searchLower) ||
+      (item.indentSlip.ident_no || item.indentSlip.doc_no || '').toLowerCase().includes(searchLower) ||
+      (item.indentSlip.party_name || item.indentSlip.department_name || '').toLowerCase().includes(searchLower);
+    
+    // Completed items should show when filter is 'all' or 'completed'
+    const matchesStatus = statusFilter === 'all' || statusFilter === 'completed';
     
     return matchesSearch && matchesStatus;
   });
@@ -132,9 +179,9 @@ const OpenIndent: React.FC = () => {
     return requested > 0 ? Math.min(100, (received / requested) * 100) : 0;
   };
 
-  const totalPendingItems = filteredItems.filter(item => item.status === 'pending').length;
-  const totalPartialItems = filteredItems.filter(item => item.status === 'partial').length;
-  const totalCompletedItems = filteredItems.filter(item => item.status === 'completed').length;
+  const totalPendingItems = filteredOpenItems.filter(item => item.status === 'pending').length;
+  const totalPartialItems = filteredOpenItems.filter(item => item.status === 'partial').length;
+  const totalCompletedItems = filteredOpenItems.filter(item => item.status === 'completed').length + filteredCompletedItems.length;
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
@@ -147,7 +194,7 @@ const OpenIndent: React.FC = () => {
         <button
           onClick={fetchOpenIndentData}
           disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 disabled:opacity-50 transition-colors"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Refresh
@@ -190,7 +237,7 @@ const OpenIndent: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-blue-600">Total Items</p>
-              <p className="text-2xl font-bold text-blue-700">{filteredItems.length}</p>
+              <p className="text-2xl font-bold text-blue-700">{filteredOpenItems.length + filteredCompletedItems.length}</p>
             </div>
             <Package className="w-8 h-8 text-blue-500" />
           </div>
@@ -235,120 +282,280 @@ const OpenIndent: React.FC = () => {
         </div>
       )}
 
-      {/* Items List */}
+      {/* Open Indents Table */}
       {!loading && (
-        <div className="space-y-4">
-          {filteredItems.length === 0 ? (
-            <div className="text-center py-12">
-              <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">No open indent items found</p>
-            </div>
-          ) : (
-            filteredItems.map((item, index) => (
-              <div key={`${item.indentSlip.id}-${item.indentItem.id}`} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      {getStatusIcon(item.status)}
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(item.status)}`}>
-                        {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                      </span>
-                      {/* Status indicator for indent slip */}
-                      {item.indentSlip.status && (
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
-                          item.indentSlip.status === 'OPEN' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
-                          item.indentSlip.status === 'CLOSED_PERFECT' ? 'bg-green-100 text-green-800 border-green-200' :
-                          item.indentSlip.status === 'CLOSED_OVER_RECEIVED' ? 'bg-orange-100 text-orange-800 border-orange-200' :
-                          'bg-gray-100 text-gray-800 border-gray-200'
-                        }`}>
-                          {item.indentSlip.status.replace('_', ' ')}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {/* Manual Close Button */}
-                  {item.indentSlip.status === 'OPEN' && item.status === 'pending' && (
-                    <button
-                      onClick={() => handleManualClose(item.indentSlip.id)}
-                      disabled={closingIndent === item.indentSlip.id}
-                      className="ml-4 px-3 py-1 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+        <>
+          {filteredOpenItems.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Open Indents</h3>
+              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Item</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Indent No</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Party</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Date</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Requested</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Received</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Pending</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Progress</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">UOM</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredOpenItems.map((item, index) => (
+                    <tr 
+                      key={`${item.indentSlip.id}-${item.indentItem.id}`} 
+                      className="hover:bg-gray-50 transition-colors"
                     >
-                      {closingIndent === item.indentSlip.id ? 'Closing...' : 'Close Manually'}
-                    </button>
-                  )}
+                      {/* Status */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          {getStatusIcon(item.status)}
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(item.status)}`}>
+                            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                          </span>
+                        </div>
+                      </td>
+                      
+                      {/* Item Name & Code */}
+                      <td className="px-4 py-3">
+                        <div className="text-sm font-medium text-gray-900">
+                          {item.indentItem.item_name || item.indentItem.description_specification || 'N/A'}
+                        </div>
+                        {item.indentItem.item_code && (
+                          <div className="text-xs text-gray-500">Code: {item.indentItem.item_code}</div>
+                        )}
+                      </td>
+                      
+                      {/* Indent No */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="text-sm text-blue-600 font-medium">
+                          {item.indentSlip.ident_no || item.indentSlip.doc_no || 'N/A'}
+                        </div>
+                        {item.indentSlip.status && (
+                          <div className={`text-xs mt-1 inline-block px-2 py-0.5 rounded ${
+                            item.indentSlip.status === 'OPEN' ? 'bg-yellow-100 text-yellow-700' :
+                            item.indentSlip.status === 'CLOSED_PERFECT' ? 'bg-green-100 text-green-700' :
+                            item.indentSlip.status === 'CLOSED_OVER_RECEIVED' ? 'bg-orange-100 text-orange-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {item.indentSlip.status.replace('_', ' ')}
+                          </div>
+                        )}
+                      </td>
+                      
+                      {/* Party Name */}
+                      <td className="px-4 py-3">
+                        <div className="text-sm text-gray-900">
+                          {item.indentSlip.party_name || item.indentSlip.department_name || 'N/A'}
+                        </div>
+                      </td>
+                      
+                      {/* Date */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {new Date(item.indentSlip.indent_date).toLocaleDateString('en-GB')}
+                        </div>
+                      </td>
+                      
+                      {/* Requested */}
+                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <div className="text-sm font-semibold text-blue-700">{item.requestedQty}</div>
+                      </td>
+                      
+                      {/* Received */}
+                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <div className="text-sm font-semibold text-green-700">{item.receivedQty}</div>
+                      </td>
+                      
+                      {/* Pending */}
+                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <div className="text-sm font-semibold text-red-700">{item.pendingQty}</div>
+                      </td>
+                      
+                      {/* Progress */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-gray-200 rounded-full h-2 min-w-[60px]">
+                            <div
+                              className={`h-2 rounded-full transition-all ${
+                                item.status === 'completed' ? 'bg-green-500' :
+                                item.status === 'partial' ? 'bg-yellow-500' : 'bg-red-500'
+                              }`}
+                              style={{ width: `${getProgressPercentage(item.receivedQty, item.requestedQty)}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-gray-600 font-medium min-w-[40px]">
+                            {getProgressPercentage(item.receivedQty, item.requestedQty).toFixed(1)}%
+                          </span>
+                        </div>
+                      </td>
+                      
+                      {/* UOM */}
+                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <div className="text-sm text-gray-600">{item.indentItem.uom || 'N/A'}</div>
+                      </td>
+                      
+                      {/* Action */}
+                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                        {item.indentSlip.status === 'OPEN' && (
+                          <button
+                            onClick={() => handleManualClose(item.indentSlip.id)}
+                            disabled={closingIndent === item.indentSlip.id}
+                            className="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors disabled:opacity-50"
+                          >
+                            {closingIndent === item.indentSlip.id ? 'Closing...' : 'Close'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-                
-                <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900 mb-1">
-                    {item.indentItem.item_name || item.indentItem.description_specification || 'N/A'}
-                    {item.indentItem.item_code && (
-                      <span className="text-sm text-gray-500 ml-2">({item.indentItem.item_code})</span>
-                    )}
-                  </h3>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
-                    <div>
-                      <span className="font-medium">Indent No:</span>
-                      <p className="text-blue-600">{item.indentSlip.ident_no || item.indentSlip.doc_no || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium">Party Name:</span>
-                      <p>{item.indentSlip.party_name || item.indentSlip.department_name || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium">Indent Date:</span>
-                      <p>{new Date(item.indentSlip.indent_date).toLocaleDateString()}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium">UOM:</span>
-                      <p>{item.indentItem.uom || 'N/A'}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Progress Bar */}
-                <div className="mb-3">
-                  <div className="flex justify-between text-sm text-gray-600 mb-1">
-                    <span>Progress</span>
-                    <span>{getProgressPercentage(item.receivedQty, item.requestedQty).toFixed(1)}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full transition-all duration-300 ${
-                        item.status === 'completed' ? 'bg-green-500' :
-                        item.status === 'partial' ? 'bg-yellow-500' : 'bg-red-500'
-                      }`}
-                      style={{ width: `${getProgressPercentage(item.receivedQty, item.requestedQty)}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Quantity Details */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center p-3 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-600 font-medium">Requested</p>
-                    <p className="text-lg font-bold text-blue-700">{item.requestedQty}</p>
-                  </div>
-                  <div className="text-center p-3 bg-green-50 rounded-lg">
-                    <p className="text-sm text-green-600 font-medium">Received</p>
-                    <p className="text-lg font-bold text-green-700">{item.receivedQty}</p>
-                  </div>
-                  <div className="text-center p-3 bg-red-50 rounded-lg">
-                    <p className="text-sm text-red-600 font-medium">Pending</p>
-                    <p className="text-lg font-bold text-red-700">{item.pendingQty}</p>
-                  </div>
-                </div>
-
-                {/* Last Received */}
-                {item.lastReceived && (
-                  <div className="mt-3 text-xs text-gray-500">
-                    Last received: {new Date(item.lastReceived).toLocaleDateString()}
-                  </div>
-                )}
               </div>
-            ))
+            </div>
           )}
-        </div>
+
+          {/* Completed Indents Table */}
+          {filteredCompletedItems.length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Completed Indents</h3>
+              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Item</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Indent No</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Party</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Date</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Requested</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Received</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Pending</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Progress</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">UOM</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredCompletedItems.map((item, index) => (
+                        <tr 
+                          key={`${item.indentSlip.id}-${item.indentItem.id}`} 
+                          className="hover:bg-gray-50 transition-colors"
+                        >
+                          {/* Status */}
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              {getStatusIcon(item.status)}
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(item.status)}`}>
+                                {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                              </span>
+                            </div>
+                          </td>
+                          
+                          {/* Item Name & Code */}
+                          <td className="px-4 py-3">
+                            <div className="text-sm font-medium text-gray-900">
+                              {item.indentItem.item_name || item.indentItem.description_specification || 'N/A'}
+                            </div>
+                            {item.indentItem.item_code && (
+                              <div className="text-xs text-gray-500">Code: {item.indentItem.item_code}</div>
+                            )}
+                          </td>
+                          
+                          {/* Indent No */}
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="text-sm text-blue-600 font-medium">
+                              {item.indentSlip.ident_no || item.indentSlip.doc_no || 'N/A'}
+                            </div>
+                            {item.indentSlip.status && (
+                              <div className={`text-xs mt-1 inline-block px-2 py-0.5 rounded ${
+                                item.indentSlip.status === 'OPEN' ? 'bg-yellow-100 text-yellow-700' :
+                                item.indentSlip.status === 'CLOSED_PERFECT' ? 'bg-green-100 text-green-700' :
+                                item.indentSlip.status === 'CLOSED_OVER_RECEIVED' ? 'bg-orange-100 text-orange-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {item.indentSlip.status.replace('_', ' ')}
+                              </div>
+                            )}
+                          </td>
+                          
+                          {/* Party Name */}
+                          <td className="px-4 py-3">
+                            <div className="text-sm text-gray-900">
+                              {item.indentSlip.party_name || item.indentSlip.department_name || 'N/A'}
+                            </div>
+                          </td>
+                          
+                          {/* Date */}
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">
+                              {new Date(item.indentSlip.indent_date).toLocaleDateString('en-GB')}
+                            </div>
+                          </td>
+                          
+                          {/* Requested */}
+                          <td className="px-4 py-3 whitespace-nowrap text-center">
+                            <div className="text-sm font-semibold text-blue-700">{item.requestedQty}</div>
+                          </td>
+                          
+                          {/* Received */}
+                          <td className="px-4 py-3 whitespace-nowrap text-center">
+                            <div className="text-sm font-semibold text-green-700">{item.receivedQty}</div>
+                          </td>
+                          
+                          {/* Pending */}
+                          <td className="px-4 py-3 whitespace-nowrap text-center">
+                            <div className="text-sm font-semibold text-red-700">{item.pendingQty}</div>
+                          </td>
+                          
+                          {/* Progress */}
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 bg-gray-200 rounded-full h-2 min-w-[60px]">
+                                <div
+                                  className={`h-2 rounded-full transition-all ${
+                                    item.status === 'completed' ? 'bg-green-500' :
+                                    item.status === 'partial' ? 'bg-yellow-500' : 'bg-red-500'
+                                  }`}
+                                  style={{ width: `${getProgressPercentage(item.receivedQty, item.requestedQty)}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-600 font-medium min-w-[40px]">
+                                {getProgressPercentage(item.receivedQty, item.requestedQty).toFixed(1)}%
+                              </span>
+                            </div>
+                          </td>
+                          
+                          {/* UOM */}
+                          <td className="px-4 py-3 whitespace-nowrap text-center">
+                            <div className="text-sm text-gray-600">{item.indentItem.uom || 'N/A'}</div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {filteredOpenItems.length === 0 && filteredCompletedItems.length === 0 && (
+            <div className="bg-white rounded-lg border border-gray-200">
+              <div className="text-center py-12">
+                <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">No indent items found</p>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

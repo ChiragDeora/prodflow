@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getClientIP, verifyAccessScope, AccessScope } from '@/lib/auth-utils';
+
+const getSupabase = () => createClient();
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = getSupabase();
     // Check rate limit
     const rateLimitResult = checkRateLimit(request, {
       maxAttempts: 5, // 5 attempts per IP
@@ -167,6 +171,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Invalid username or password' },
         { status: 401 }
+      );
+    }
+
+    // Check network access scope restriction
+    const clientIP = getClientIP(request);
+    console.log(`[Login] Checking network access for user ${username} (IP: ${clientIP || 'unknown'}, Access Scope: ${user.access_scope || 'FACTORY_ONLY'})`);
+    const accessCheck = verifyAccessScope(
+      user.is_root_admin,
+      user.access_scope as AccessScope,
+      clientIP
+    );
+
+    if (!accessCheck.allowed) {
+      console.log(`[Login] Network access denied for user ${username}: ${accessCheck.reason}`);
+      // Log restricted access attempt
+      try {
+        await supabase.from('auth_audit_logs').insert({
+          user_id: user.id,
+          action: 'login_restricted_network',
+          resource_type: 'auth_users',
+          resource_id: user.id,
+          details: { 
+            username, 
+            reason: 'network_restriction',
+            access_scope: user.access_scope,
+            client_ip: clientIP,
+            message: accessCheck.reason
+          },
+          outcome: 'failure',
+          ip_address: clientIP,
+          user_agent: request.headers.get('user-agent') || null
+        });
+      } catch (auditError) {
+        console.warn('Could not log network restriction:', auditError);
+      }
+
+      return NextResponse.json(
+        { error: accessCheck.reason || 'Network access restricted' },
+        { status: 403 }
       );
     }
 

@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 import { verifyRootAdmin } from '@/lib/auth-utils';
+
+const getSupabase = () => createClient();
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
+    const supabase = getSupabase();
     const adminUser = await verifyRootAdmin(request);
     if (!adminUser) {
       return NextResponse.json(
@@ -42,6 +45,50 @@ export async function POST(
     if (user.status !== 'pending') {
       return NextResponse.json(
         { error: 'User is not in pending status' },
+        { status: 400 }
+      );
+    }
+
+    // Ensure department and designation are set before approval
+    if (!user.department || !user.job_title || String(user.job_title).trim() === '') {
+      return NextResponse.json(
+        { error: 'Please set this user\'s department and designation before approving.' },
+        { status: 400 }
+      );
+    }
+
+    // Ensure the user has at least one active permission or role before approval
+    const { count: activePermissionCount, error: permissionCountError } = await supabase
+      .from('auth_user_permissions')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('is_active', true);
+
+    if (permissionCountError) {
+      console.error('Error counting user permissions:', permissionCountError);
+      return NextResponse.json(
+        { error: 'Failed to validate user permissions before approval' },
+        { status: 500 }
+      );
+    }
+
+    const { count: activeRoleCount, error: roleCountError } = await supabase
+      .from('auth_user_roles')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('is_active', true);
+
+    if (roleCountError) {
+      console.error('Error counting user roles:', roleCountError);
+      return NextResponse.json(
+        { error: 'Failed to validate user permissions before approval' },
+        { status: 500 }
+      );
+    }
+
+    if ((activePermissionCount || 0) + (activeRoleCount || 0) === 0) {
+      return NextResponse.json(
+        { error: 'Before approving this user, please grant at least one permission or role.' },
         { status: 400 }
       );
     }

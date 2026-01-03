@@ -356,8 +356,7 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
   const [achievementMetrics, setAchievementMetrics] = useState<AchievementMetrics>(loadAchievementMetrics);
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [showFullView, setShowFullView] = useState(false);
-  const [dprPermissions, setDprPermissions] = useState<Record<string, boolean>>({});
-  const [canManageSettings, setCanManageSettings] = useState(false);
+  const [hasFullViewAccess, setHasFullViewAccess] = useState<boolean>(false);
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [molds, setMolds] = useState<Mold[]>([]);
   const [machines, setMachines] = useState<Machine[]>([]);
@@ -373,27 +372,82 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
     userName.includes('deora') ||
     user?.isRootAdmin || false;
   
-  const isSuperUser = isYogeshDeora || canManageSettings;
+  // Super user can always open the local Column Settings panel.
+  // We no longer depend on legacy DPR category permissions here;
+  // per-user view settings are managed from the Admin dashboard instead.
+  const isSuperUser = isYogeshDeora;
 
-  // Load DPR permissions on mount
+  // Load per-user DPR view settings (what to show on dashboard)
   useEffect(() => {
-    const loadDprPermissions = async () => {
+    const loadDprViewSettings = async () => {
       try {
-        const response = await fetch('/api/user/dpr-permissions', {
+        const response = await fetch('/api/user/dpr-view-settings', {
           credentials: 'include'
         });
-        if (response.ok) {
-          const data = await response.json();
-          setDprPermissions(data.permissions || {});
-          setCanManageSettings(data.canManageSettings || false);
+        if (!response.ok) {
+          return;
         }
+        const data = await response.json();
+        const settings = (data.settings || {}) as Record<string, boolean>;
+        if (!settings || Object.keys(settings).length === 0) return;
+
+        // Check fullView access (default to false if not set)
+        setHasFullViewAccess(settings['fullView'] === true);
+
+        // Build SHIFT TOTAL metrics from settings (fallback to defaults)
+        const newShiftTotal: ShiftTotalMetrics = { ...DEFAULT_SHIFT_TOTAL_METRICS };
+        Object.entries(settings).forEach(([key, visible]) => {
+          if (key.startsWith('summary.shiftTotal.')) {
+            const metricKey = key.replace('summary.shiftTotal.', '') as keyof ShiftTotalMetrics;
+            if (metricKey in newShiftTotal) {
+              (newShiftTotal[metricKey] as boolean) = visible;
+            }
+          }
+        });
+        const anyShiftMetricVisible = Object.values(newShiftTotal).some(Boolean);
+
+        // Build ACHIEVEMENT metrics from settings (fallback to defaults)
+        const newAchievement: AchievementMetrics = { ...DEFAULT_ACHIEVEMENT_METRICS };
+        Object.entries(settings).forEach(([key, visible]) => {
+          if (key.startsWith('summary.achievement.')) {
+            const metricKey = key.replace('summary.achievement.', '') as keyof AchievementMetrics;
+            if (metricKey in newAchievement) {
+              (newAchievement[metricKey] as boolean) = visible;
+            }
+          }
+        });
+        const anyAchievementVisible = Object.values(newAchievement).some(Boolean);
+
+        // Apply summary visibility
+        setShiftTotalMetrics(newShiftTotal);
+        setAchievementMetrics(newAchievement);
+        setSectionVisibility(prev => ({
+          ...prev,
+          shiftTotal: anyShiftMetricVisible,
+          achievementMetrics: anyAchievementVisible
+        }));
+
+        // Apply table column visibility
+        setColumnVisibility(prev => {
+          const updated = { ...prev };
+          Object.entries(settings).forEach(([key, visible]) => {
+            if (key.startsWith('table.')) {
+              const parts = key.split('.');
+              const columnId = parts[parts.length - 1];
+              updated[columnId] = visible;
+            }
+          });
+          // Persist to localStorage so subsequent loads are fast
+          saveColumnVisibility(updated);
+          return updated;
+        });
       } catch (error) {
-        console.error('Error loading DPR permissions:', error);
+        console.error('Error loading DPR view settings for user:', error);
       }
     };
-    
+
     if (user) {
-      loadDprPermissions();
+      loadDprViewSettings();
     }
   }, [user]);
 
@@ -1707,32 +1761,16 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
   const isColumnVisible = (columnId: string, isFullView: boolean = false): boolean => {
     if (isFullView) return true; // Full view shows all columns
     
-    // Check if column is enabled in visibility settings
-    const isEnabled = columnVisibility[columnId] ?? DPR_COLUMNS.find(c => c.id === columnId)?.defaultVisible ?? false;
-    if (!isEnabled) return false;
-    
-    // Check permissions for the column's category
-    const column = DPR_COLUMNS.find(c => c.id === columnId);
-    if (!column) return false;
-    
-    // Yogesh Deora always has access
-    if (isYogeshDeora) return true;
-    
-    // Map column category to permission name
-    const permissionMap: Record<string, string> = {
-      'basic': 'dpr.basic_info.view',
-      'process': 'dpr.process_params.view',
-      'shots': 'dpr.shots.view',
-      'production': 'dpr.production_data.view',
-      'runtime': 'dpr.runtime.view',
-      'stoppage': 'dpr.stoppage.view'
-    };
-    
-    const permissionName = permissionMap[column.category];
-    if (!permissionName) return true; // Default to visible if no permission defined
-    
-    // Check if user has permission
-    return dprPermissions[permissionName] === true;
+    // Column visibility is now controlled purely by:
+    // - global defaults,
+    // - per-user Admin DPR Column Settings (saved in dpr_user_view_settings),
+    // independent of the old DPR category permission flags.
+    const isEnabled =
+      columnVisibility[columnId] ??
+      DPR_COLUMNS.find((c) => c.id === columnId)?.defaultVisible ??
+      false;
+
+    return isEnabled;
   };
 
   // Helper to count visible columns in a group
@@ -1842,8 +1880,8 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
                   </button>
                   )}
                   
-                  {/* Full View Button */}
-                  {getCurrentDPRData() && (
+                  {/* Full View Button - Only show if user has fullView access */}
+                  {getCurrentDPRData() && hasFullViewAccess && (
                     <button
                       onClick={() => setShowFullView(true)}
                       className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"

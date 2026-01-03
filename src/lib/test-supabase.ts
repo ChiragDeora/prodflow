@@ -1,5 +1,5 @@
 // Test Supabase client configuration and machine updates
-import { supabase, machineAPI } from './supabase';
+import { machineAPI } from './supabase';
 
 export async function testMachineUpdate() {
   console.log('🧪 Testing Supabase client configuration...');

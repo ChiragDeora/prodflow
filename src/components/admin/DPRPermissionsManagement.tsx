@@ -8,9 +8,7 @@ interface DPRPermission {
   id: string;
   name: string;
   description: string;
-  module: string;
   action: string;
-  resource: string;
   userCount: number;
 }
 
@@ -49,77 +47,24 @@ const DPRPermissionsManagement: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      await Promise.all([loadPermissions(), loadUsers()]);
+      setError('');
+
+      const response = await fetch('/api/admin/dpr-permissions?includeUsers=true', {
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load DPR permissions');
+      }
+
+      const data = await response.json();
+      setPermissions(data.permissions || []);
+      setUsers(data.users || []);
+      setUserPermissions(data.userPermissions || []);
     } catch (err: any) {
       setError(err.message || 'Failed to load data');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadPermissions = async () => {
-    try {
-      const response = await fetch('/api/admin/dpr-permissions', {
-        credentials: 'include',
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setPermissions(data.permissions || []);
-      } else {
-        throw new Error('Failed to load permissions');
-      }
-    } catch (err: any) {
-      console.error('Error loading permissions:', err);
-      throw err;
-    }
-  };
-
-  const loadUsers = async () => {
-    try {
-      const response = await fetch('/api/admin/users', {
-        credentials: 'include',
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data.users || []);
-        // Load permissions for all users
-        await loadAllUserPermissions(data.users || []);
-      } else {
-        throw new Error('Failed to load users');
-      }
-    } catch (err: any) {
-      console.error('Error loading users:', err);
-      throw err;
-    }
-  };
-
-  const loadAllUserPermissions = async (userList: User[]) => {
-    try {
-      const permissionPromises = userList.map(async (u) => {
-        const response = await fetch(`/api/user/dpr-permissions?userId=${u.id}`, {
-          credentials: 'include',
-        });
-        if (response.ok) {
-          const data = await response.json();
-          return {
-            userId: u.id,
-            userName: u.fullName,
-            userEmail: u.email,
-            permissions: data.permissions || {},
-          };
-        }
-        return {
-          userId: u.id,
-          userName: u.fullName,
-          userEmail: u.email,
-          permissions: {},
-        };
-      });
-
-      const userPerms = await Promise.all(permissionPromises);
-      setUserPermissions(userPerms);
-    } catch (err) {
-      console.error('Error loading user permissions:', err);
     }
   };
 
@@ -139,8 +84,8 @@ const DPRPermissionsManagement: React.FC = () => {
       if (response.ok) {
         setSuccessMessage(`Permission ${currentValue ? 'revoked' : 'granted'} successfully`);
         setTimeout(() => setSuccessMessage(''), 3000);
-        // Reload user permissions
-        await loadAllUserPermissions(users);
+        // Reload full DPR permissions matrix to reflect changes
+        await loadData();
       } else {
         const errorData = await response.json();
         setError(errorData.error || 'Failed to update permission');
@@ -223,77 +168,6 @@ const DPRPermissionsManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* User Permissions Matrix */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <Users className="w-5 h-5 mr-2" />
-          User Permissions Matrix
-        </h2>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left p-3 text-sm font-semibold text-gray-700">User</th>
-                {permissions.map((perm) => (
-                  <th key={perm.id} className="text-center p-3 text-xs font-semibold text-gray-700 min-w-[120px]">
-                    {perm.name.split('.')[1]}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {users
-                .filter((u) => !u.isRootAdmin) // Hide root admins (they have all permissions)
-                .map((u) => {
-                  const userPerms = getUserPermissions(u.id);
-                  return (
-                    <tr key={u.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="p-3">
-                        <div>
-                          <div className="font-medium text-sm text-gray-900">{u.fullName}</div>
-                          <div className="text-xs text-gray-500">{u.email}</div>
-                        </div>
-                      </td>
-                      {permissions.map((perm) => {
-                        const hasPermission = userPerms[perm.name] || false;
-                        return (
-                          <td key={perm.id} className="p-3 text-center">
-                            <button
-                              onClick={() => toggleUserPermission(u.id, perm.name, hasPermission)}
-                              className={`inline-flex items-center px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                                hasPermission
-                                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                              }`}
-                              title={hasPermission ? 'Click to revoke' : 'Click to grant'}
-                            >
-                              {hasPermission ? (
-                                <>
-                                  <Eye className="w-3 h-3 mr-1" />
-                                  Granted
-                                </>
-                              ) : (
-                                <>
-                                  <EyeOff className="w-3 h-3 mr-1" />
-                                  Denied
-                                </>
-                              )}
-                            </button>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        </div>
-        <div className="mt-4 text-sm text-gray-600">
-          <p>
-            <strong>Note:</strong> Root administrators automatically have all DPR permissions and are not shown in this table.
-          </p>
-        </div>
-      </div>
     </div>
   );
 };

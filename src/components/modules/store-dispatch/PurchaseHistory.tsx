@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Calendar, Search, Filter, FileText, ShoppingCart, Eye } from 'lucide-react';
-import { materialIndentSlipAPI, purchaseOrderAPI } from '../../../lib/supabase';
+import { materialIndentSlipAPI, purchaseOrderAPI, MaterialIndentSlip, MaterialIndentSlipItem, PurchaseOrder, PurchaseOrderItem } from '../../../lib/supabase';
+import HistoryDetailView from './HistoryDetailView';
 
 interface PurchaseForm {
   id: string;
@@ -23,6 +24,9 @@ const PurchaseHistory: React.FC = () => {
   const [selectedType, setSelectedType] = useState<'all' | 'material-indent' | 'purchase-order'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedForm, setSelectedForm] = useState<PurchaseForm | null>(null);
+  const [detailedForm, setDetailedForm] = useState<MaterialIndentSlip | PurchaseOrder | null>(null);
+  const [detailedItems, setDetailedItems] = useState<MaterialIndentSlipItem[] | PurchaseOrderItem[]>([]);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   // Get available years from forms
   const availableYears = React.useMemo(() => {
@@ -137,8 +141,31 @@ const PurchaseHistory: React.FC = () => {
     setFilteredForms(filtered);
   }, [forms, selectedYear, selectedDate, selectedType, searchTerm]);
 
-  const handleViewForm = (form: PurchaseForm) => {
+  const handleViewForm = async (form: PurchaseForm) => {
     setSelectedForm(form);
+    setLoadingDetails(true);
+    setDetailedForm(null);
+    setDetailedItems([]);
+    
+    try {
+      if (form.type === 'material-indent') {
+        const data = await materialIndentSlipAPI.getById(form.id);
+        if (data) {
+          setDetailedForm(data.slip);
+          setDetailedItems(data.items || []);
+        }
+      } else if (form.type === 'purchase-order') {
+        const data = await purchaseOrderAPI.getById(form.id);
+        if (data) {
+          setDetailedForm(data.order);
+          setDetailedItems(data.items || []);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading form details:', error);
+    } finally {
+      setLoadingDetails(false);
+    }
   };
 
   const handleCloseView = () => {
@@ -167,23 +194,56 @@ const PurchaseHistory: React.FC = () => {
   const purchaseOrders = filteredForms.filter(f => f.type === 'purchase-order');
 
   if (selectedForm) {
+    // Prepare document info
+    const documentInfo: Array<{ label: string; value: string | number | null | undefined }> = [
+      { label: 'Document Number', value: detailedForm && 'doc_no' in detailedForm ? detailedForm.doc_no : (detailedForm && 'ident_no' in detailedForm ? detailedForm.ident_no : selectedForm.docNo) },
+      { label: 'Date', value: formatDate(detailedForm && 'date' in detailedForm ? detailedForm.date : selectedForm.date || selectedForm.createdAt) }
+    ];
+
+    if (selectedForm.type === 'material-indent' && detailedForm) {
+      const slip = detailedForm as MaterialIndentSlip;
+      if (slip.party_name) documentInfo.push({ label: 'Party Name', value: slip.party_name });
+      if (slip.address) documentInfo.push({ label: 'Address', value: slip.address });
+      if (slip.state) documentInfo.push({ label: 'State', value: slip.state });
+      if (slip.gst_no) documentInfo.push({ label: 'GST Number', value: slip.gst_no });
+      if (slip.indent_date) documentInfo.push({ label: 'Indent Date', value: formatDate(slip.indent_date) });
+    } else if (selectedForm.type === 'purchase-order' && detailedForm) {
+      const order = detailedForm as PurchaseOrder;
+      if (order.po_no) documentInfo.push({ label: 'PO Number', value: order.po_no });
+      if (order.party_name) documentInfo.push({ label: 'Party Name', value: order.party_name });
+      if (order.gst_no) documentInfo.push({ label: 'GST Number', value: order.gst_no });
+      if (order.final_amt) documentInfo.push({ label: 'Final Amount', value: `₹${order.final_amt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` });
+    }
+
+    // Prepare item columns
+    const itemColumns = selectedForm.type === 'material-indent'
+      ? [
+          { key: 'sr_no', label: 'Sr. No.' },
+          { key: 'item_code', label: 'Item Code' },
+          { key: 'item_name', label: 'Item Name' },
+          { key: 'qty', label: 'Quantity' },
+          { key: 'uom', label: 'UOM' },
+          { key: 'color_remarks', label: 'Color/Remarks' }
+        ]
+      : [
+          { key: 'sr_no', label: 'Sr. No.' },
+          { key: 'description', label: 'Description' },
+          { key: 'qty', label: 'Quantity' },
+          { key: 'unit', label: 'Unit' },
+          { key: 'rate', label: 'Rate', format: (v: any) => v ? `₹${v}` : 'N/A' },
+          { key: 'total_price', label: 'Total Price', format: (v: any) => v ? `₹${v.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : 'N/A' }
+        ];
+
     return (
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">{getFormTitle(selectedForm)}</h2>
-          <button
-            onClick={handleCloseView}
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-          >
-            Close
-          </button>
-        </div>
-        <div className="border border-gray-300 rounded-lg p-6 bg-gray-50">
-          <pre className="whitespace-pre-wrap text-sm">
-            {JSON.stringify(selectedForm, null, 2)}
-          </pre>
-        </div>
-      </div>
+      <HistoryDetailView
+        title={getFormTitle(selectedForm)}
+        date={selectedForm.date || selectedForm.createdAt}
+        onClose={handleCloseView}
+        documentInfo={documentInfo}
+        items={detailedItems}
+        itemColumns={itemColumns}
+        loading={loadingDetails}
+      />
     );
   }
 

@@ -226,62 +226,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    try {
-      setError(null); // Clear any errors on logout
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include'
-      });
-    } catch (error) {
+    setError(null); // Clear any errors on logout
+
+    // Fire-and-forget server logout so the UI can navigate instantly.
+    // The request continues in the background; our front-end still
+    // treats the user as logged out immediately via local state.
+    fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include'
+    }).catch((error) => {
       console.error('Logout error:', error);
-    } finally {
-      // Clear user preferences from localStorage before logout
-      if (typeof window !== 'undefined') {
-        const userId = localStorage.getItem('currentUserId') || 'default';
-        const keysToRemove: string[] = [];
-        
-        // Find all keys that belong to the current user
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && key.endsWith(`_${userId}`)) {
-            keysToRemove.push(key);
-          }
-        }
-        
-        // Remove all user-specific keys
-        keysToRemove.forEach(key => localStorage.removeItem(key));
-        console.log(`Cleared ${keysToRemove.length} user preferences on logout`);
-      }
+    });
+
+    // Clear user preferences from localStorage before logout
+    if (typeof window !== 'undefined') {
+      const userId = localStorage.getItem('currentUserId') || 'default';
+      const keysToRemove: string[] = [];
       
-      setUser(null);
-      setError(null);
-      
-      // Add a logout timestamp to prevent back button access
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('logoutTimestamp', Date.now().toString());
-        
-        // Clear browser history to prevent back button access
-        if (window.history && window.history.pushState) {
-          // Replace current history entry with login page
-          window.history.replaceState(null, '', '/auth/login');
-          // Clear all history entries
-          window.history.pushState(null, '', '/auth/login');
+      // Find all keys that belong to the current user
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.endsWith(`_${userId}`)) {
+          keysToRemove.push(key);
         }
       }
       
-      // Force navigation to login page and prevent back button
-      router.replace('/auth/login');
+      // Remove all user-specific keys
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      console.log(`Cleared ${keysToRemove.length} user preferences on logout`);
       
-      // Additional security: disable back button after logout
-      setTimeout(() => {
-        if (typeof window !== 'undefined') {
-          window.history.pushState(null, '', '/auth/login');
-          window.addEventListener('popstate', () => {
-            window.history.pushState(null, '', '/auth/login');
-          });
-        }
-      }, 100);
+      // Mark that we navigated here via logout so the login page
+      // can safely force a one-time reload if needed.
+      sessionStorage.setItem('fromLogout', '1');
     }
+    
+    // Immediately drop auth state on the client
+    setUser(null);
+    setError(null);
+    
+    // Add a logout timestamp to prevent back button access
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('logoutTimestamp', Date.now().toString());
+      
+      // Clear browser history to prevent back button access
+      if (window.history && window.history.pushState) {
+        // Replace current history entry with login page
+        window.history.replaceState(null, '', '/auth/login');
+        // Clear all history entries
+        window.history.pushState(null, '', '/auth/login');
+      }
+    }
+    
+    // Force navigation to login page and prevent back button
+    router.replace('/auth/login');
+    
+    // Additional security: disable back button after logout
+    setTimeout(() => {
+      if (typeof window !== 'undefined') {
+        window.history.pushState(null, '', '/auth/login');
+        window.addEventListener('popstate', () => {
+          window.history.pushState(null, '', '/auth/login');
+        });
+      }
+    }, 100);
   };
 
   const signup = async (data: SignupData) => {

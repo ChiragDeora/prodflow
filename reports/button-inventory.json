@@ -1,0 +1,5671 @@
+{
+  "timestamp": "2025-12-17T06:27:38.649Z",
+  "totalButtons": 1130,
+  "buttonsWithTestId": 0,
+  "buttonsWithoutTestId": 1130,
+  "buttonsCovered": 0,
+  "buttonsNotCovered": 0,
+  "coveragePercent": 0,
+  "buttons": [],
+  "missingTestIds": [
+    {
+      "filePath": "src/app/unauthorized/page.tsx",
+      "lineNumber": 22,
+      "elementType": "link"
+    },
+    {
+      "filePath": "src/app/unauthorized/page.tsx",
+      "lineNumber": 29,
+      "elementType": "link"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 3963,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 3976,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 3978,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4018,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4019,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4035,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4036,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4062,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4063,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4079,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4080,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4111,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4112,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4117,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4118,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4201,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4202,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4220,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4323,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4324,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4329,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ExcelFileReader.tsx",
+      "lineNumber": 4330,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 413,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 414,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 519,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 520,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 545,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 546,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1320,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1354,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1356,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1378,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1379,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1401,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1402,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1437,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1438,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1500,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1501,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1668,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1669,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1674,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1675,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1727,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1728,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1734,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 1735,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 2076,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 2077,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 2398,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 2400,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 2405,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 2438,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 2439,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 2680,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 2682,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 2687,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 2720,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 2721,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 2940,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 2942,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 2947,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 2979,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 2980,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3217,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3219,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3224,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3257,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3258,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3340,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3342,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3350,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3377,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3378,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3420,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3421,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3453,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3454,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3521,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3523,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3531,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3558,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3559,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3593,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3594,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3623,
+      "elementType": "link"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3645,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 3646,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 4347,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 4349,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 4357,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 4375,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/ProductionSchedulerERP.tsx",
+      "lineNumber": 4376,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/DPRPermissionsManagement.tsx",
+      "lineNumber": 261,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/DPRPermissionsManagement.tsx",
+      "lineNumber": 262,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 742,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 743,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 764,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 766,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 904,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 905,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 914,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 915,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 922,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 923,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1032,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1055,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1058,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1061,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1111,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1112,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1126,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1127,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1138,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1139,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1273,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1274,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1291,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1292,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1307,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1308,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1484,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1485,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1493,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1494,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1523,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1524,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1541,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1542,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1552,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1553,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1729,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1730,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1738,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1739,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1768,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1769,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1894,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1896,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1927,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1928,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1938,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/EnhancedAdminDashboard.tsx",
+      "lineNumber": 1939,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/FieldLevelPermissionEditor.tsx",
+      "lineNumber": 259,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/FieldLevelPermissionEditor.tsx",
+      "lineNumber": 260,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/FieldLevelPermissionEditor.tsx",
+      "lineNumber": 267,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/FieldLevelPermissionEditor.tsx",
+      "lineNumber": 268,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/FieldLevelPermissionEditor.tsx",
+      "lineNumber": 280,
+      "elementType": "button",
+      "text": "setError('')} className=\"ml-2 text-red-500 hover:text-red-700\">×"
+    },
+    {
+      "filePath": "src/components/admin/FieldLevelPermissionEditor.tsx",
+      "lineNumber": 389,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/FieldLevelPermissionEditor.tsx",
+      "lineNumber": 390,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/FieldLevelPermissionEditor.tsx",
+      "lineNumber": 406,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/FieldLevelPermissionEditor.tsx",
+      "lineNumber": 407,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/FieldLevelPermissionEditor.tsx",
+      "lineNumber": 442,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/admin/FieldLevelPermissionEditor.tsx",
+      "lineNumber": 443,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/ChangePasswordForm.tsx",
+      "lineNumber": 122,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/ChangePasswordForm.tsx",
+      "lineNumber": 123,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/ChangePasswordForm.tsx",
+      "lineNumber": 192,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/ChangePasswordForm.tsx",
+      "lineNumber": 195,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/ChangePasswordForm.tsx",
+      "lineNumber": 224,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/ChangePasswordForm.tsx",
+      "lineNumber": 227,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/ChangePasswordForm.tsx",
+      "lineNumber": 259,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/ChangePasswordForm.tsx",
+      "lineNumber": 270,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/ChangePasswordForm.tsx",
+      "lineNumber": 272,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/LoginForm.tsx",
+      "lineNumber": 127,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/LoginForm.tsx",
+      "lineNumber": 130,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/LoginForm.tsx",
+      "lineNumber": 145,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/RouteGuard.tsx",
+      "lineNumber": 93,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/RouteGuard.tsx",
+      "lineNumber": 94,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/SignupForm.tsx",
+      "lineNumber": 134,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/SignupForm.tsx",
+      "lineNumber": 135,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/SignupForm.tsx",
+      "lineNumber": 255,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/SignupForm.tsx",
+      "lineNumber": 258,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/SignupForm.tsx",
+      "lineNumber": 287,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/SignupForm.tsx",
+      "lineNumber": 290,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/auth/SignupForm.tsx",
+      "lineNumber": 304,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/approvals/index.tsx",
+      "lineNumber": 45,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/approvals/index.tsx",
+      "lineNumber": 46,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/BOMAuditTrail.tsx",
+      "lineNumber": 61,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/BOMAuditTrail.tsx",
+      "lineNumber": 62,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/BOMAuditTrail.tsx",
+      "lineNumber": 160,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/BOMAuditTrail.tsx",
+      "lineNumber": 161,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/BOMMasterForm.tsx",
+      "lineNumber": 66,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/BOMMasterForm.tsx",
+      "lineNumber": 67,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/BOMMasterForm.tsx",
+      "lineNumber": 164,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/BOMMasterForm.tsx",
+      "lineNumber": 166,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/BOMMasterForm.tsx",
+      "lineNumber": 171,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/BOMVersionViewer.tsx",
+      "lineNumber": 125,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/BOMVersionViewer.tsx",
+      "lineNumber": 126,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/BOMVersionViewer.tsx",
+      "lineNumber": 132,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/BOMVersionViewer.tsx",
+      "lineNumber": 133,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/BOMVersionViewer.tsx",
+      "lineNumber": 165,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/BOMVersionViewer.tsx",
+      "lineNumber": 199,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/BOMVersionViewer.tsx",
+      "lineNumber": 200,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 255,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 256,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 265,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 266,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 275,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 276,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 288,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 289,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 295,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 296,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 302,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 303,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 366,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 367,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 428,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 429,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 792,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 793,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 800,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 801,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 809,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 810,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 819,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/bom-master/index.tsx",
+      "lineNumber": 820,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/commercial-master/index.tsx",
+      "lineNumber": 28,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/commercial-master/index.tsx",
+      "lineNumber": 29,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/commercial-master/index.tsx",
+      "lineNumber": 42,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/commercial-master/index.tsx",
+      "lineNumber": 43,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/commercial-master/index.tsx",
+      "lineNumber": 56,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/commercial-master/index.tsx",
+      "lineNumber": 57,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/customer-master/index.tsx",
+      "lineNumber": 170,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/customer-master/index.tsx",
+      "lineNumber": 171,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/customer-master/index.tsx",
+      "lineNumber": 177,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/customer-master/index.tsx",
+      "lineNumber": 178,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/customer-master/index.tsx",
+      "lineNumber": 242,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/customer-master/index.tsx",
+      "lineNumber": 243,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/customer-master/index.tsx",
+      "lineNumber": 292,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/customer-master/index.tsx",
+      "lineNumber": 293,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/customer-master/index.tsx",
+      "lineNumber": 393,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/customer-master/index.tsx",
+      "lineNumber": 394,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/customer-master/index.tsx",
+      "lineNumber": 400,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/customer-master/index.tsx",
+      "lineNumber": 401,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/customer-master/index.tsx",
+      "lineNumber": 436,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/customer-master/index.tsx",
+      "lineNumber": 437,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/customer-master/index.tsx",
+      "lineNumber": 445,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/customer-master/index.tsx",
+      "lineNumber": 446,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/DailyReadingsTab.tsx",
+      "lineNumber": 128,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/DailyReadingsTab.tsx",
+      "lineNumber": 130,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/DailyReadingsTab.tsx",
+      "lineNumber": 219,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/DailyReadingsTab.tsx",
+      "lineNumber": 221,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/DailyReadingsTab.tsx",
+      "lineNumber": 313,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/DailyReadingsTab.tsx",
+      "lineNumber": 315,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/DailyReadingsTab.tsx",
+      "lineNumber": 356,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/DailyReadingsTab.tsx",
+      "lineNumber": 404,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/DailyReadingsTab.tsx",
+      "lineNumber": 406,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/DailyReadingsTab.tsx",
+      "lineNumber": 428,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/DailyReadingsTab.tsx",
+      "lineNumber": 429,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/DailyReadingsTab.tsx",
+      "lineNumber": 448,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/DailyReadingsTab.tsx",
+      "lineNumber": 449,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/DailyReadingsTab.tsx",
+      "lineNumber": 459,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/DailyReadingsTab.tsx",
+      "lineNumber": 460,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/DailyReadingsTab.tsx",
+      "lineNumber": 465,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/DailyReadingsTab.tsx",
+      "lineNumber": 466,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 644,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 645,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 653,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 654,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 660,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 661,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 669,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 670,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 681,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 682,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 688,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 689,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 779,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 780,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 797,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 798,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 841,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 845,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 891,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 892,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 914,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 915,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 925,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 926,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 953,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 954,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1069,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1070,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1103,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1104,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1149,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1150,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1155,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1156,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1248,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1249,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1256,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1257,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1276,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1277,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1421,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1422,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1455,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineChecklists.tsx",
+      "lineNumber": 1456,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineMaintenance.tsx",
+      "lineNumber": 246,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineMaintenance.tsx",
+      "lineNumber": 247,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineMaintenance.tsx",
+      "lineNumber": 320,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineMaintenance.tsx",
+      "lineNumber": 321,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineMaintenance.tsx",
+      "lineNumber": 331,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineMaintenance.tsx",
+      "lineNumber": 332,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineMaintenance.tsx",
+      "lineNumber": 342,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineMaintenance.tsx",
+      "lineNumber": 343,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineMaintenance.tsx",
+      "lineNumber": 484,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineMaintenance.tsx",
+      "lineNumber": 485,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineMaintenance.tsx",
+      "lineNumber": 491,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineMaintenance.tsx",
+      "lineNumber": 492,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineMaintenance.tsx",
+      "lineNumber": 624,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineMaintenance.tsx",
+      "lineNumber": 625,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineMaintenance.tsx",
+      "lineNumber": 630,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/LineMaintenance.tsx",
+      "lineNumber": 631,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MachineChecklist.tsx",
+      "lineNumber": 63,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MachineChecklist.tsx",
+      "lineNumber": 64,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MachineChecklist.tsx",
+      "lineNumber": 145,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MachineChecklist.tsx",
+      "lineNumber": 146,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MachineChecklist.tsx",
+      "lineNumber": 182,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MachineChecklist.tsx",
+      "lineNumber": 183,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MachineChecklist.tsx",
+      "lineNumber": 211,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MachineChecklist.tsx",
+      "lineNumber": 212,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MachineChecklist.tsx",
+      "lineNumber": 217,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MaintenanceHistoryTab.tsx",
+      "lineNumber": 166,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MaintenanceHistoryTab.tsx",
+      "lineNumber": 167,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MaintenanceHistoryTab.tsx",
+      "lineNumber": 177,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MaintenanceHistoryTab.tsx",
+      "lineNumber": 178,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MaintenanceHistoryTab.tsx",
+      "lineNumber": 188,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MaintenanceHistoryTab.tsx",
+      "lineNumber": 189,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MaintenanceHistoryTab.tsx",
+      "lineNumber": 219,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MaintenanceHistoryTab.tsx",
+      "lineNumber": 220,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MoldBreakdownTab.tsx",
+      "lineNumber": 200,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MoldBreakdownTab.tsx",
+      "lineNumber": 201,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MoldBreakdownTab.tsx",
+      "lineNumber": 254,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MoldBreakdownTab.tsx",
+      "lineNumber": 255,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MoldBreakdownTab.tsx",
+      "lineNumber": 329,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MoldBreakdownTab.tsx",
+      "lineNumber": 330,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MoldBreakdownTab.tsx",
+      "lineNumber": 582,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MoldBreakdownTab.tsx",
+      "lineNumber": 583,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MoldBreakdownTab.tsx",
+      "lineNumber": 615,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/MoldBreakdownTab.tsx",
+      "lineNumber": 616,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/RobotChecklistExecutor.tsx",
+      "lineNumber": 320,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/RobotChecklistExecutor.tsx",
+      "lineNumber": 321,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/RobotChecklistExecutor.tsx",
+      "lineNumber": 330,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/RobotChecklistExecutor.tsx",
+      "lineNumber": 331,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 426,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 427,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 432,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 433,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 438,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 439,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 474,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 475,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 480,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 481,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 486,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 487,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 519,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 520,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 525,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 526,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 531,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 532,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 564,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 565,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 570,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 571,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 576,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 577,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 609,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 610,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 615,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 616,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 621,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 622,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 654,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 655,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 660,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 661,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 666,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 667,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 699,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 700,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 705,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 706,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 711,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 712,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 743,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 744,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 749,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 750,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 755,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 756,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 788,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 789,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 794,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistForm.tsx",
+      "lineNumber": 795,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistKanban.tsx",
+      "lineNumber": 219,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistKanban.tsx",
+      "lineNumber": 270,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistKanban.tsx",
+      "lineNumber": 271,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistKanban.tsx",
+      "lineNumber": 322,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistKanban.tsx",
+      "lineNumber": 355,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistKanban.tsx",
+      "lineNumber": 364,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistKanban.tsx",
+      "lineNumber": 438,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistKanban.tsx",
+      "lineNumber": 439,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistKanban.tsx",
+      "lineNumber": 492,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistKanban.tsx",
+      "lineNumber": 493,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistKanban.tsx",
+      "lineNumber": 504,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 172,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 206,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 207,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 232,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 233,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 260,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 261,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 271,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 272,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 284,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 285,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 293,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 294,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 300,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 301,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 356,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 357,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 376,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 377,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 389,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 408,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 467,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 468,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 501,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistManager.tsx",
+      "lineNumber": 502,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistSections.tsx",
+      "lineNumber": 368,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ChecklistTypes.tsx",
+      "lineNumber": 99,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/DailyChecklistSections.tsx",
+      "lineNumber": 120,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/DailyChecklistSections.tsx",
+      "lineNumber": 121,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/DailyChecklistSections.tsx",
+      "lineNumber": 140,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ExcelTemplateGenerator.tsx",
+      "lineNumber": 220,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ExcelTemplateGenerator.tsx",
+      "lineNumber": 221,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ExcelTemplateGenerator.tsx",
+      "lineNumber": 278,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ExcelTemplateGenerator.tsx",
+      "lineNumber": 279,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ExcelTemplateGenerator.tsx",
+      "lineNumber": 286,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ExcelTemplateGenerator.tsx",
+      "lineNumber": 287,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ExcelTemplateGenerator.tsx",
+      "lineNumber": 296,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/ExcelTemplateGenerator.tsx",
+      "lineNumber": 297,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/index.tsx",
+      "lineNumber": 248,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/index.tsx",
+      "lineNumber": 249,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/index.tsx",
+      "lineNumber": 255,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/index.tsx",
+      "lineNumber": 256,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/index.tsx",
+      "lineNumber": 262,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/index.tsx",
+      "lineNumber": 263,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/index.tsx",
+      "lineNumber": 347,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/index.tsx",
+      "lineNumber": 348,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/index.tsx",
+      "lineNumber": 385,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/checklist/index.tsx",
+      "lineNumber": 386,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 331,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 332,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 345,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 346,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 359,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 360,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 373,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 374,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 387,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 388,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 401,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 402,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 437,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 438,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 494,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 495,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 558,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 559,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 589,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 590,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 620,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 621,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 922,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 923,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 948,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 949,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 968,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 969,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 1023,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 1024,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 1029,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/maintenance-management/index.tsx",
+      "lineNumber": 1030,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/ColorLabelMaster.tsx",
+      "lineNumber": 98,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/ColorLabelMaster.tsx",
+      "lineNumber": 99,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/ColorLabelMaster.tsx",
+      "lineNumber": 106,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/ColorLabelMaster.tsx",
+      "lineNumber": 107,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/ColorLabelMaster.tsx",
+      "lineNumber": 113,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/ColorLabelMaster.tsx",
+      "lineNumber": 114,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/ColorLabelMaster.tsx",
+      "lineNumber": 149,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/ColorLabelMaster.tsx",
+      "lineNumber": 150,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/ColorLabelMaster.tsx",
+      "lineNumber": 156,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/ColorLabelMaster.tsx",
+      "lineNumber": 157,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/ColorLabelMaster.tsx",
+      "lineNumber": 163,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/ColorLabelMaster.tsx",
+      "lineNumber": 164,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/LineMaster.tsx",
+      "lineNumber": 85,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/LineMaster.tsx",
+      "lineNumber": 86,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/LineMaster.tsx",
+      "lineNumber": 92,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/LineMaster.tsx",
+      "lineNumber": 93,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/LineMaster.tsx",
+      "lineNumber": 108,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/LineMaster.tsx",
+      "lineNumber": 130,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/LineMaster.tsx",
+      "lineNumber": 137,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/LineMaster.tsx",
+      "lineNumber": 216,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/LineMaster.tsx",
+      "lineNumber": 217,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/LineMaster.tsx",
+      "lineNumber": 223,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/LineMaster.tsx",
+      "lineNumber": 224,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/LineMaster.tsx",
+      "lineNumber": 230,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/LineMaster.tsx",
+      "lineNumber": 231,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/LineMaster.tsx",
+      "lineNumber": 255,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/LineMaster.tsx",
+      "lineNumber": 256,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 64,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 65,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 74,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 75,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 84,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 85,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 94,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 95,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 104,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 105,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 119,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 120,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 129,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 130,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 146,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 159,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 172,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 185,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 198,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 216,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 229,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 242,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 274,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 275,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 313,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 314,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 320,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 321,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 327,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MachineMaster.tsx",
+      "lineNumber": 328,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 55,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 56,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 63,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 64,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 79,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 92,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 105,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 118,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 131,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 144,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 157,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 170,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 183,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 196,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 209,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 222,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 235,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 248,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 261,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 295,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 296,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 302,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 303,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 309,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/MoldMaster.tsx",
+      "lineNumber": 310,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 75,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 76,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 85,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 86,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 95,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 96,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 105,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 106,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 116,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 117,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 124,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 125,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 140,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 153,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 166,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 179,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 192,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 205,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 218,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 231,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 244,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 257,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 319,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 320,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 325,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 326,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 331,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PackingMaterialsMaster.tsx",
+      "lineNumber": 332,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PartyNameMaster.tsx",
+      "lineNumber": 98,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PartyNameMaster.tsx",
+      "lineNumber": 99,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PartyNameMaster.tsx",
+      "lineNumber": 106,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PartyNameMaster.tsx",
+      "lineNumber": 107,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PartyNameMaster.tsx",
+      "lineNumber": 113,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PartyNameMaster.tsx",
+      "lineNumber": 114,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PartyNameMaster.tsx",
+      "lineNumber": 149,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PartyNameMaster.tsx",
+      "lineNumber": 150,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PartyNameMaster.tsx",
+      "lineNumber": 156,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PartyNameMaster.tsx",
+      "lineNumber": 157,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PartyNameMaster.tsx",
+      "lineNumber": 163,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/PartyNameMaster.tsx",
+      "lineNumber": 164,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 71,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 72,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 79,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 80,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 95,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 108,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 121,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 134,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 147,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 160,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 173,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 192,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 234,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 235,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 252,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 253,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 258,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 259,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 264,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/RawMaterialsMaster.tsx",
+      "lineNumber": 265,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/index.tsx",
+      "lineNumber": 177,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/index.tsx",
+      "lineNumber": 178,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/index.tsx",
+      "lineNumber": 188,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/index.tsx",
+      "lineNumber": 189,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/index.tsx",
+      "lineNumber": 199,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/index.tsx",
+      "lineNumber": 200,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/index.tsx",
+      "lineNumber": 210,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/index.tsx",
+      "lineNumber": 211,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/index.tsx",
+      "lineNumber": 221,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/index.tsx",
+      "lineNumber": 222,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/index.tsx",
+      "lineNumber": 229,
+      "elementType": "link"
+    },
+    {
+      "filePath": "src/components/modules/master-data/index.tsx",
+      "lineNumber": 232,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/index.tsx",
+      "lineNumber": 233,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/index.tsx",
+      "lineNumber": 243,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/index.tsx",
+      "lineNumber": 244,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/index.tsx",
+      "lineNumber": 254,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/master-data/index.tsx",
+      "lineNumber": 255,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/operator-panel/index.tsx",
+      "lineNumber": 76,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/operator-panel/index.tsx",
+      "lineNumber": 77,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2151,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2152,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2163,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2164,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2171,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2172,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2179,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2180,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2197,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2198,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2232,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2234,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2252,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2253,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2288,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2311,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2347,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2392,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2659,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2660,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2866,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2867,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2872,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 2873,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3030,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3052,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3084,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3089,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3261,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3263,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3280,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3282,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3442,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3444,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3460,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3462,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3540,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3542,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3555,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3557,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3654,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3655,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3660,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3661,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3666,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3667,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/prod-planner/index.tsx",
+      "lineNumber": 3727,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 383,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 384,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 390,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 391,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 443,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 444,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 492,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 493,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 585,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 586,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 593,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 594,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 634,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 635,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 834,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 836,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 845,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 847,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 897,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 899,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 908,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 910,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 946,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 948,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 953,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/MouldLoadingUnloadingReport.tsx",
+      "lineNumber": 955,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 581,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 582,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 592,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 593,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 617,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 618,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 627,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 628,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 636,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 637,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 666,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 667,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 748,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 749,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 771,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 772,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 854,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 855,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 877,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 878,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 931,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 932,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1063,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1064,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1069,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1070,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1088,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1089,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1187,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1188,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1193,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1194,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1216,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1217,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1291,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1292,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1301,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1302,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1327,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1328,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1556,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1557,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1565,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/SiloManagement.tsx",
+      "lineNumber": 1566,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 1835,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 1836,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 1847,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 1848,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 1858,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 1859,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 1878,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 1879,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 1887,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 1888,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 2318,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 2319,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 2325,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 2326,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 2639,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 2641,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 2676,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 2677,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 2684,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 2685,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 2690,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 2691,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 2915,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 2916,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 3097,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 3098,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 3722,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 3723,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 3777,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 3778,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 4309,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 4310,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 4320,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 4321,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 4326,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production/index.tsx",
+      "lineNumber": 4327,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production-schedule/index.tsx",
+      "lineNumber": 70,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/production-schedule/index.tsx",
+      "lineNumber": 116,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 230,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 231,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 239,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 240,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 246,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 247,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 384,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 385,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 442,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 443,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 473,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 474,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 480,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 481,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 516,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 517,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 581,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 583,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 619,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 620,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 686,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 687,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 692,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/profile/index.tsx",
+      "lineNumber": 693,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/ContainerInspectionForm.tsx",
+      "lineNumber": 227,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/ContainerInspectionForm.tsx",
+      "lineNumber": 229,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/ContainerInspectionForm.tsx",
+      "lineNumber": 301,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/ContainerInspectionForm.tsx",
+      "lineNumber": 303,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/ContainerInspectionForm.tsx",
+      "lineNumber": 486,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/ContainerInspectionForm.tsx",
+      "lineNumber": 492,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/IncomingMaterialInspectionForm.tsx",
+      "lineNumber": 377,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/IncomingMaterialInspectionForm.tsx",
+      "lineNumber": 383,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 180,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 181,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 191,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 192,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 202,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 203,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 213,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 214,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 224,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 225,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 235,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 236,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 246,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 247,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 257,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 258,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 288,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 313,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 321,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 346,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 354,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 370,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 393,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 394,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 475,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 512,
+      "elementType": "button",
+      "text": "Remove"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 545,
+      "elementType": "button",
+      "text": "Remove"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 569,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 572,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 597,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 598,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 609,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 610,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 621,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 622,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 636,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 637,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 662,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 663,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 742,
+      "elementType": "button",
+      "text": "Edit"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 743,
+      "elementType": "button",
+      "text": "Delete"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 822,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 823,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 867,
+      "elementType": "button",
+      "text": "View"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 868,
+      "elementType": "button",
+      "text": "Complete"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 893,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 894,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 924,
+      "elementType": "button",
+      "text": "View Details"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 942,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 943,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 1079,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 1080,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 1088,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 1089,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 1110,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 1111,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 1184,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 1185,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 1193,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 1194,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 1215,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 1216,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 1283,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 1284,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 1292,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/quality-control/index.tsx",
+      "lineNumber": 1293,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/reports/DailyWeightReport.tsx",
+      "lineNumber": 771,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/reports/DailyWeightReport.tsx",
+      "lineNumber": 772,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/reports/DailyWeightReport.tsx",
+      "lineNumber": 802,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/reports/DailyWeightReport.tsx",
+      "lineNumber": 806,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/reports/DailyWeightReport.tsx",
+      "lineNumber": 880,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/reports/DailyWeightReport.tsx",
+      "lineNumber": 881,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/reports/DailyWeightReport.tsx",
+      "lineNumber": 1058,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/reports/DailyWeightReport.tsx",
+      "lineNumber": 1059,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/reports/FirstPiecesApprovalReport.tsx",
+      "lineNumber": 448,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/reports/FirstPiecesApprovalReport.tsx",
+      "lineNumber": 449,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/reports/FirstPiecesApprovalReport.tsx",
+      "lineNumber": 484,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/reports/FirstPiecesApprovalReport.tsx",
+      "lineNumber": 488,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/reports/FirstPiecesApprovalReport.tsx",
+      "lineNumber": 566,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/reports/FirstPiecesApprovalReport.tsx",
+      "lineNumber": 567,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/reports/FirstPiecesApprovalReport.tsx",
+      "lineNumber": 1038,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/reports/FirstPiecesApprovalReport.tsx",
+      "lineNumber": 1039,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DeliveryChallanForm.tsx",
+      "lineNumber": 394,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DeliveryChallanForm.tsx",
+      "lineNumber": 396,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DeliveryChallanForm.tsx",
+      "lineNumber": 407,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DeliveryChallanForm.tsx",
+      "lineNumber": 409,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DeliveryChallanForm.tsx",
+      "lineNumber": 419,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DeliveryChallanForm.tsx",
+      "lineNumber": 421,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DeliveryChallanForm.tsx",
+      "lineNumber": 427,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchHistory.tsx",
+      "lineNumber": 182,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchHistory.tsx",
+      "lineNumber": 183,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchHistory.tsx",
+      "lineNumber": 283,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchHistory.tsx",
+      "lineNumber": 296,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchHistory.tsx",
+      "lineNumber": 297,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchHistory.tsx",
+      "lineNumber": 330,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchHistory.tsx",
+      "lineNumber": 344,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchHistory.tsx",
+      "lineNumber": 345,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchHistory.tsx",
+      "lineNumber": 378,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchHistory.tsx",
+      "lineNumber": 392,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchHistory.tsx",
+      "lineNumber": 393,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchMemoForm.tsx",
+      "lineNumber": 262,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchMemoForm.tsx",
+      "lineNumber": 264,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchMemoForm.tsx",
+      "lineNumber": 275,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchMemoForm.tsx",
+      "lineNumber": 277,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchMemoForm.tsx",
+      "lineNumber": 313,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchMemoForm.tsx",
+      "lineNumber": 315,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/DispatchMemoForm.tsx",
+      "lineNumber": 321,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/FGNForm.tsx",
+      "lineNumber": 335,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/FGNForm.tsx",
+      "lineNumber": 337,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/FGNForm.tsx",
+      "lineNumber": 348,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/FGNForm.tsx",
+      "lineNumber": 350,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/FGNForm.tsx",
+      "lineNumber": 400,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/FGNForm.tsx",
+      "lineNumber": 402,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/FGNForm.tsx",
+      "lineNumber": 408,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/GRNForm.tsx",
+      "lineNumber": 366,
+      "elementType": "link"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/GRNForm.tsx",
+      "lineNumber": 369,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/GRNForm.tsx",
+      "lineNumber": 371,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/GRNForm.tsx",
+      "lineNumber": 387,
+      "elementType": "link"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/GRNForm.tsx",
+      "lineNumber": 390,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/GRNForm.tsx",
+      "lineNumber": 392,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/GRNForm.tsx",
+      "lineNumber": 425,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/GRNForm.tsx",
+      "lineNumber": 453,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/GRNForm.tsx",
+      "lineNumber": 656,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/GRNForm.tsx",
+      "lineNumber": 658,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/GRNForm.tsx",
+      "lineNumber": 669,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/GRNForm.tsx",
+      "lineNumber": 671,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/GRNForm.tsx",
+      "lineNumber": 780,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/GRNForm.tsx",
+      "lineNumber": 782,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/GRNForm.tsx",
+      "lineNumber": 788,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JWAnnexureGRNForm.tsx",
+      "lineNumber": 263,
+      "elementType": "link"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JWAnnexureGRNForm.tsx",
+      "lineNumber": 266,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JWAnnexureGRNForm.tsx",
+      "lineNumber": 268,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JWAnnexureGRNForm.tsx",
+      "lineNumber": 315,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JWAnnexureGRNForm.tsx",
+      "lineNumber": 533,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JWAnnexureGRNForm.tsx",
+      "lineNumber": 535,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JWAnnexureGRNForm.tsx",
+      "lineNumber": 557,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JWAnnexureGRNForm.tsx",
+      "lineNumber": 559,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JWAnnexureGRNForm.tsx",
+      "lineNumber": 569,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JWAnnexureGRNForm.tsx",
+      "lineNumber": 571,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JWAnnexureGRNForm.tsx",
+      "lineNumber": 577,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JobWorkChallanForm.tsx",
+      "lineNumber": 398,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JobWorkChallanForm.tsx",
+      "lineNumber": 400,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JobWorkChallanForm.tsx",
+      "lineNumber": 411,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JobWorkChallanForm.tsx",
+      "lineNumber": 413,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JobWorkChallanForm.tsx",
+      "lineNumber": 487,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JobWorkChallanForm.tsx",
+      "lineNumber": 489,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/JobWorkChallanForm.tsx",
+      "lineNumber": 495,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/MISForm.tsx",
+      "lineNumber": 262,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/MISForm.tsx",
+      "lineNumber": 264,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/MISForm.tsx",
+      "lineNumber": 275,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/MISForm.tsx",
+      "lineNumber": 277,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/MISForm.tsx",
+      "lineNumber": 287,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/MISForm.tsx",
+      "lineNumber": 289,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/MISForm.tsx",
+      "lineNumber": 295,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/MaterialIndentSlipForm.tsx",
+      "lineNumber": 358,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/MaterialIndentSlipForm.tsx",
+      "lineNumber": 360,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/MaterialIndentSlipForm.tsx",
+      "lineNumber": 371,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/MaterialIndentSlipForm.tsx",
+      "lineNumber": 373,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/MaterialIndentSlipForm.tsx",
+      "lineNumber": 420,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/MaterialIndentSlipForm.tsx",
+      "lineNumber": 422,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/MaterialIndentSlipForm.tsx",
+      "lineNumber": 428,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/OpenIndent.tsx",
+      "lineNumber": 147,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/OpenIndent.tsx",
+      "lineNumber": 148,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/OpenIndent.tsx",
+      "lineNumber": 271,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/OpenIndent.tsx",
+      "lineNumber": 272,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/OrderBookForm.tsx",
+      "lineNumber": 580,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/OrderBookForm.tsx",
+      "lineNumber": 582,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/OrderBookForm.tsx",
+      "lineNumber": 593,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/OrderBookForm.tsx",
+      "lineNumber": 595,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/OrderBookForm.tsx",
+      "lineNumber": 623,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/OrderBookForm.tsx",
+      "lineNumber": 625,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/OrderBookForm.tsx",
+      "lineNumber": 631,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseHistory.tsx",
+      "lineNumber": 174,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseHistory.tsx",
+      "lineNumber": 175,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseHistory.tsx",
+      "lineNumber": 274,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseHistory.tsx",
+      "lineNumber": 288,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseHistory.tsx",
+      "lineNumber": 289,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseHistory.tsx",
+      "lineNumber": 322,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseHistory.tsx",
+      "lineNumber": 335,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseHistory.tsx",
+      "lineNumber": 336,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseOrderForm.tsx",
+      "lineNumber": 300,
+      "elementType": "link"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseOrderForm.tsx",
+      "lineNumber": 303,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseOrderForm.tsx",
+      "lineNumber": 305,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseOrderForm.tsx",
+      "lineNumber": 352,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseOrderForm.tsx",
+      "lineNumber": 539,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseOrderForm.tsx",
+      "lineNumber": 541,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseOrderForm.tsx",
+      "lineNumber": 552,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseOrderForm.tsx",
+      "lineNumber": 554,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseOrderForm.tsx",
+      "lineNumber": 703,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseOrderForm.tsx",
+      "lineNumber": 705,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/PurchaseOrderForm.tsx",
+      "lineNumber": 711,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/StoreHistory.tsx",
+      "lineNumber": 174,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/StoreHistory.tsx",
+      "lineNumber": 175,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/StoreHistory.tsx",
+      "lineNumber": 274,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/StoreHistory.tsx",
+      "lineNumber": 287,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/StoreHistory.tsx",
+      "lineNumber": 288,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/StoreHistory.tsx",
+      "lineNumber": 321,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/StoreHistory.tsx",
+      "lineNumber": 334,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/StoreHistory.tsx",
+      "lineNumber": 335,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/VendorRegistrationForm.tsx",
+      "lineNumber": 237,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/VendorRegistrationForm.tsx",
+      "lineNumber": 239,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/VendorRegistrationForm.tsx",
+      "lineNumber": 245,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 38,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 39,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 52,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 53,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 66,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 67,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 80,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 81,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 113,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 124,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 133,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 144,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 152,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 163,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 171,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 182,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 190,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 204,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 213,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 214,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 245,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 259,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 267,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 281,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 289,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 303,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 312,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 313,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 342,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 356,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 364,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 378,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 386,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 400,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 408,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 422,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 431,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 432,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 462,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 476,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 484,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 498,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 506,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 520,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 529,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/store-dispatch/index.tsx",
+      "lineNumber": 530,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vendor-master/index.tsx",
+      "lineNumber": 173,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vendor-master/index.tsx",
+      "lineNumber": 174,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vendor-master/index.tsx",
+      "lineNumber": 180,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vendor-master/index.tsx",
+      "lineNumber": 181,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vendor-master/index.tsx",
+      "lineNumber": 246,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vendor-master/index.tsx",
+      "lineNumber": 247,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vendor-master/index.tsx",
+      "lineNumber": 296,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vendor-master/index.tsx",
+      "lineNumber": 297,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vendor-master/index.tsx",
+      "lineNumber": 399,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vendor-master/index.tsx",
+      "lineNumber": 400,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vendor-master/index.tsx",
+      "lineNumber": 406,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vendor-master/index.tsx",
+      "lineNumber": 407,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vendor-master/index.tsx",
+      "lineNumber": 442,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vendor-master/index.tsx",
+      "lineNumber": 443,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vendor-master/index.tsx",
+      "lineNumber": 451,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vendor-master/index.tsx",
+      "lineNumber": 452,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 240,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 241,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 247,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 248,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 302,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 303,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 352,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 353,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 453,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 454,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 461,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 462,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 470,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 471,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 480,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 481,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 487,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 488,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 592,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 593,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 889,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 891,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/vrf-form/index.tsx",
+      "lineNumber": 896,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/welcome-dashboard/index.tsx",
+      "lineNumber": 272,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/modules/welcome-dashboard/index.tsx",
+      "lineNumber": 274,
+      "elementType": "button"
+    },
+    {
+      "filePath": "src/components/setup/RootAdminSetup.tsx",
+      "lineNumber": 186,
+      "elementType": "button"
+    }
+  ],
+  "uncoveredTestIds": []
+}

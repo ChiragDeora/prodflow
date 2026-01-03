@@ -11,13 +11,15 @@ export default function LoginForm() {
   const [localError, setLocalError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   
-  const { login, isLoading, error, clearError } = useAuth();
+  const { login, error, clearError } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError('');
     clearError(); // Clear global auth errors
+    setIsSubmitting(true);
 
     try {
       // Get password from ref (never stored in state)
@@ -50,6 +52,8 @@ export default function LoginForm() {
     } catch (error) {
       setLocalError('An unexpected error occurred');
       console.error('Login error:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -91,7 +95,7 @@ export default function LoginForm() {
                   setLocalError(''); // Clear error when user starts typing
                   clearError();
                 }}
-                disabled={isLoading}
+                disabled={isSubmitting}
               />
             </div>
             <div className="relative">
@@ -108,7 +112,7 @@ export default function LoginForm() {
                 data-lpignore="true"
                 className="appearance-none rounded-none relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                 placeholder="Password"
-                disabled={isLoading}
+                disabled={isSubmitting}
                 onFocus={() => {
                   setLocalError(''); // Clear error when user focuses on password
                   clearError();
@@ -122,7 +126,7 @@ export default function LoginForm() {
                 type="button"
                 className="absolute inset-y-0 right-0 pr-3 flex items-center"
                 onClick={() => setShowPassword(!showPassword)}
-                disabled={isLoading}
+                disabled={isSubmitting}
               >
                 {showPassword ? (
                   <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
@@ -136,10 +140,10 @@ export default function LoginForm() {
           <div>
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isSubmitting}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Signing in...' : 'Sign in'}
+              {isSubmitting ? 'Signing in...' : 'Sign in'}
             </button>
           </div>
 

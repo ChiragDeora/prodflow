@@ -1,0 +1,52 @@
+Test: test_login_form_elements
+Timestamp: 20251217_155644
+Error:
+Traceback (most recent call last):
+  File "/Users/chiragdeora/Developer/production-scheduler/tests/helium/run.py", line 69, in run_single_test
+    test_func()
+  File "/Users/chiragdeora/Developer/production-scheduler/tests/helium/test_auth.py", line 49, in test_login_form_elements
+    go_to(LOGIN_URL)
+  File "/Users/chiragdeora/Developer/production-scheduler/tests/helium/venv/lib/python3.11/site-packages/helium/__init__.py", line 140, in go_to
+    _get_api_impl().go_to_impl(url)
+  File "/Users/chiragdeora/Developer/production-scheduler/tests/helium/venv/lib/python3.11/site-packages/helium/_impl/__init__.py", line 36, in f_decorated
+    result = f(self, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/chiragdeora/Developer/production-scheduler/tests/helium/venv/lib/python3.11/site-packages/helium/_impl/__init__.py", line 55, in f_decorated
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/chiragdeora/Developer/production-scheduler/tests/helium/venv/lib/python3.11/site-packages/helium/_impl/__init__.py", line 140, in go_to_impl
+    self.require_driver().get(url)
+  File "/Users/chiragdeora/Developer/production-scheduler/tests/helium/venv/lib/python3.11/site-packages/selenium/webdriver/remote/webdriver.py", line 452, in get
+    self.execute(Command.GET, {"url": url})
+  File "/Users/chiragdeora/Developer/production-scheduler/tests/helium/venv/lib/python3.11/site-packages/selenium/webdriver/remote/webdriver.py", line 432, in execute
+    self.error_handler.check_response(response)
+  File "/Users/chiragdeora/Developer/production-scheduler/tests/helium/venv/lib/python3.11/site-packages/selenium/webdriver/remote/errorhandler.py", line 232, in check_response
+    raise exception_class(message, screen, stacktrace)
+selenium.common.exceptions.TimeoutException: Message: timeout: Timed out receiving message from renderer: 15.355
+  (Session info: chrome=143.0.7499.110)
+Stacktrace:
+0   chromedriver                        0x0000000102e1c9d4 cxxbridge1$str$ptr + 3032992
+1   chromedriver                        0x0000000102e149c4 cxxbridge1$str$ptr + 3000208
+2   chromedriver                        0x000000010290eb14 _RNvCsgXDX2mvAJAg_7___rustc35___rust_no_alloc_shim_is_unstable_v2 + 74196
+3   chromedriver                        0x00000001028f963c cxxbridge1$string$len + 3972
+4   chromedriver                        0x00000001028f93f4 cxxbridge1$string$len + 3388
+5   chromedriver                        0x00000001028f7214 chromedriver + 209428
+6   chromedriver                        0x00000001028f7dac chromedriver + 212396
+7   chromedriver                        0x0000000102904dd8 _RNvCsgXDX2mvAJAg_7___rustc35___rust_no_alloc_shim_is_unstable_v2 + 33944
+8   chromedriver                        0x000000010291b0bc _RNvCsgXDX2mvAJAg_7___rustc35___rust_no_alloc_shim_is_unstable_v2 + 124796
+9   chromedriver                        0x00000001028f8400 chromedriver + 214016
+10  chromedriver                        0x000000010291aec8 _RNvCsgXDX2mvAJAg_7___rustc35___rust_no_alloc_shim_is_unstable_v2 + 124296
+11  chromedriver                        0x0000000102996c70 _RNvCsgXDX2mvAJAg_7___rustc35___rust_no_alloc_shim_is_unstable_v2 + 631600
+12  chromedriver                        0x000000010294a168 _RNvCsgXDX2mvAJAg_7___rustc35___rust_no_alloc_shim_is_unstable_v2 + 317480
+13  chromedriver                        0x0000000102de039c cxxbridge1$str$ptr + 2785640
+14  chromedriver                        0x0000000102de3af8 cxxbridge1$str$ptr + 2799812
+15  chromedriver                        0x0000000102dc0b4c cxxbridge1$str$ptr + 2656536
+16  chromedriver                        0x0000000102de4368 cxxbridge1$str$ptr + 2801972
+17  chromedriver                        0x0000000102db14d0 cxxbridge1$str$ptr + 2593436
+18  chromedriver                        0x0000000102e03fa0 cxxbridge1$str$ptr + 2932076
+19  chromedriver                        0x0000000102e04120 cxxbridge1$str$ptr + 2932460
+20  chromedriver                        0x0000000102e1461c cxxbridge1$str$ptr + 2999272
+21  libsystem_pthread.dylib             0x000000019e49fc0c _pthread_start + 136
+22  libsystem_pthread.dylib             0x000000019e49ab80 thread_start + 8
+
+

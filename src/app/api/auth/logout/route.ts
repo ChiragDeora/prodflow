@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
+
+const getSupabase = () => createClient();
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = getSupabase();
     const sessionToken = request.cookies.get('session_token')?.value ||
                         request.headers.get('authorization')?.replace('Bearer ', '');
 

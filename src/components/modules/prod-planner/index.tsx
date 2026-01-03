@@ -4,10 +4,10 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { 
   ChevronLeft, 
   ChevronRight, 
+  ChevronDown,
   Plus, 
   Calendar, 
   ZoomIn, 
-  ZoomOut,
   Save,
   Download,
   Settings,
@@ -58,13 +58,15 @@ interface PackingMaterialSelection {
 interface ProductionBlock {
   id: string;
   lineId: string;
-  startDay: number;
-  endDay: number;
+  startDay: string; // Date string in DD-MM-YYYY format (e.g., "13-12-2025")
+  endDay: string; // Date string in DD-MM-YYYY format (e.g., "13-12-2025")
   label: string;
   color: string; // Base/default color
   colorSegments?: ColorSegment[]; // Multiple colors within the same block
   productColors?: ProductColor[]; // Product colors with quantities (e.g., black 1000 pieces, peach 0 pieces, white 100 pieces)
   partyCodes?: string[]; // Multiple party codes/names from party_name_master (e.g., ["Gesa", "Klex"])
+  changeoverProductColors?: ProductColor[]; // Product colors for the changeover block
+  changeoverPartyCodes?: string[]; // Party codes for the changeover block
   packingMaterials?: {
     boxes?: PackingMaterialSelection[];
     polybags?: PackingMaterialSelection[];
@@ -76,8 +78,8 @@ interface ProductionBlock {
   moldData?: Mold; // Reference to actual mold data
   isResizingLeft?: boolean; // For drag handle logic
   isChangeover?: boolean; // Indicates if this is a changeover day
-  changeoverStartDay?: number; // If changeover, which day it starts
-  changeoverEndDay?: number; // If changeover, which day it ends
+  changeoverStartDay?: string; // If changeover, which day it starts (DD-MM-YYYY format)
+  changeoverEndDay?: string; // If changeover, which day it ends (DD-MM-YYYY format)
   changeoverTime?: number; // Changeover time in minutes
   changeoverTimeString?: string; // Changeover time as time string (HH:MM)
   changeoverTimeMode?: 'minutes' | 'time'; // Whether time is in minutes or time format
@@ -119,7 +121,7 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
   const [isDraggingBlock, setIsDraggingBlock] = useState(false);
   const [dragStartPosition, setDragStartPosition] = useState<{ x: number; y: number; day: number } | null>(null);
   const [hoveredDay, setHoveredDay] = useState<{ day: number; lineId: string } | null>(null);
-  const [originalBlockPosition, setOriginalBlockPosition] = useState<{ startDay: number; endDay: number; lineId: string } | null>(null);
+  const [originalBlockPosition, setOriginalBlockPosition] = useState<{ startDay: string; endDay: string; lineId: string } | null>(null);
   const [dragPreview, setDragPreview] = useState<{ x: number; y: number; block: ProductionBlock } | null>(null);
   const [tooltipTimeout, setTooltipTimeout] = useState<NodeJS.Timeout | null>(null);
   const [showTooltip, setShowTooltip] = useState(false);
@@ -132,6 +134,7 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
   const [selectedCellRange, setSelectedCellRange] = useState<{ startDay: number; endDay: number; lineId: string } | null>(null);
   const [rangeAnchor, setRangeAnchor] = useState<{ day: number; lineId: string } | null>(null);
   const [expandedDay, setExpandedDay] = useState<number | null>(null);
+  const [showDayPicker, setShowDayPicker] = useState(false);
   const [dayLineData, setDayLineData] = useState<{ [key: string]: { 
     color: string; 
     quantity: number; 
@@ -423,16 +426,95 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
     '#F0F9FF'  // White-based cyan
   ];
 
+  // Helper function to convert day/month/year to date string (DD-MM-YYYY)
+  const formatDateString = useCallback((day: number, month: number, year: number): string => {
+    const dayStr = day.toString().padStart(2, '0');
+    const monthStr = month.toString().padStart(2, '0');
+    return `${dayStr}-${monthStr}-${year}`;
+  }, []);
+
+  // Helper function to parse date string (DD-MM-YYYY) to day, month, year
+  const parseDateString = useCallback((dateStr: string): { day: number; month: number; year: number } | null => {
+    if (!dateStr || typeof dateStr !== 'string') {
+      console.error('❌ parseDateString: Invalid input:', dateStr);
+      return null;
+    }
+    const parts = dateStr.trim().split('-');
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      const year = parseInt(parts[2], 10);
+      if (!isNaN(day) && !isNaN(month) && !isNaN(year) && day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+        return { day, month, year };
+      } else {
+        console.error('❌ parseDateString: Invalid date values:', { dateStr, day, month, year });
+      }
+    } else {
+      console.error('❌ parseDateString: Invalid format, expected DD-MM-YYYY, got:', dateStr);
+    }
+    return null;
+  }, []);
+
+  // Helper function to get day number from date string (for comparisons with display days)
+  const getDayFromDateString = useCallback((dateStr: string): number | null => {
+    const parsed = parseDateString(dateStr);
+    return parsed ? parsed.day : null;
+  }, [parseDateString]);
+
+  // Helper function to add days to a date string
+  const addDaysToDateString = useCallback((dateStr: string, days: number): string => {
+    const parsed = parseDateString(dateStr);
+    if (!parsed) return dateStr;
+    
+    const date = new Date(parsed.year, parsed.month - 1, parsed.day);
+    date.setDate(date.getDate() + days);
+    
+    const day = date.getDate();
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    return formatDateString(day, month, year);
+  }, [parseDateString, formatDateString]);
+
+  // Helper function to compare two date strings (returns -1, 0, or 1)
+  const compareDateStrings = useCallback((dateStr1: string, dateStr2: string): number => {
+    const parsed1 = parseDateString(dateStr1);
+    const parsed2 = parseDateString(dateStr2);
+    if (!parsed1 || !parsed2) return 0;
+    
+    const date1 = new Date(parsed1.year, parsed1.month - 1, parsed1.day);
+    const date2 = new Date(parsed2.year, parsed2.month - 1, parsed2.day);
+    
+    if (date1 < date2) return -1;
+    if (date1 > date2) return 1;
+    return 0;
+  }, [parseDateString]);
+
+  // Helper function to convert day number to date string for current month
+  const dayNumberToDateString = useCallback((day: number): string => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth() + 1;
+    return formatDateString(day, month, year);
+  }, [currentMonth, formatDateString]);
+
+  // Helper function to convert day number to date string using a specific month/year
+  const dayNumberToDateStringWithMonth = useCallback((day: number, month: number, year: number): string => {
+    return formatDateString(day, month, year);
+  }, [formatDateString]);
+
   // Helper function to transform database block to UI block
   const transformDbBlockToUI = useCallback((dbBlock: ProductionBlockWithRelations, molds: Mold[]): ProductionBlock => {
     const mold = dbBlock.mold_id ? molds.find(m => m.mold_id === dbBlock.mold_id) : undefined;
     const changeoverMold = dbBlock.changeover_mold_id ? molds.find(m => m.mold_id === dbBlock.changeover_mold_id) : undefined;
 
+    // Database now stores date strings directly in DD-MM-YYYY format, so use them as-is
+    const startDayStr = dbBlock.start_day; // Already in DD-MM-YYYY format
+    const endDayStr = dbBlock.end_day; // Already in DD-MM-YYYY format
+
     return {
       id: dbBlock.id,
       lineId: dbBlock.line_id,
-      startDay: dbBlock.start_day,
-      endDay: dbBlock.end_day,
+      startDay: startDayStr,
+      endDay: endDayStr,
       label: dbBlock.label,
       color: dbBlock.color,
       duration: dbBlock.duration,
@@ -442,8 +524,8 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
       isResizingLeft: dbBlock.is_resizing_left,
       isChangeover: dbBlock.is_changeover,
       isChangeoverBlock: dbBlock.is_changeover_block,
-      changeoverStartDay: dbBlock.changeover_start_day,
-      changeoverEndDay: dbBlock.changeover_end_day,
+      changeoverStartDay: dbBlock.changeover_start_day || undefined, // Already in DD-MM-YYYY format
+      changeoverEndDay: dbBlock.changeover_end_day || undefined, // Already in DD-MM-YYYY format
       changeoverTime: dbBlock.changeover_time,
       changeoverTimeString: dbBlock.changeover_time_string,
       changeoverTimeMode: dbBlock.changeover_time_mode,
@@ -476,15 +558,31 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
         }))
       } : undefined
     };
-  }, []);
+  }, [formatDateString]);
 
   // Helper function to transform UI block to database block
   const transformUIBlockToDB = useCallback((uiBlock: ProductionBlock, year: number, month: number): ProductionBlockWithRelations => {
+    // UI blocks already have date strings in DD-MM-YYYY format, so we can use them directly
+    // Just ensure they're in the correct format
+    const startDay = uiBlock.startDay; // Already in DD-MM-YYYY format
+    const endDay = uiBlock.endDay; // Already in DD-MM-YYYY format
+    
+    // Parse to get year/month for planning_month and planning_year
+    // CRITICAL: Always parse from the date string, never use fallback from currentMonth
+    // This ensures blocks are saved with the correct planning_month/year based on their actual date
+    const startDate = parseDateString(uiBlock.startDay);
+    if (!startDate) {
+      console.error('❌ Failed to parse date string:', uiBlock.startDay);
+      throw new Error(`Invalid date string format: ${uiBlock.startDay}. Expected DD-MM-YYYY format.`);
+    }
+    const finalYear = startDate.year;
+    const finalMonth = startDate.month;
+
     const dbBlock: ProductionBlockWithRelations = {
       id: uiBlock.id,
       line_id: uiBlock.lineId,
-      start_day: uiBlock.startDay,
-      end_day: uiBlock.endDay,
+      start_day: startDay, // Store full date string (DD-MM-YYYY)
+      end_day: endDay, // Store full date string (DD-MM-YYYY)
       duration: uiBlock.duration,
       label: uiBlock.label,
       color: uiBlock.color.toUpperCase(),
@@ -492,16 +590,16 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
       production_day_start_time: '08:00:00',
       is_changeover: uiBlock.isChangeover || false,
       is_changeover_block: uiBlock.isChangeoverBlock || false,
-      changeover_start_day: uiBlock.changeoverStartDay,
-      changeover_end_day: uiBlock.changeoverEndDay,
+      changeover_start_day: uiBlock.changeoverStartDay || undefined, // Already in DD-MM-YYYY format
+      changeover_end_day: uiBlock.changeoverEndDay || undefined, // Already in DD-MM-YYYY format
       changeover_time: uiBlock.changeoverTime,
       changeover_time_string: uiBlock.changeoverTimeString,
       changeover_time_mode: uiBlock.changeoverTimeMode,
       changeover_mold_id: uiBlock.changeoverMoldId,
       notes: uiBlock.notes,
       is_resizing_left: uiBlock.isResizingLeft || false,
-      planning_month: month,
-      planning_year: year
+      planning_month: finalMonth,
+      planning_year: finalYear
     };
 
     // Transform related data
@@ -520,14 +618,16 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
         block_id: uiBlock.id,
         color: pc.color,
         quantity: pc.quantity,
-        party_code: pc.partyCode
+        party_code: pc.partyCode,
+        is_changeover: uiBlock.isChangeoverBlock || false
       }));
     }
 
     if (uiBlock.partyCodes && uiBlock.partyCodes.length > 0) {
       dbBlock.party_codes = uiBlock.partyCodes.map(pc => ({
         block_id: uiBlock.id,
-        party_code: pc
+        party_code: pc,
+        is_changeover: uiBlock.isChangeoverBlock || false
       }));
     }
 
@@ -572,11 +672,17 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
         lineId: block.lineId,
         startDay: block.startDay,
         endDay: block.endDay,
-        year,
-        month
+        currentMonthYear: year,
+        currentMonthMonth: month
       });
       const dbBlock = transformUIBlockToDB(block, year, month);
-      console.log('💾 Transformed block data:', dbBlock);
+      console.log('💾 Transformed block data:', {
+        ...dbBlock,
+        start_day: dbBlock.start_day,
+        end_day: dbBlock.end_day,
+        planning_month: dbBlock.planning_month,
+        planning_year: dbBlock.planning_year
+      });
       const result = await productionBlockAPI.save(dbBlock);
       console.log('✅ Successfully saved block to database:', block.id, result);
       return result;
@@ -600,10 +706,67 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
         const dbBlocks = await productionBlockAPI.getByMonth(year, month);
         
         // Transform database blocks to UI blocks
-        const uiBlocks = dbBlocks.map(dbBlock => transformDbBlockToUI(dbBlock, molds));
+        let uiBlocks = dbBlocks.map(dbBlock => transformDbBlockToUI(dbBlock, molds));
+        
+        // Link changeover blocks to their parent blocks
+        // For blocks with changeover configured, find the changeover block and load its product colors
+        uiBlocks = uiBlocks.map(block => {
+          if (block.changeoverTime && block.changeoverTime > 0 && block.changeoverMoldId && !block.isChangeoverBlock) {
+            // Parse the start day to preserve month/year when calculating next day
+            const blockDateParsed = parseDateString(block.startDay);
+            let nextDayStr = block.startDay;
+            if (blockDateParsed) {
+              const nextDate = new Date(blockDateParsed.year, blockDateParsed.month - 1, blockDateParsed.day + 1);
+              const nextDay = nextDate.getDate();
+              const nextMonth = nextDate.getMonth() + 1;
+              const nextYear = nextDate.getFullYear();
+              nextDayStr = dayNumberToDateStringWithMonth(nextDay, nextMonth, nextYear);
+            }
+              
+            // Find the changeover block (starts on next day, same line, is_changeover_block = true, and matches the changeover mold)
+            const changeoverBlock = uiBlocks.find(cb => 
+              cb.isChangeoverBlock &&
+              cb.lineId === block.lineId &&
+                cb.startDay === nextDayStr &&
+              cb.moldId === block.changeoverMoldId
+            );
+            
+            if (changeoverBlock) {
+              console.log('🔗 Linking changeover block to parent:', {
+                parentId: block.id,
+                changeoverId: changeoverBlock.id,
+                  parentStartDay: block.startDay,
+                  changeoverStartDay: changeoverBlock.startDay,
+                changeoverProductColors: changeoverBlock.productColors?.length || 0,
+                  changeoverPartyCodes: changeoverBlock.partyCodes?.length || 0,
+                parentProductColors: block.productColors?.length || 0
+              });
+              return {
+                ...block,
+                changeoverProductColors: changeoverBlock.productColors || [],
+                changeoverPartyCodes: changeoverBlock.partyCodes || []
+              };
+            } else {
+              console.warn('⚠️ Changeover block not found for:', {
+                blockId: block.id,
+                lineId: block.lineId,
+                startDay: block.startDay,
+                  expectedNextDay: nextDayStr,
+                  changeoverMoldId: block.changeoverMoldId,
+                  availableChangeoverBlocks: uiBlocks.filter(cb => cb.isChangeoverBlock && cb.lineId === block.lineId).map(cb => ({
+                    id: cb.id,
+                    startDay: cb.startDay,
+                    moldId: cb.moldId
+                  }))
+                });
+            }
+          }
+          return block;
+        });
         
         setBlocks(uiBlocks);
-        console.log('✅ Loaded', uiBlocks.length, 'blocks from database');
+        const changeoverBlocksCount = uiBlocks.filter(b => b.isChangeoverBlock).length;
+        console.log('✅ Loaded', uiBlocks.length, 'blocks from database (', changeoverBlocksCount, 'changeover blocks)');
       } catch (error) {
         console.error('❌ Failed to load blocks:', error);
       }
@@ -823,7 +986,21 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
     const dayHeight = 48; // Height of each day row (h-12 = 48px)
     const headerWidth = 80; // Width of the date header column (w-20 = 80px)
     const margin = 2; // Small margin to prevent touching grid lines
-    const dayIndex = displayDays.findIndex(day => day === block.startDay);
+    const blockDayNum = getDayFromDateString(block.startDay);
+    const dayIndex = blockDayNum !== null ? displayDays.findIndex(day => day === blockDayNum) : -1;
+    
+    // Debug: Log if block day is not found in display days
+    if (blockDayNum !== null && dayIndex === -1) {
+      console.warn('⚠️ Block day not found in displayDays:', {
+        blockId: block.id,
+        blockStartDay: block.startDay,
+        blockDayNum,
+        displayDays: displayDays.slice(0, 10), // Show first 10 days
+        currentMonth: currentMonth.getMonth() + 1,
+        currentYear: currentMonth.getFullYear()
+      });
+    }
+    
     const top = dayIndex >= 0 ? dayIndex * dayHeight + margin : margin;
     // All blocks are now single-day, so height is always dayHeight
     const height = dayHeight - (margin * 2);
@@ -845,17 +1022,23 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
       top: `${top}px`,
       height: `${height}px`,
     };
-  }, [zoomLevel, lineColumnWidths]);
+  }, [zoomLevel, lineColumnWidths, getDayFromDateString]);
 
   // Check for overlaps - prevent ANY overlapping blocks (strict no-overlap policy)
   const checkOverlaps = useCallback((newBlock: ProductionBlock, excludeId?: string) => {
-    const relevantBlocks = blocks.filter(block => block.id !== excludeId && block.lineId === newBlock.lineId);
+    const relevantBlocks = blocks.filter(block => 
+      block.id !== excludeId && 
+      block.lineId === newBlock.lineId &&
+      // Exclude changeover blocks from overlap check - they're special blocks that can coexist
+      !block.isChangeoverBlock
+    );
     
     if (relevantBlocks.length === 0) {
       return false;
     }
     
     // Check for ANY overlap - if blocks share the same day, it's an overlap
+    // But exclude changeover blocks as they're allowed to exist on the next day after their parent block
     return relevantBlocks.some(block => {
       // Overlap occurs if blocks share any day
       // Since all blocks are single-day (startDay === endDay), we just check if they're on the same day
@@ -930,14 +1113,21 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
     const lineBlocks = blocks.filter(block => block.lineId === lineId);
     
     // Check if any block ends on this day and another starts on this day
-    const hasBlockEndingOnDay = lineBlocks.some(block => block.endDay === day);
-    const hasBlockStartingOnDay = lineBlocks.some(block => block.startDay === day);
+    // Convert date strings to day numbers for comparison
+    const hasBlockEndingOnDay = lineBlocks.some(block => {
+      const blockDay = getDayFromDateString(block.endDay);
+      return blockDay === day;
+    });
+    const hasBlockStartingOnDay = lineBlocks.some(block => {
+      const blockDay = getDayFromDateString(block.startDay);
+      return blockDay === day;
+    });
     
     return hasBlockEndingOnDay && hasBlockStartingOnDay;
-  }, [blocks]);
+  }, [blocks, getDayFromDateString]);
 
   // Get the changeover day for a specific line (the day where changeover happens)
-  const getChangeoverDay = useCallback((lineId: string) => {
+  const getChangeoverDay = useCallback((lineId: string): number | null => {
     const lineBlocks = blocks.filter(block => block.lineId === lineId);
     
     // Find days where one block ends and another starts
@@ -948,12 +1138,14 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
       );
       
       if (hasBlockStartingOnEndDay) {
-        return block.endDay; // Return the day where the changeover happens
+        // Return the day number (not the full date string) for compatibility
+        const dayNum = getDayFromDateString(block.endDay);
+        return dayNum;
       }
     }
     
     return null;
-  }, [blocks]);
+  }, [blocks, getDayFromDateString]);
 
   // Handle drag start - completely rewritten for inverted layout
   const handleDragStart = useCallback((e: React.MouseEvent, block: ProductionBlock) => {
@@ -978,13 +1170,15 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
     // Find the initial line index for this block
     const initialLineIndex = lines.findIndex(l => l.id === block.lineId);
     
-    // Store initial positions for potential drag
+    // Store initial positions for potential drag (convert date strings to day numbers for calculations)
+    const initialStartDayNum = getDayFromDateString(block.startDay) || 1;
+    const initialEndDayNum = getDayFromDateString(block.endDay) || 1;
     setDragStart({ 
       mouseX: e.clientX, 
       mouseY: e.clientY,
       initialLineIndex: initialLineIndex >= 0 ? initialLineIndex : 0,
-      initialStartDay: block.startDay,
-      initialEndDay: block.endDay
+      initialStartDay: initialStartDayNum,
+      initialEndDay: initialEndDayNum
     });
     setOriginalBlockPosition({ 
       startDay: block.startDay, 
@@ -1064,18 +1258,25 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
     // Calculate day index from Y position (allow negative to snap to first day)
     const dayIndex = Math.floor(adjustedY / dayHeight);
     const clampedDayIndex = Math.max(0, Math.min(currentDays.length - 1, dayIndex < 0 ? 0 : dayIndex));
-    const targetDay = currentDays[clampedDayIndex] || currentDays[0] || dragStart.initialStartDay;
+    // Get initial start day as number for calculations
+    const initialStartDayNum = typeof dragStart.initialStartDay === 'string' 
+      ? getDayFromDateString(dragStart.initialStartDay) || 1
+      : dragStart.initialStartDay;
+    const targetDay = currentDays[clampedDayIndex] || currentDays[0] || initialStartDayNum;
     
     // Calculate how many days the block should span (keep original duration)
-    const blockDuration = dragStart.initialEndDay - dragStart.initialStartDay + 1;
-    const newStartDay = targetDay;
-    const newEndDay = newStartDay + blockDuration - 1;
+    const initialEndDayNum = typeof dragStart.initialEndDay === 'string'
+      ? getDayFromDateString(dragStart.initialEndDay) || 1
+      : dragStart.initialEndDay;
+    const blockDuration = initialEndDayNum - initialStartDayNum + 1;
+    const newStartDayNum = targetDay;
+    const newEndDayNum = newStartDayNum + blockDuration - 1;
     
     // Constrain to valid day range
     const minDay = Math.min(...currentDays);
     const maxDay = Math.max(...currentDays);
-    const constrainedStartDay = Math.max(minDay, Math.min(maxDay - blockDuration + 1, newStartDay));
-    const constrainedEndDay = constrainedStartDay + blockDuration - 1;
+    const constrainedStartDayNum = Math.max(minDay, Math.min(maxDay - blockDuration + 1, newStartDayNum));
+    const constrainedEndDayNum = constrainedStartDayNum + blockDuration - 1;
 
     // Check for boundaries with other blocks on the target line
     const otherBlocks = blocks.filter(block => 
@@ -1083,26 +1284,32 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
       block.lineId === newLineId
     );
 
-    // Find the nearest block boundaries
+    // Find the nearest block boundaries (convert block dates to day numbers for comparison)
     let minStart = minDay;
     let maxEnd = maxDay;
 
     otherBlocks.forEach(block => {
-      if (block.endDay < constrainedStartDay) {
-        minStart = Math.max(minStart, block.endDay); // Same day transitions allowed
+      const blockEndDayNum = getDayFromDateString(block.endDay);
+      const blockStartDayNum = getDayFromDateString(block.startDay);
+      if (blockEndDayNum !== null && blockEndDayNum < constrainedStartDayNum) {
+        minStart = Math.max(minStart, blockEndDayNum); // Same day transitions allowed
       }
-      if (block.startDay > constrainedEndDay) {
-        maxEnd = Math.min(maxEnd, block.startDay); // Same day transitions allowed
+      if (blockStartDayNum !== null && blockStartDayNum > constrainedEndDayNum) {
+        maxEnd = Math.min(maxEnd, blockStartDayNum); // Same day transitions allowed
       }
     });
 
     // Final constraint based on other blocks
-    let finalStartDay = Math.max(minStart, Math.min(maxEnd - blockDuration + 1, constrainedStartDay));
-    let finalEndDay = finalStartDay + blockDuration - 1;
+    let finalStartDayNum = Math.max(minStart, Math.min(maxEnd - blockDuration + 1, constrainedStartDayNum));
+    let finalEndDayNum = finalStartDayNum + blockDuration - 1;
     
     // Ensure we don't go out of bounds
-    finalStartDay = Math.max(minDay, Math.min(maxDay - blockDuration + 1, finalStartDay));
-    finalEndDay = Math.min(maxDay, finalStartDay + blockDuration - 1);
+    finalStartDayNum = Math.max(minDay, Math.min(maxDay - blockDuration + 1, finalStartDayNum));
+    finalEndDayNum = Math.min(maxDay, finalStartDayNum + blockDuration - 1);
+
+    // Convert day numbers to date strings
+    const finalStartDay = dayNumberToDateString(finalStartDayNum);
+    const finalEndDay = dayNumberToDateString(finalEndDayNum);
 
     // Update block position in real-time for visual feedback only
     // DO NOT update blocks array here - that causes wrong overlap/changeover detection
@@ -1123,7 +1330,7 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
       y: e.clientY - 25,
       block: updatedBlock
     });
-  }, [isDragging, selectedBlock, dragStart, zoomLevel, blocks, checkOverlaps, checkMoldConflict, lines, getDisplayDays, lineColumnWidths]);
+  }, [isDragging, selectedBlock, dragStart, zoomLevel, blocks, checkOverlaps, checkMoldConflict, lines, getDisplayDays, lineColumnWidths, getDayFromDateString, dayNumberToDateString]);
 
   // Handle drag end - completely rewritten for inverted layout
   const handleDragEnd = useCallback(() => {
@@ -1212,11 +1419,14 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
 
   // Handle block resize
   const handleBlockResize = useCallback((block: ProductionBlock, newDuration: number) => {
-    const newEndDay = block.startDay + newDuration - 1;
+    const startDayNum = getDayFromDateString(block.startDay);
+    if (startDayNum === null) return;
+    const newEndDayNum = startDayNum + newDuration - 1;
+    const newEndDay = dayNumberToDateString(newEndDayNum);
     const updatedBlock = { ...block, endDay: newEndDay, duration: newDuration };
     
     setBlocks(prev => prev.map(b => b.id === block.id ? updatedBlock : b));
-  }, []);
+  }, [getDayFromDateString, dayNumberToDateString]);
 
   // Handle resize drag move (inverted: resize vertically for days)
   const handleResizeMove = useCallback((e: MouseEvent) => {
@@ -1238,10 +1448,14 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
     const maxDay = currentDays.length > 0 ? Math.max(...currentDays) : 31;
     const minDay = currentDays.length > 0 ? Math.min(...currentDays) : 1;
     
+    const startDayNum = getDayFromDateString(selectedBlock.startDay);
+    const endDayNum = getDayFromDateString(selectedBlock.endDay);
+    if (startDayNum === null || endDayNum === null) return;
+    
     if (selectedBlock.isResizingLeft) {
       // Top handle: extend upward
-      const newStartDay = Math.max(minDay, Math.min(selectedBlock.endDay, targetDay));
-      const daysToCreate = selectedBlock.endDay - newStartDay + 1;
+      const newStartDayNum = Math.max(minDay, Math.min(endDayNum, targetDay));
+      const newStartDay = dayNumberToDateString(newStartDayNum);
       setDragPreview({
         x: e.clientX - 50,
         y: e.clientY - 25,
@@ -1249,14 +1463,16 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
       });
     } else {
       // Bottom handle: extend downward
-      const daysToCreate = Math.max(1, targetDay - selectedBlock.startDay + 1);
+      const daysToCreate = Math.max(1, targetDay - startDayNum + 1);
+      const newEndDayNum = startDayNum + daysToCreate - 1;
+      const newEndDay = dayNumberToDateString(newEndDayNum);
       setDragPreview({
         x: e.clientX - 50,
         y: e.clientY - 25,
-        block: { ...selectedBlock, endDay: selectedBlock.startDay + daysToCreate - 1 }
+        block: { ...selectedBlock, endDay: newEndDay }
       });
     }
-  }, [isDraggingBlock, selectedBlock, dragStartPosition, getDisplayDays]);
+  }, [isDraggingBlock, selectedBlock, dragStartPosition, getDisplayDays, getDayFromDateString, dayNumberToDateString]);
 
   // Handle resize drag end
   const handleResizeEnd = useCallback((e: MouseEvent) => {
@@ -1285,20 +1501,27 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
     const maxDay = currentDays.length > 0 ? Math.max(...currentDays) : 31;
     const minDay = currentDays.length > 0 ? Math.min(...currentDays) : 1;
     
+    const startDayNum = getDayFromDateString(selectedBlock.startDay);
+    const endDayNum = getDayFromDateString(selectedBlock.endDay);
+    if (startDayNum === null || endDayNum === null) return;
+    
     if (selectedBlock.isResizingLeft) {
       // Top handle: extend upward - create multiple blocks going up
-      const newStartDay = Math.max(minDay, Math.min(selectedBlock.endDay, targetDay));
-      const daysToCreate = selectedBlock.endDay - newStartDay + 1;
+      const newStartDayNum = Math.max(minDay, Math.min(endDayNum, targetDay));
+      const newStartDay = dayNumberToDateString(newStartDayNum);
+      const daysToCreate = endDayNum - newStartDayNum + 1;
       
       // Create new blocks for each day going upward (excluding the original last day)
       const newBlocks: ProductionBlock[] = [];
       
       for (let i = 0; i < daysToCreate - 1; i++) {
+        const dayNum = newStartDayNum + i;
+        const dayStr = dayNumberToDateString(dayNum);
         const dayBlock: ProductionBlock = {
           ...selectedBlock,
           id: `block-${Date.now()}-${i}`,
-          startDay: newStartDay + i,
-          endDay: newStartDay + i,
+          startDay: dayStr,
+          endDay: dayStr,
           duration: 1,
         };
         
@@ -1350,8 +1573,8 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
       }
     } else {
       // Bottom handle: extend downward - create multiple blocks going down
-      const lastDay = Math.min(maxDay, Math.max(selectedBlock.startDay, targetDay));
-      const daysToCreate = lastDay - selectedBlock.startDay + 1;
+      const lastDayNum = Math.min(maxDay, Math.max(startDayNum, targetDay));
+      const daysToCreate = lastDayNum - startDayNum + 1;
       
       // If this is a changeover block, create normal blocks with the changeover mold's properties
       const isChangeoverBlock = selectedBlock.isChangeoverBlock;
@@ -1372,11 +1595,13 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
       const newBlocks: ProductionBlock[] = [];
       
       for (let i = 1; i < daysToCreate; i++) {
+        const dayNum = startDayNum + i;
+        const dayStr = dayNumberToDateString(dayNum);
         const dayBlock: ProductionBlock = {
           ...baseBlock,
           id: `block-${Date.now()}-${i}`,
-          startDay: selectedBlock.startDay + i,
-          endDay: selectedBlock.startDay + i,
+          startDay: dayStr,
+          endDay: dayStr,
           duration: 1,
         };
         
@@ -1409,7 +1634,7 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
     if (selectedBlock) {
       setSelectedBlock({ ...selectedBlock, isResizingLeft: undefined });
     }
-  }, [selectedBlock, dragStartPosition, getDisplayDays, checkOverlaps, checkMoldConflict, detectChangeovers, lines, lineDefaultColors, saveBlockToDatabase]);
+  }, [selectedBlock, dragStartPosition, getDisplayDays, checkOverlaps, checkMoldConflict, detectChangeovers, lines, lineDefaultColors, saveBlockToDatabase, getDayFromDateString, dayNumberToDateString]);
 
   // Add event listeners for drag - add them when dragStart is set (not just when isDragging is true)
   // This allows us to detect movement and then set isDragging
@@ -1478,6 +1703,23 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
     };
   }, [hoveredLine]);
 
+  // Close day picker dropdown when clicking outside
+  useEffect(() => {
+    if (!showDayPicker) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-day-picker]')) {
+        setShowDayPicker(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDayPicker]);
+
   // Add event listeners for resize drag
   useEffect(() => {
     if (isDraggingBlock) {
@@ -1492,7 +1734,7 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
         document.removeEventListener('mouseup', mouseUpHandler);
       };
     }
-  }, [isDraggingBlock, handleResizeMove, handleResizeEnd]);
+  }, [isDraggingBlock, handleResizeMove, handleResizeEnd, getDayFromDateString, dayNumberToDateString]);
 
   // Keyboard shortcuts for copy, paste, delete, duplicate
   useEffect(() => {
@@ -1556,7 +1798,10 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
           setSelectedCellRange({ startDay, endDay, lineId: selectedCell.lineId });
           
           // Select block in the new cell if exists
-          const blockInCell = blocks.find(b => b.lineId === selectedCell.lineId && b.startDay === newDay);
+          const blockInCell = blocks.find(b => {
+            const blockDayNum = getDayFromDateString(b.startDay);
+            return b.lineId === selectedCell.lineId && blockDayNum === newDay;
+          });
           if (blockInCell) {
             setSelectedBlock(blockInCell);
           } else {
@@ -1596,7 +1841,10 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
           setRangeAnchor(null); // Clear anchor when moving with arrow keys
           
           // Select block in the new cell if exists
-          const blockInCell = blocks.find(b => b.lineId === newLineId && b.startDay === newDay);
+          const blockInCell = blocks.find(b => {
+            const blockDayNum = getDayFromDateString(b.startDay);
+            return b.lineId === newLineId && blockDayNum === newDay;
+          });
           if (blockInCell) {
             setSelectedBlock(blockInCell);
           } else {
@@ -1642,8 +1890,8 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
             ...clipboardBlock,
             id: `block-${Date.now()}`,
             lineId: selectedCell.lineId,
-            startDay: selectedCell.day,
-            endDay: selectedCell.day,
+            startDay: dayNumberToDateString(selectedCell.day),
+            endDay: dayNumberToDateString(selectedCell.day),
             duration: 1,
             label: clipboardBlock.label,
             productColors: clipboardBlock.productColors ? [...clipboardBlock.productColors] : [],
@@ -1694,7 +1942,10 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
           e.preventDefault();
           // Find next empty cell on the same line
           const lineBlocks = blocks.filter(b => b.lineId === selectedCell.lineId);
-          const occupiedDays = new Set(lineBlocks.map(b => b.startDay));
+          const occupiedDays = new Set(lineBlocks.map(b => {
+            const dayNum = getDayFromDateString(b.startDay);
+            return dayNum !== null ? dayNum : 0;
+          }));
           let nextEmptyDay = selectedCell.day + 1;
           const maxDay = 31;
           
@@ -1710,8 +1961,8 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
           const newBlock: ProductionBlock = {
             ...selectedBlock,
             id: `block-${Date.now()}`,
-            startDay: nextEmptyDay,
-            endDay: nextEmptyDay,
+            startDay: dayNumberToDateString(nextEmptyDay),
+            endDay: dayNumberToDateString(nextEmptyDay),
             duration: 1,
             label: selectedBlock.label,
             productColors: selectedBlock.productColors ? [...selectedBlock.productColors] : [],
@@ -1762,11 +2013,13 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
         if (selectedCellRange && selectedCell) {
           // Delete all blocks in the selected range
           e.preventDefault();
-          const rangeBlocks = blocks.filter(b => 
-            b.lineId === selectedCellRange.lineId &&
-            b.startDay >= selectedCellRange.startDay &&
-            b.startDay <= selectedCellRange.endDay
-          );
+          const rangeBlocks = blocks.filter(b => {
+            const blockDayNum = getDayFromDateString(b.startDay);
+            return blockDayNum !== null &&
+              b.lineId === selectedCellRange.lineId &&
+              blockDayNum >= selectedCellRange.startDay &&
+              blockDayNum <= selectedCellRange.endDay;
+          });
           
           if (rangeBlocks.length > 0) {
             const blockCount = rangeBlocks.length;
@@ -1793,8 +2046,57 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
           // Delete single selected block
           e.preventDefault();
           if (confirm(`Are you sure you want to delete "${selectedBlock.label}"?`)) {
+            const blockIdToDelete = selectedBlock.id;
+            
+            // Delete from database
+            productionBlockAPI.delete(blockIdToDelete).catch(error => {
+              console.error('❌ Failed to delete block from database:', error);
+              alert('Failed to delete block from database. Please try again.');
+            });
+            
+            // Also delete associated changeover block if this is a main block with changeover
+            if (selectedBlock.changeoverTime && selectedBlock.changeoverTime > 0 && selectedBlock.changeoverMoldId) {
+              const startDayNum = getDayFromDateString(selectedBlock.startDay);
+              if (startDayNum !== null) {
+                const nextDayNum = startDayNum + 1;
+                const nextDayStr = dayNumberToDateString(nextDayNum);
+                const changeoverBlock = blocks.find(b => 
+                  b.isChangeoverBlock &&
+                  b.lineId === selectedBlock.lineId &&
+                  b.startDay === nextDayStr &&
+                  b.moldId === selectedBlock.changeoverMoldId
+                );
+                
+                if (changeoverBlock) {
+                  productionBlockAPI.delete(changeoverBlock.id).catch(error => {
+                    console.error('❌ Failed to delete changeover block from database:', error);
+                  });
+                }
+              }
+            }
+            
+            // Update local state
             setBlocks(prev => {
-              const newBlocks = prev.filter(block => block.id !== selectedBlock.id);
+              const blockIdsToDelete = [blockIdToDelete];
+              // Also remove changeover block if exists
+              if (selectedBlock.changeoverTime && selectedBlock.changeoverTime > 0 && selectedBlock.changeoverMoldId) {
+                const startDayNum = getDayFromDateString(selectedBlock.startDay);
+                if (startDayNum !== null) {
+                  const nextDayNum = startDayNum + 1;
+                  const nextDayStr = dayNumberToDateString(nextDayNum);
+                  const changeoverBlock = prev.find(b => 
+                    b.isChangeoverBlock &&
+                    b.lineId === selectedBlock.lineId &&
+                    b.startDay === nextDayStr &&
+                    b.moldId === selectedBlock.changeoverMoldId
+                  );
+                  if (changeoverBlock) {
+                    blockIdsToDelete.push(changeoverBlock.id);
+                  }
+                }
+              }
+              const blockIdsSet = new Set(blockIdsToDelete);
+              const newBlocks = prev.filter(block => !blockIdsSet.has(block.id));
               return detectChangeovers(newBlocks);
             });
             setSelectedBlock(null);
@@ -1809,18 +2111,37 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedBlock, clipboardBlock, selectedCell, selectedCellRange, checkOverlaps, checkMoldConflict, detectChangeovers, blocks, lines, getDisplayDays, lineDefaultColors]);
+  }, [selectedBlock, clipboardBlock, selectedCell, selectedCellRange, checkOverlaps, checkMoldConflict, detectChangeovers, blocks, lines, getDisplayDays, lineDefaultColors, getDayFromDateString, dayNumberToDateString]);
 
   // Create new block
   const createBlock = useCallback((lineId: string, day: number) => {
     // Don't create block immediately - just open the editing modal
     const line = lines.find(l => l.id === lineId);
     const defaultColor = (lineDefaultColors[lineId] || line?.color || '#E0F2FE').toUpperCase();
+    
+    // Always use the clicked day in the current month being viewed
+    // The user explicitly clicked on a specific day, so use that day, not today's date
+    const currentYear = currentMonth.getFullYear();
+    const currentMonthNum = currentMonth.getMonth() + 1; // getMonth() returns 0-11
+    
+    const dayStr = day.toString().padStart(2, '0');
+    const monthStr = currentMonthNum.toString().padStart(2, '0');
+    const yearStr = currentYear.toString();
+    const defaultStartDay = `${dayStr}-${monthStr}-${yearStr}`;
+    
+    console.log('🆕 Creating new block:', {
+      clickedDay: day,
+      defaultStartDay,
+      currentYear,
+      currentMonthNum,
+      lineId
+    });
+    
     const newBlock: ProductionBlock = {
       id: `block-${Date.now()}`,
       lineId,
-      startDay: day,
-      endDay: day, // Single day by default
+      startDay: defaultStartDay,
+      endDay: defaultStartDay, // Single day by default
       label: 'New Production Run',
       color: defaultColor,
       duration: 1, // Single day - user can increase duration in form to create multiple days
@@ -1834,7 +2155,7 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
 
     // Open editing modal without creating the block yet
     setEditingBlock(newBlock);
-  }, [lines, lineDefaultColors]);
+  }, [lines, lineDefaultColors, currentMonth]);
 
   // Update block
   const updateBlock = useCallback(async (updatedBlock: ProductionBlock) => {
@@ -1847,20 +2168,41 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
     // Check if this is a new block (not yet in blocks array)
     const isNewBlock = !blocks.some(block => block.id === updatedBlock.id);
     
+    // Parse the original date string to preserve month and year
+    const startDateParsed = parseDateString(updatedBlock.startDay);
+    const endDateParsed = parseDateString(updatedBlock.endDay);
+    if (!startDateParsed || !endDateParsed) {
+      alert('Invalid date format. Please check the start and end days.');
+      return;
+    }
+    
     // Get duration - if endDay is different from startDay, calculate duration
-    const duration = updatedBlock.duration || (updatedBlock.endDay - updatedBlock.startDay + 1);
-    const startDay = updatedBlock.startDay;
+    const startDayNum = startDateParsed.day;
+    const endDayNum = endDateParsed.day;
+    const duration = updatedBlock.duration || (endDayNum - startDayNum + 1);
+    const startDay = startDayNum;
+    
+    // Preserve the original month and year from the start date
+    const originalMonth = startDateParsed.month;
+    const originalYear = startDateParsed.year;
     
     if (duration > 1 && isNewBlock) {
       // Create separate single-day blocks for each day
       const newBlocks: ProductionBlock[] = [];
       
       for (let i = 0; i < duration; i++) {
+        const dayNum = startDay + i;
+        // Use the original month/year, but handle month boundaries
+        const date = new Date(originalYear, originalMonth - 1, dayNum);
+        const actualDay = date.getDate();
+        const actualMonth = date.getMonth() + 1;
+        const actualYear = date.getFullYear();
+        const dayStr = dayNumberToDateStringWithMonth(actualDay, actualMonth, actualYear);
         const dayBlock: ProductionBlock = {
           ...updatedBlock,
           id: `block-${Date.now()}-${i}`,
-          startDay: startDay + i,
-          endDay: startDay + i, // Single day block
+          startDay: dayStr,
+          endDay: dayStr, // Single day block
           duration: 1,
         };
         
@@ -1897,19 +2239,34 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
         return detectChangeovers(allNewBlocks);
       });
     } else {
-      // Single day block - ensure it's a single-day block
+      // Single day block - preserve the original date string instead of converting
+      // This ensures the month/year from the original date is maintained
       const singleDayBlock: ProductionBlock = {
         ...updatedBlock,
-        startDay: startDay,
-        endDay: startDay, // Single day
+        startDay: updatedBlock.startDay, // Use original date string to preserve month/year
+        endDay: updatedBlock.startDay, // Single day - same as start
         duration: 1,
       };
 
     // Check for overlaps before updating
+    // Exclude changeover blocks from overlap check - they're allowed to exist on the next day
       const hasOverlap = checkOverlaps(singleDayBlock, updatedBlock.id);
     if (hasOverlap) {
+      // Double-check: if the overlap is with a changeover block, it's allowed
+      const overlappingBlocks = blocks.filter(b => 
+        b.id !== updatedBlock.id && 
+        b.lineId === singleDayBlock.lineId && 
+        b.startDay === singleDayBlock.startDay
+      );
+      
+      // If all overlapping blocks are changeover blocks, it's not a real overlap
+      const allAreChangeoverBlocks = overlappingBlocks.length > 0 && 
+        overlappingBlocks.every(b => b.isChangeoverBlock);
+      
+      if (!allAreChangeoverBlocks) {
       alert('Cannot update block: There is a true overlap with existing blocks on this line. Same-day transitions are allowed (morning/evening shifts).');
       return;
+      }
     }
 
       // Check if same mold is already on a different line on this day
@@ -1930,24 +2287,36 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
       
       // If changeover is configured, create changeover block below
       if (singleDayBlock.changeoverTime && singleDayBlock.changeoverTime > 0 && singleDayBlock.changeoverMoldId && singleDayBlock.changeoverMoldData) {
-        // Mark the original block as having changeover (orange/amber it)
-        const blockWithChangeover = { ...singleDayBlock, color: changeoverColor };
-        blocksToSave[0] = blockWithChangeover;
+        // Keep the original block color - don't save orange color to database
+        // Orange color will be applied visually during rendering
+        blocksToSave[0] = singleDayBlock;
         
         // Create changeover block below (on next day) - use line's normal color, not amber
         const line = lines.find(l => l.id === singleDayBlock.lineId);
+        // Parse the original date to preserve month/year when calculating next day
+        const blockDateParsed = parseDateString(singleDayBlock.startDay);
+        let changeoverStartDay = singleDayBlock.startDay;
+        if (blockDateParsed) {
+          // Calculate next day preserving month/year
+          const nextDate = new Date(blockDateParsed.year, blockDateParsed.month - 1, blockDateParsed.day + 1);
+          const nextDay = nextDate.getDate();
+          const nextMonth = nextDate.getMonth() + 1;
+          const nextYear = nextDate.getFullYear();
+          changeoverStartDay = dayNumberToDateStringWithMonth(nextDay, nextMonth, nextYear);
+        }
         const changeoverBlock: ProductionBlock = {
           id: `changeover-${singleDayBlock.id}-${Date.now()}`,
           lineId: singleDayBlock.lineId,
-          startDay: singleDayBlock.startDay + 1,
-          endDay: singleDayBlock.startDay + 1,
+          startDay: changeoverStartDay,
+          endDay: changeoverStartDay,
           label: singleDayBlock.changeoverMoldData.mold_name,
           color: (lineDefaultColors[singleDayBlock.lineId] || line?.color || '#E0F2FE').toUpperCase(),
           duration: 1,
           moldId: singleDayBlock.changeoverMoldId,
           moldData: singleDayBlock.changeoverMoldData,
           isChangeoverBlock: true,
-          productColors: singleDayBlock.productColors ? [...singleDayBlock.productColors] : [],
+          productColors: singleDayBlock.changeoverProductColors ? [...singleDayBlock.changeoverProductColors] : [],
+          partyCodes: singleDayBlock.changeoverPartyCodes ? [...singleDayBlock.changeoverPartyCodes] : [],
         };
         
         // Check if changeover block can be placed
@@ -1964,49 +2333,133 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
         console.log('💾 Saving', blocksToSave.length, 'new block(s) to database...');
         await Promise.all(blocksToSave.map(block => saveBlockToDatabase(block)));
         console.log('✅ All blocks saved successfully');
+        
+        // Reload blocks from database to ensure UI is in sync
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth() + 1;
+        const dbBlocks = await productionBlockAPI.getByMonth(year, month);
+        let uiBlocks = dbBlocks.map(dbBlock => transformDbBlockToUI(dbBlock, molds));
+        
+        // Link changeover blocks
+        uiBlocks = uiBlocks.map(block => {
+          if (block.changeoverTime && block.changeoverTime > 0 && block.changeoverMoldId && !block.isChangeoverBlock) {
+            // Parse the start day to preserve month/year when calculating next day
+            const blockDateParsed = parseDateString(block.startDay);
+            let nextDayStr = block.startDay;
+            if (blockDateParsed) {
+              const nextDate = new Date(blockDateParsed.year, blockDateParsed.month - 1, blockDateParsed.day + 1);
+              const nextDay = nextDate.getDate();
+              const nextMonth = nextDate.getMonth() + 1;
+              const nextYear = nextDate.getFullYear();
+              nextDayStr = dayNumberToDateStringWithMonth(nextDay, nextMonth, nextYear);
+            }
+            const changeoverBlock = uiBlocks.find(cb => 
+              cb.isChangeoverBlock &&
+              cb.lineId === block.lineId &&
+              cb.startDay === nextDayStr &&
+              cb.moldId === block.changeoverMoldId
+            );
+            if (changeoverBlock) {
+              return {
+                ...block,
+                changeoverProductColors: changeoverBlock.productColors || [],
+                changeoverPartyCodes: changeoverBlock.partyCodes || []
+              };
+            }
+          }
+          return block;
+        });
+        
+        // Apply detectChangeovers to the reloaded blocks
+        const blocksWithChangeovers = detectChangeovers(uiBlocks);
+        setBlocks(blocksWithChangeovers);
+        console.log('✅ Reloaded', blocksWithChangeovers.length, 'blocks from database after save');
       } catch (error) {
         console.error('❌ Failed to save blocks to database:', error);
         alert('Failed to save blocks to database. Please try again.');
         return;
       }
-      
-      // Add new block and detect changeovers AFTER saving
-      setBlocks(prev => {
-        const newBlocks = [...prev, ...blocksToSave];
-        return detectChangeovers(newBlocks);
-      });
     } else {
       // Update existing block and detect changeovers
       blocksToSave.push(singleDayBlock);
       
-      // If changeover is configured, create changeover block below
+      // Handle changeover blocks
       if (singleDayBlock.changeoverTime && singleDayBlock.changeoverTime > 0 && singleDayBlock.changeoverMoldId && singleDayBlock.changeoverMoldData) {
-        // Mark the original block as having changeover (orange/amber it)
-        const updatedSingleDayBlock = { ...singleDayBlock, color: changeoverColor };
-        blocksToSave[0] = updatedSingleDayBlock;
+        // Keep the original block color - don't save orange color to database
+        // Orange color will be applied visually during rendering
+        blocksToSave[0] = singleDayBlock;
         
-        // Create changeover block below (on next day) - use line's normal color, not amber
+        // Find existing changeover block for this main block (by line, day, and mold)
+        // Parse the original date to preserve month/year when calculating next day
+        const blockDateParsed = parseDateString(singleDayBlock.startDay);
+        let changeoverDayStr = singleDayBlock.startDay;
+        if (blockDateParsed) {
+          const nextDate = new Date(blockDateParsed.year, blockDateParsed.month - 1, blockDateParsed.day + 1);
+          const nextDay = nextDate.getDate();
+          const nextMonth = nextDate.getMonth() + 1;
+          const nextYear = nextDate.getFullYear();
+          changeoverDayStr = dayNumberToDateStringWithMonth(nextDay, nextMonth, nextYear);
+        }
+        const existingChangeoverBlock = blocks.find(b => 
+          b.isChangeoverBlock &&
+          b.lineId === singleDayBlock.lineId &&
+          b.startDay === changeoverDayStr
+        );
+        
         const line = lines.find(l => l.id === singleDayBlock.lineId);
-        const changeoverBlock: ProductionBlock = {
+        
+        // Use existing changeover block ID or create new one
+        const changeoverBlock: ProductionBlock = existingChangeoverBlock ? {
+          ...existingChangeoverBlock,
+          label: singleDayBlock.changeoverMoldData.mold_name,
+          moldId: singleDayBlock.changeoverMoldId,
+          moldData: singleDayBlock.changeoverMoldData,
+          productColors: singleDayBlock.changeoverProductColors ? [...singleDayBlock.changeoverProductColors] : [],
+          partyCodes: singleDayBlock.changeoverPartyCodes ? [...singleDayBlock.changeoverPartyCodes] : [],
+        } : {
           id: `changeover-${singleDayBlock.id}-${Date.now()}`,
           lineId: singleDayBlock.lineId,
-          startDay: singleDayBlock.startDay + 1,
-          endDay: singleDayBlock.startDay + 1,
+          startDay: changeoverDayStr,
+          endDay: changeoverDayStr,
           label: singleDayBlock.changeoverMoldData.mold_name,
           color: (lineDefaultColors[singleDayBlock.lineId] || line?.color || '#E0F2FE').toUpperCase(),
           duration: 1,
           moldId: singleDayBlock.changeoverMoldId,
           moldData: singleDayBlock.changeoverMoldData,
           isChangeoverBlock: true,
-          productColors: singleDayBlock.productColors ? [...singleDayBlock.productColors] : [],
+          productColors: singleDayBlock.changeoverProductColors ? [...singleDayBlock.changeoverProductColors] : [],
+          partyCodes: singleDayBlock.changeoverPartyCodes ? [...singleDayBlock.changeoverPartyCodes] : [],
         };
         
         // Check if changeover block can be placed
-        const changeoverOverlap = checkOverlaps(changeoverBlock);
-        const changeoverConflict = checkMoldConflict(changeoverBlock);
+        const changeoverOverlap = checkOverlaps(changeoverBlock, existingChangeoverBlock?.id);
+        const changeoverConflict = checkMoldConflict(changeoverBlock, existingChangeoverBlock?.id);
         
         if (!changeoverOverlap && !changeoverConflict) {
           blocksToSave.push(changeoverBlock);
+        }
+      } else {
+        // Changeover was removed - delete the changeover block from database
+        const existingChangeoverBlock = blocks.find(b => 
+          b.isChangeoverBlock &&
+          b.lineId === singleDayBlock.lineId &&
+          (() => {
+            const blockDayNum = getDayFromDateString(singleDayBlock.startDay);
+            if (blockDayNum !== null) {
+              return b.startDay === dayNumberToDateString(blockDayNum + 1);
+            }
+            return false;
+          })()
+        );
+        
+        if (existingChangeoverBlock) {
+          // Delete the changeover block from database
+          try {
+            await productionBlockAPI.delete(existingChangeoverBlock.id);
+            console.log('🗑️ Deleted changeover block:', existingChangeoverBlock.id);
+          } catch (error) {
+            console.error('❌ Failed to delete changeover block:', error);
+          }
         }
       }
       
@@ -2051,7 +2504,7 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
     }
     
     setEditingBlock(null);
-  }, [checkOverlaps, checkMoldConflict, blocks, detectChangeovers, lines, lineDefaultColors, saveBlockToDatabase]);
+  }, [checkOverlaps, checkMoldConflict, blocks, detectChangeovers, lines, lineDefaultColors, saveBlockToDatabase, getDayFromDateString, dayNumberToDateString, parseDateString, dayNumberToDateStringWithMonth]);
 
   // Delete block
   const deleteBlock = useCallback(async (blockId: string) => {
@@ -2095,6 +2548,31 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
     }
   }, []);
 
+  // Clear all blocks for current month
+  const clearCurrentMonth = useCallback(async () => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth() + 1; // getMonth() returns 0-11
+    
+    const monthName = currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    
+    if (!confirm(`Are you sure you want to delete ALL production blocks for ${monthName}? This action cannot be undone.`)) {
+      return;
+    }
+    
+    try {
+      await productionBlockAPI.deleteByMonth(year, month);
+      console.log(`✅ Cleared all blocks for ${monthName}`);
+      
+      // Reload blocks (will be empty now)
+      setBlocks([]);
+      
+      alert(`Successfully cleared all production blocks for ${monthName}.`);
+    } catch (error) {
+      console.error('❌ Failed to clear blocks:', error);
+      alert('Failed to clear blocks. Please try again.');
+    }
+  }, [currentMonth]);
+
   // Navigation
   const navigateMonth = useCallback((direction: 'prev' | 'next') => {
     setCurrentMonth(prev => {
@@ -2124,8 +2602,8 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
-      {/* Header Controls */}
-      <div className="bg-white border-b border-gray-200 p-4">
+      {/* Header Controls (hide on print) */}
+      <div className="bg-white border-b border-gray-200 p-4 app-subnav">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <h1 className="text-2xl font-bold text-gray-900">Prod Planner</h1>
@@ -2175,29 +2653,105 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
               {lines.length} lines ({lines.filter(l => getLineStatus(l).status === 'active').length} active, {lines.filter(l => getLineStatus(l).status === 'maintenance').length} maintenance), {molds.length} molds loaded
             </div>
             
-            <button
-              onClick={() => {
-                setZoomLevel(zoomLevel === 'month' ? 'week' : 'month');
-                if (zoomLevel === 'month') {
-                  setCurrentWeek(1); // Reset to first week when switching to week view
-                }
-              }}
-              className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
-                zoomLevel === 'week' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-              }`}
-            >
-              {zoomLevel === 'month' ? <ZoomIn className="w-4 h-4" /> : <ZoomOut className="w-4 h-4" />}
-              <span>{zoomLevel === 'month' ? 'Week View' : 'Month View'}</span>
-            </button>
+            {/* Clear Month Button - for testing */}
+            {currentMonth.getMonth() === 11 && currentMonth.getFullYear() === 2025 && (
+              <button
+                onClick={clearCurrentMonth}
+                className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium"
+                title="Clear all December 2025 blocks"
+              >
+                Clear December
+              </button>
+            )}
+            
+<div className="relative" data-day-picker>
+              <button
+                onClick={() => setShowDayPicker(!showDayPicker)}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
+                  expandedDay !== null 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                }`}
+              >
+                <Calendar className="w-4 h-4" />
+                <span>{expandedDay !== null ? (() => {
+                  const year = currentMonth.getFullYear();
+                  const month = currentMonth.getMonth();
+                  const date = new Date(year, month, expandedDay);
+                  const daySuffix = expandedDay === 1 || expandedDay === 21 || expandedDay === 31 ? 'st' :
+                                    expandedDay === 2 || expandedDay === 22 ? 'nd' :
+                                    expandedDay === 3 || expandedDay === 23 ? 'rd' : 'th';
+                  const monthName = date.toLocaleDateString('en-US', { month: 'long' });
+                  return `${expandedDay}${daySuffix} ${monthName} ${year}`;
+                })() : 'Day View'}</span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${showDayPicker ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {/* Day Picker Dropdown */}
+              {showDayPicker && (
+                <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-xl border border-gray-200 z-50 p-3 w-64">
+                  <div className="text-sm font-semibold text-gray-700 mb-2 pb-2 border-b">
+                    Select Day to View
+          </div>
+                  <div className="grid grid-cols-7 gap-1 mb-2">
+                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+                      <div key={i} className="text-[10px] text-gray-400 text-center font-medium">{d}</div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-1">
+                    {/* Empty cells for days before the 1st */}
+                    {Array.from({ length: new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay() }).map((_, i) => (
+                      <div key={`empty-${i}`} className="w-7 h-7" />
+                    ))}
+                    {/* Day buttons */}
+                    {days.map((day) => {
+                      const dayDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+                      const isSunday = dayDate.getDay() === 0;
+                      const isSelected = expandedDay === day;
+                      return (
+                        <button
+                          key={day}
+                          onClick={() => {
+                            setExpandedDay(day);
+                            setShowDayPicker(false);
+                          }}
+                          className={`w-7 h-7 text-xs rounded-full transition-all ${
+                            isSelected 
+                              ? 'bg-blue-600 text-white font-bold' 
+                              : isSunday 
+                                ? 'bg-gray-100 text-gray-400 hover:bg-gray-200' 
+                                : 'hover:bg-blue-100 text-gray-700'
+                          }`}
+                        >
+                          {day}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {expandedDay !== null && (
+                    <button
+                      onClick={() => {
+                        setExpandedDay(null);
+                        setShowDayPicker(false);
+                      }}
+                      className="w-full mt-2 pt-2 border-t text-sm text-red-600 hover:text-red-700 font-medium"
+                    >
+                      Close Day View
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Main Grid */}
-      <div className="flex-1 overflow-auto bg-gradient-to-br from-gray-50 to-white">
-        <div className="shadow-inner" style={{ width: `${80 + lineColumnWidths.reduce((sum, width) => sum + width, 0)}px` }}>
+      <div className="flex-1 overflow-auto bg-gradient-to-br from-gray-50 to-white prod-planner-print-root">
+        <div
+          className="shadow-inner prod-planner-print-grid"
+          style={{ width: `${80 + lineColumnWidths.reduce((sum, width) => sum + width, 0)}px` }}
+        >
           {/* Timeline Header */}
           <div className="sticky top-0 bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200 z-10 shadow-sm">
             <div className="flex">
@@ -2283,7 +2837,7 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                     }
                   }}
                 >
-                  <span className="text-[15px] font-semibold leading-tight">{day} Nov</span>
+                  <span className="text-[15px] font-semibold leading-tight">{day} {new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day).toLocaleDateString('en-US', { month: 'short' })}</span>
                   <span className="text-[11px] text-gray-400 leading-tight">
                     {new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day).toLocaleDateString('en-US', { weekday: 'short' })}
                   </span>
@@ -2339,7 +2893,10 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                             setSelectedCell({ day, lineId: line.id });
                             
                             // Select block in the clicked cell if exists
-                            const blockInCell = blocks.find(b => b.lineId === line.id && b.startDay === day);
+                            const blockInCell = blocks.find(b => {
+                              const blockDayNum = getDayFromDateString(b.startDay);
+                              return b.lineId === line.id && blockDayNum === day;
+                            });
                             if (blockInCell) {
                               setSelectedBlock(blockInCell);
                             } else {
@@ -2351,7 +2908,10 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                             setSelectedCellRange(null);
                             setRangeAnchor(null); // Clear anchor on regular click
                             // Find block in this cell if any
-                            const blockInCell = blocks.find(b => b.lineId === line.id && b.startDay === day);
+                            const blockInCell = blocks.find(b => {
+                              const blockDayNum = getDayFromDateString(b.startDay);
+                              return b.lineId === line.id && blockDayNum === day;
+                            });
                             if (blockInCell) {
                               setSelectedBlock(blockInCell);
                             } else {
@@ -2362,8 +2922,17 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                         onDoubleClick={(e) => {
                           // Double click - open modal (create or edit)
                           e.stopPropagation();
-                          const blockInCell = blocks.find(b => b.lineId === line.id && b.startDay === day);
+                          const blockInCell = blocks.find(b => {
+                            const blockDayNum = getDayFromDateString(b.startDay);
+                            return b.lineId === line.id && blockDayNum === day;
+                          });
                           if (blockInCell) {
+                            console.log('📝 Opening existing block for editing:', {
+                              clickedDay: day,
+                              blockStartDay: blockInCell.startDay,
+                              blockDayNum: getDayFromDateString(blockInCell.startDay),
+                              lineId: line.id
+                            });
                             setEditingBlock(blockInCell);
                           } else {
                             createBlock(line.id, day);
@@ -2383,21 +2952,6 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                           clearTooltipDelay();
                         }}
                       >
-                        {/* Changeover indicator - show gap indicator if there's a changeover on this day */}
-                        {getChangeoverDay(line.id) === day && (() => {
-                          const lineBlocks = blocks.filter(b => b.lineId === line.id);
-                          const blockEnding = lineBlocks.find(b => b.endDay === day);
-                          const blockStarting = lineBlocks.find(b => b.startDay === day && b.id !== blockEnding?.id);
-                          
-                          if (blockEnding && blockStarting) {
-                            return (
-                              <div className="absolute inset-0 bg-yellow-400 bg-opacity-20 border-t-2 border-b-2 border-yellow-400 flex items-center justify-center">
-                                <span className="text-[8px] font-bold text-yellow-700 bg-yellow-200 px-1 rounded">CH</span>
-                          </div>
-                            );
-                          }
-                          return null;
-                        })()}
                       </div>
                     ))}
                   </div>
@@ -2413,6 +2967,31 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
               const overlappingBlocks = getOverlappingBlocks(displayBlock);
                       const hasOverlap = overlappingBlocks.length > 0;
               const lineIndex = lines.findIndex(l => l.id === displayBlock.lineId);
+              
+              // Skip rendering if line not found (shouldn't happen, but safety check)
+              if (lineIndex < 0) {
+                console.warn('⚠️ Block has invalid lineId:', displayBlock.lineId, displayBlock);
+                return null;
+              }
+              
+              // Debug: Log block rendering info
+              const blockDayNum = getDayFromDateString(displayBlock.startDay);
+              const dayIndex = blockDayNum !== null ? days.findIndex(day => day === blockDayNum) : -1;
+              if (dayIndex === -1 && blockDayNum !== null) {
+                console.warn('⚠️ Block day not in display days:', {
+                  blockId: displayBlock.id,
+                  blockStartDay: displayBlock.startDay,
+                  blockDayNum,
+                  lineId: displayBlock.lineId,
+                  lineIndex,
+                  daysRange: days.length > 0 ? `${days[0]} to ${days[days.length - 1]}` : 'empty'
+                });
+              }
+              
+              // Debug: Log changeover blocks
+              if (displayBlock.isChangeoverBlock) {
+                console.log('Rendering changeover block:', displayBlock.id, 'on day', displayBlock.startDay, 'line', displayBlock.lineId);
+              }
               
               // Get color - only blocks WITH changeover (not changeover blocks themselves) use orange/amber
               const changeoverColor = '#FFB84D'; // Light orange/amber color for blocks with changeover
@@ -2431,8 +3010,7 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                           key={block.id}
                           ref={el => { blockRefs.current[block.id] = el; }}
                   className={`absolute rounded-lg shadow-lg border-2 cursor-move hover:shadow-xl transition-all duration-200 ${
-                            hasOverlap ? 'ring-2 ring-red-400 ring-opacity-75 border-red-300' : 
-                    displayBlock.isChangeover ? 'ring-2 ring-yellow-400 ring-opacity-70 border-yellow-300' : 'border-gray-300'
+                            hasOverlap ? 'ring-2 ring-red-400 ring-opacity-75 border-red-300' : 'border-gray-300'
                   } ${isDragging && selectedBlock?.id === block.id ? 'opacity-50' : ''}`}
                           style={{
                     ...getBlockStyle(displayBlock, days, lineIndex >= 0 ? lineIndex : 0, blockColor),
@@ -2448,7 +3026,10 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                     // Clicking anywhere else on the block (center, sides) - pick it up immediately
                     e.preventDefault();
                       e.stopPropagation();
-                      setSelectedCell({ day: block.startDay, lineId: block.lineId });
+                      const blockDayNum = getDayFromDateString(block.startDay);
+                      if (blockDayNum !== null) {
+                        setSelectedCell({ day: blockDayNum, lineId: block.lineId });
+                      }
                       setSelectedBlock({ ...block });
                       handleDragStart(e, block);
                   }}
@@ -2456,7 +3037,16 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                     // Double click - open modal
                     e.preventDefault();
                     e.stopPropagation();
-                    setSelectedCell({ day: block.startDay, lineId: block.lineId });
+                    const blockDayNum = getDayFromDateString(block.startDay);
+                    console.log('📝 Opening block directly (double-click on block):', {
+                      blockId: block.id,
+                      blockStartDay: block.startDay,
+                      blockDayNum,
+                      lineId: block.lineId
+                    });
+                    if (blockDayNum !== null) {
+                      setSelectedCell({ day: blockDayNum, lineId: block.lineId });
+                    }
                     // Initialize changeover time mode if not set
                     if (block.changeoverTimeMode) {
                       setChangeoverTimeMode(block.changeoverTimeMode);
@@ -2538,11 +3128,6 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                             {hasOverlap && (
                       <AlertTriangle className="w-4 h-4 text-red-500 drop-shadow-sm ml-2 flex-shrink-0" />
                             )}
-                    {displayBlock.isChangeover && !hasOverlap && (
-                      <div className="w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center ml-2 flex-shrink-0">
-                                <span className="text-xs font-bold text-yellow-900">C</span>
-                              </div>
-                            )}
                           </div>
                           
                   {/* Bottom resize handle - drag to extend mold downward */}
@@ -2556,7 +3141,10 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                                       e.preventDefault();
                                       e.stopPropagation();
                                       setIsDraggingBlock(true);
-                        setDragStartPosition({ x: e.clientX, y: e.clientY, day: displayBlock.endDay });
+                        const endDayNum = getDayFromDateString(displayBlock.endDay);
+                        if (endDayNum !== null) {
+                          setDragStartPosition({ x: e.clientX, y: e.clientY, day: endDayNum });
+                        }
                         setSelectedBlock({ ...displayBlock, isResizingLeft: false });
                         setOriginalBlockPosition({ 
                           startDay: displayBlock.startDay, 
@@ -2582,9 +3170,38 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
         <div className="w-full border-t-4 border-blue-400 bg-white shadow-lg">
           <div className="p-4">
             <div className="flex items-center justify-between mb-4">
+              <div>
               <h3 className="text-lg font-bold text-gray-800">
-                Day {expandedDay} - Production Details
+                  {(() => {
+                    const year = currentMonth.getFullYear();
+                    const month = currentMonth.getMonth(); // 0-11
+                    const date = new Date(year, month, expandedDay);
+                    const daySuffix = expandedDay === 1 || expandedDay === 21 || expandedDay === 31 ? 'st' :
+                                      expandedDay === 2 || expandedDay === 22 ? 'nd' :
+                                      expandedDay === 3 || expandedDay === 23 ? 'rd' : 'th';
+                    const monthName = date.toLocaleDateString('en-US', { month: 'long' });
+                    return `${expandedDay}${daySuffix} ${monthName} ${year} - Production Details`;
+                  })()}
               </h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Production Day: 8:00 AM {(() => {
+                    const year = currentMonth.getFullYear();
+                    const month = currentMonth.getMonth();
+                    const date = new Date(year, month, expandedDay);
+                    const monthName = date.toLocaleDateString('en-US', { month: 'long' });
+                    const daySuffix = expandedDay === 1 || expandedDay === 21 || expandedDay === 31 ? 'st' :
+                                      expandedDay === 2 || expandedDay === 22 ? 'nd' :
+                                      expandedDay === 3 || expandedDay === 23 ? 'rd' : 'th';
+                    const nextDay = expandedDay + 1;
+                    const nextDaySuffix = nextDay === 1 || nextDay === 21 || nextDay === 31 ? 'st' :
+                                         nextDay === 2 || nextDay === 22 ? 'nd' :
+                                         nextDay === 3 || nextDay === 23 ? 'rd' : 'th';
+                    const nextDate = new Date(year, month, nextDay);
+                    const nextMonthName = nextDate.toLocaleDateString('en-US', { month: 'long' });
+                    return `${expandedDay}${daySuffix} ${monthName} ${year} to 8:00 AM ${nextDay}${nextDaySuffix} ${nextMonthName} ${year}`;
+                  })()}
+                </p>
+              </div>
               <button
                 onClick={() => setExpandedDay(null)}
                 className="text-gray-500 hover:text-gray-700 text-xl font-bold"
@@ -2600,6 +3217,7 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                     <th className="border border-gray-300 p-2 text-center font-semibold text-[15px]" rowSpan={2}>Line</th>
                     <th className="border border-gray-300 p-2 text-center font-semibold text-[15px]" colSpan={4}>Product</th>
                     <th className="border border-gray-300 p-2 text-center font-semibold text-[15px]" colSpan={2}>Changeover</th>
+                    <th className="border border-gray-300 p-2 text-center font-semibold text-[15px]" colSpan={3}>Changeover Product</th>
                   </tr>
                   <tr className="bg-gray-100">
                     <th className="border border-gray-300 p-2 text-center font-semibold text-[15px]">Mold</th>
@@ -2608,26 +3226,158 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                     <th className="border border-gray-300 p-2 text-center font-semibold text-[15px]">Quantity</th>
                     <th className="border border-gray-300 p-2 text-center font-semibold text-[15px]">Mold</th>
                     <th className="border border-gray-300 p-2 text-center font-semibold text-[15px]">Time</th>
+                    <th className="border border-gray-300 p-2 text-center font-semibold text-[15px]">Party</th>
+                    <th className="border border-gray-300 p-2 text-center font-semibold text-[15px]">Color</th>
+                    <th className="border border-gray-300 p-2 text-center font-semibold text-[15px]">Quantity</th>
                   </tr>
                 </thead>
                 <tbody>
                   {lines.flatMap((line) => {
-                    // Find the block for this line on the expanded day
-                    const block = blocks.find(b => 
-                      b.lineId === line.id && 
-                      b.startDay <= expandedDay && 
-                      b.endDay >= expandedDay &&
-                      !b.isChangeoverBlock // Don't show changeover blocks in the main table
-                    );
+                    // Find the block for this line on the expanded day (including changeover blocks)
+                    const block = blocks.find(b => {
+                      const startDayNum = getDayFromDateString(b.startDay);
+                      const endDayNum = getDayFromDateString(b.endDay);
+                      return startDayNum !== null && endDayNum !== null &&
+                        b.lineId === line.id && 
+                        startDayNum <= expandedDay && 
+                        endDayNum >= expandedDay;
+                    });
+                    
+                    // If it's a changeover block, find the parent block to get changeover info
+                    let mainBlock = block;
+                    let changeoverBlock = null;
+                    
+                    if (block?.isChangeoverBlock) {
+                      // This is a changeover block - find the parent block
+                      changeoverBlock = block;
+                      const prevDayNum = expandedDay - 1;
+                      const prevDayStr = dayNumberToDateString(prevDayNum);
+                      mainBlock = blocks.find(b => 
+                        b.lineId === line.id && 
+                        b.startDay === prevDayStr &&
+                        b.changeoverTime && b.changeoverTime > 0 &&
+                        b.changeoverMoldId === block.moldId &&
+                        !b.isChangeoverBlock // Ensure we don't pick another changeover block
+                      );
+                    } else if (block && block.changeoverTime && block.changeoverTime > 0 && block.changeoverMoldId) {
+                      // This is a main block with changeover configured - find the changeover block on next day
+                      // IMPORTANT: mainBlock stays as the current block (the one with changeover configured)
+                      mainBlock = block; // Explicitly set to ensure it's the main block, not changeover
+                      const nextDayNum = expandedDay + 1;
+                      const nextDayStr = dayNumberToDateString(nextDayNum);
+                      
+                      // First try: exact match with all conditions
+                      changeoverBlock = blocks.find(b => 
+                        b.isChangeoverBlock &&
+                        b.lineId === line.id &&
+                        b.startDay === nextDayStr &&
+                        b.moldId === block.changeoverMoldId
+                      );
+                      
+                      // If not found, try more flexible search (just line and day, mold might differ)
+                      if (!changeoverBlock) {
+                        changeoverBlock = blocks.find(b => 
+                          b.isChangeoverBlock &&
+                          b.lineId === line.id &&
+                          b.startDay === nextDayStr
+                        );
+                      }
+                      
+                      // Debug logging
+                      if (!changeoverBlock) {
+                        const allChangeoverBlocks = blocks.filter(b => b.isChangeoverBlock);
+                        const lineChangeoverBlocks = blocks.filter(b => b.isChangeoverBlock && b.lineId === line.id);
+                        console.log('🔍 Day View - Changeover block not found for main block:', {
+                          mainBlockId: block.id,
+                          mainBlockStartDay: block.startDay,
+                          expandedDay,
+                          nextDayNum,
+                          nextDayStr,
+                          lineId: line.id,
+                          changeoverMoldId: block.changeoverMoldId,
+                          totalChangeoverBlocks: allChangeoverBlocks.length,
+                          lineChangeoverBlocks: lineChangeoverBlocks.map(b => ({
+                            id: b.id,
+                            startDay: b.startDay,
+                            moldId: b.moldId,
+                            lineId: b.lineId
+                          })),
+                          allBlocksOnNextDay: blocks.filter(b => {
+                            const bDayNum = getDayFromDateString(b.startDay);
+                            return bDayNum === nextDayNum && b.lineId === line.id;
+                          }).map(b => ({
+                            id: b.id,
+                            startDay: b.startDay,
+                            isChangeoverBlock: b.isChangeoverBlock,
+                            moldId: b.moldId
+                          }))
+                        });
+                      } else {
+                        console.log('✅ Day View - Found changeover block:', {
+                          changeoverBlockId: changeoverBlock.id,
+                          changeoverBlockStartDay: changeoverBlock.startDay,
+                          productColors: changeoverBlock.productColors?.length || 0,
+                          partyCodes: changeoverBlock.partyCodes?.length || 0,
+                          productColorsData: changeoverBlock.productColors,
+                          partyCodesData: changeoverBlock.partyCodes
+                        });
+                      }
+                    }
+                    
+                    // Determine if we're viewing a changeover block day (the result day, not the day with changeover configured)
+                    const isViewingChangeoverBlockDay = block?.isChangeoverBlock === true;
                     
                     // Get product colors from block
-                    const productColors = block?.productColors || [];
+                    // If viewing changeover block day, use changeover block's product colors as the main product
+                    // Otherwise, use main block's product colors
+                    const productColors = isViewingChangeoverBlockDay && changeoverBlock
+                      ? (changeoverBlock.productColors || [])
+                      : (mainBlock?.productColors || []);
+                    
+                    // Get changeover product colors if changeover exists
+                    // When viewing main block day with changeover: populate from changeover block
+                    // When viewing changeover block day: leave empty (show "-")
+                    // Priority: 1) From changeover block directly, 2) From mainBlock.changeoverProductColors (linked during load), 3) Empty
+                    const hasChangeoverData = !isViewingChangeoverBlockDay && 
+                      ((mainBlock?.changeoverTime && mainBlock?.changeoverTime > 0 && mainBlock?.changeoverMoldId) || !!changeoverBlock);
+                    
+                    // Try multiple sources for changeover product colors
+                    let changeoverProductColors: ProductColor[] = [];
+                    if (hasChangeoverData) {
+                      if (changeoverBlock && changeoverBlock.productColors && changeoverBlock.productColors.length > 0) {
+                        changeoverProductColors = changeoverBlock.productColors;
+                        console.log('📦 Day View - Using changeover block product colors:', changeoverProductColors.length);
+                      } else if (mainBlock?.changeoverProductColors && mainBlock.changeoverProductColors.length > 0) {
+                        changeoverProductColors = mainBlock.changeoverProductColors;
+                        console.log('📦 Day View - Using mainBlock.changeoverProductColors:', changeoverProductColors.length);
+                      }
+                    }
+                    
+                    // Get changeover party codes (from separate array or from product colors)
+                    // Priority: 1) From changeover block directly, 2) From mainBlock.changeoverPartyCodes (linked during load), 3) From product colors, 4) Empty
+                    let changeoverPartyCodes: string[] = [];
+                    if (hasChangeoverData) {
+                      if (changeoverBlock && changeoverBlock.partyCodes && changeoverBlock.partyCodes.length > 0) {
+                        changeoverPartyCodes = changeoverBlock.partyCodes;
+                        console.log('🏷️ Day View - Using changeover block party codes:', changeoverPartyCodes);
+                      } else if (mainBlock?.changeoverPartyCodes && mainBlock.changeoverPartyCodes.length > 0) {
+                        changeoverPartyCodes = mainBlock.changeoverPartyCodes;
+                        console.log('🏷️ Day View - Using mainBlock.changeoverPartyCodes:', changeoverPartyCodes);
+                      } else if (changeoverProductColors.length > 0) {
+                        // Extract party codes from product colors as fallback
+                        changeoverPartyCodes = [...new Set(changeoverProductColors.map(pc => pc.partyCode).filter(Boolean))] as string[];
+                        console.log('🏷️ Day View - Extracted party codes from product colors:', changeoverPartyCodes);
+                      }
+                    }
                     
                     // If no block exists, show empty row
-                    if (!block) {
+                    if (!mainBlock && !changeoverBlock) {
                       return [
                         <tr key={line.id} className="hover:bg-gray-50">
                           <td className="border border-gray-300 p-2 font-medium text-[15px] text-center">{line.name}</td>
+                          <td className="border border-gray-300 p-2 text-gray-400 text-[15px] text-center">-</td>
+                          <td className="border border-gray-300 p-2 text-gray-400 text-[15px] text-center">-</td>
+                          <td className="border border-gray-300 p-2 text-gray-400 text-[15px] text-center">-</td>
                           <td className="border border-gray-300 p-2 text-gray-400 text-[15px] text-center">-</td>
                           <td className="border border-gray-300 p-2 text-gray-400 text-[15px] text-center">-</td>
                           <td className="border border-gray-300 p-2 text-gray-400 text-[15px] text-center">-</td>
@@ -2638,45 +3388,101 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                       ];
                     }
                     
-                    // Calculate max rows needed (for multiple colors)
-                    const maxRows = Math.max(1, productColors.length);
+                    // Show both main products and changeover products if changeover exists
+                    // Group product colors by party name for merging
+                    const groupedByParty: { [partyCode: string]: ProductColor[] } = {};
+                    productColors.forEach(pc => {
+                      const partyCode = pc.partyCode || 'No Party';
+                      if (!groupedByParty[partyCode]) {
+                        groupedByParty[partyCode] = [];
+                      }
+                      groupedByParty[partyCode].push(pc);
+                    });
                     
-                    // Get mold name from block
-                    const moldName = block?.moldData?.mold_name || block?.label || '-';
+                    // Flatten grouped data with row span info
+                    // If no product colors exist, create a single empty row to display the block info
+                    const flattenedRows: Array<{ productColor: ProductColor | null; partyRowSpan: number; isFirstInParty: boolean }> = [];
+                    if (Object.keys(groupedByParty).length === 0) {
+                      // No product colors - create a single empty row
+                      flattenedRows.push({
+                        productColor: null,
+                        partyRowSpan: 1,
+                        isFirstInParty: true
+                      });
+                    } else {
+                      Object.keys(groupedByParty).forEach(partyCode => {
+                        const partyColors = groupedByParty[partyCode];
+                        partyColors.forEach((pc, index) => {
+                          flattenedRows.push({
+                            productColor: pc,
+                            partyRowSpan: partyColors.length,
+                            isFirstInParty: index === 0
+                          });
+                        });
+                      });
+                    }
                     
-                    // Convert changeover time to HH:MM format
-                    const changeoverTimeDisplay = block?.changeoverTimeString || 
-                      (block?.changeoverTime ? (() => {
-                        const hours = Math.floor(block.changeoverTime / 60);
-                        const minutes = block.changeoverTime % 60;
-                        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-                      })() : '');
+                    const totalRows = Math.max(1, flattenedRows.length);
                     
-                    // Get changeover mold name
-                    const changeoverMoldName = block?.changeoverMoldData?.mold_name || '';
+                    // Get initial mold name
+                    // If viewing changeover block day, show changeover block's mold as the Product Mold
+                    // Otherwise, show main block's mold
+                    let moldName = '-';
+                    if (isViewingChangeoverBlockDay && changeoverBlock) {
+                      // Viewing the changeover block day - show changeover block's mold
+                      moldName = changeoverBlock.moldData?.mold_name || changeoverBlock.label || '-';
+                    } else if (mainBlock && !mainBlock.isChangeoverBlock) {
+                      // Viewing main block day - show main block's mold
+                      moldName = mainBlock.moldData?.mold_name || mainBlock.label || '-';
+                    } else if (block && !block.isChangeoverBlock) {
+                      // Fallback to the original block found (should be the main block)
+                      moldName = block.moldData?.mold_name || block.label || '-';
+                    }
                     
-                    return Array.from({ length: maxRows }).map((_, rowIndex) => {
-                      const productColor = productColors[rowIndex] || productColors[0];
+                    // Convert changeover time to HH:MM format (show when viewing main block day with changeover)
+                    const changeoverTimeDisplay = hasChangeoverData && mainBlock
+                      ? (mainBlock.changeoverTimeString || 
+                        (mainBlock.changeoverTime ? (() => {
+                          const hours = Math.floor(mainBlock.changeoverTime / 60);
+                          const minutes = mainBlock.changeoverTime % 60;
+                          return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+                        })() : ''))
+                      : '';
+                    
+                    // Get changeover mold name (show when viewing main block day with changeover)
+                    const changeoverMoldName = hasChangeoverData
+                      ? (changeoverBlock
+                          ? (changeoverBlock.moldData?.mold_name || changeoverBlock.label || '')
+                          : (mainBlock?.changeoverMoldData?.mold_name || ''))
+                      : '';
+                    
+                    return flattenedRows.map((rowData, rowIndex) => {
+                      const productColor = rowData.productColor;
+                      const changeoverProductColor = hasChangeoverData ? (changeoverProductColors[rowIndex] || null) : null;
                       
                       return (
                         <tr key={`${line.id}-${rowIndex}`} className="hover:bg-gray-50">
                           {rowIndex === 0 && (
-                            <td className="border border-gray-300 p-2 font-medium text-[15px] text-center" rowSpan={maxRows}>
+                            <td className="border border-gray-300 p-2 font-medium text-[15px] text-center" rowSpan={totalRows}>
                               {line.name}
                             </td>
                           )}
                           {rowIndex === 0 && (
-                            <td className="border border-gray-300 p-2 text-center" rowSpan={maxRows}>
+                            <td className="border border-gray-300 p-2 text-center" rowSpan={totalRows}>
                               <span className="text-[15px] font-medium">{moldName}</span>
                             </td>
                           )}
-                          <td className="border border-gray-300 p-2 text-center">
+                          {/* Main Product columns - always show main products */}
+                          {/* Party column - merge rows with same party name */}
+                          {rowData.isFirstInParty ? (
+                            <td className="border border-gray-300 p-2 text-center" rowSpan={rowData.partyRowSpan}>
                             {productColor?.partyCode ? (
                               <span className="text-[15px] font-medium">{productColor.partyCode}</span>
                             ) : (
                               <span className="text-gray-400 text-[15px]">-</span>
                             )}
                           </td>
+                          ) : null}
                           <td className="border border-gray-300 p-2 text-center">
                             {productColor ? (
                               <span className="text-[15px] font-medium">{productColor.color || 'N/A'}</span>
@@ -2693,14 +3499,38 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                           </td>
                           {rowIndex === 0 && (
                             <>
-                              <td className="border border-gray-300 p-2 text-center" rowSpan={maxRows}>
+                              <td className="border border-gray-300 p-2 text-center" rowSpan={totalRows}>
                                 <span className="text-[15px]">{changeoverMoldName || '-'}</span>
                               </td>
-                              <td className="border border-gray-300 p-2 text-center" rowSpan={maxRows}>
+                              <td className="border border-gray-300 p-2 text-center" rowSpan={totalRows}>
                                 <span className="text-[15px]">{changeoverTimeDisplay || '-'}</span>
                               </td>
                             </>
                           )}
+                          {/* Changeover Product columns - always show, populate when changeover data exists */}
+                          <td className="border border-gray-300 p-2 text-center">
+                            {changeoverProductColor?.partyCode ? (
+                              <span className="text-[15px] font-medium">{changeoverProductColor.partyCode}</span>
+                            ) : changeoverPartyCodes.length > 0 && rowIndex === 0 ? (
+                              <span className="text-[15px] font-medium">{changeoverPartyCodes.join(', ')}</span>
+                            ) : (
+                              <span className="text-gray-400 text-[15px]">-</span>
+                            )}
+                          </td>
+                          <td className="border border-gray-300 p-2 text-center">
+                            {changeoverProductColor ? (
+                              <span className="text-[15px] font-medium">{changeoverProductColor.color || 'N/A'}</span>
+                            ) : (
+                              <span className="text-gray-400 text-[15px]">-</span>
+                            )}
+                          </td>
+                          <td className="border border-gray-300 p-2 text-center">
+                            {changeoverProductColor ? (
+                              <span className="text-[15px]">{changeoverProductColor.quantity.toLocaleString()}</span>
+                            ) : (
+                              <span className="text-gray-400 text-[15px]">-</span>
+                            )}
+                          </td>
                         </tr>
                       );
                     });
@@ -2709,107 +3539,6 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
               </table>
           </div>
             
-            <div className="mt-4 flex justify-between items-start gap-4">
-              {/* Bottom Right Log Format */}
-              <div className="flex-1"></div>
-              <div className="bg-gray-50 border border-gray-300 rounded-lg p-4 min-w-[400px]">
-                <h4 className="font-semibold text-[15px] mb-3">Log Entries</h4>
-                <div className="space-y-3">
-                  {/* Entry 1: Date Time Color Qty */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-[15px] font-bold">①</span>
-                    <input
-                      type="date"
-                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-[15px]"
-                      placeholder="Date"
-                    />
-                    <input
-                      type="time"
-                      className="w-24 px-2 py-1 border border-gray-300 rounded text-[15px]"
-                      placeholder="Time"
-                    />
-                    <input
-                      type="text"
-                      className="w-24 px-2 py-1 border border-gray-300 rounded text-[15px]"
-                      placeholder="Color"
-                    />
-                    <input
-                      type="number"
-                      className="w-20 px-2 py-1 border border-gray-300 rounded text-[15px]"
-                      placeholder="Qty"
-                    />
-                  </div>
-                  
-                  {/* Entry 2: Date Time Packing Material Qty */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-[15px] font-bold">②</span>
-                    <input
-                      type="date"
-                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-[15px]"
-                      placeholder="Date"
-                    />
-                    <input
-                      type="time"
-                      className="w-24 px-2 py-1 border border-gray-300 rounded text-[15px]"
-                      placeholder="Time"
-                    />
-                    <select className="w-32 px-2 py-1 border border-gray-300 rounded text-[15px]">
-                      <option value="">Packing Material</option>
-                      {packingMaterials.map(pm => (
-                        <option key={pm.id} value={pm.id}>
-                          {pm.item_code}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      className="w-20 px-2 py-1 border border-gray-300 rounded text-[15px]"
-                      placeholder="Qty"
-                    />
-                  </div>
-                  
-                  {/* Entry 3: Date Time Changeover New Mold Name */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-[15px] font-bold">③</span>
-                    <input
-                      type="date"
-                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-[15px]"
-                      placeholder="Date"
-                    />
-                    <input
-                      type="time"
-                      className="w-24 px-2 py-1 border border-gray-300 rounded text-[15px]"
-                      placeholder="Time"
-                    />
-                    <span className="text-[13px] text-gray-600">Changeover</span>
-                    <input
-                      type="text"
-                      className="w-32 px-2 py-1 border border-gray-300 rounded text-[15px]"
-                      placeholder="New Mold Name"
-                    />
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setExpandedDay(null)}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    // Save the data (you can add save logic here)
-                    console.log('Saving day data:', dayLineData);
-                    setExpandedDay(null);
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                >
-                  Save
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -2868,29 +3597,50 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                 >
                   <option value="">Select a mold...</option>
                   {molds.map(mold => {
-                    // Check if this mold is already used anywhere (not just same line)
-                    const isUsed = blocks.some(block => 
+                    // Find the block that's using this mold
+                    const usedBlock = blocks.find(block => 
                       block.id !== editingBlock.id && 
                       block.moldId === mold.mold_id
                     );
                     
+                    const isUsed = !!usedBlock;
+                    
                     // Check if it's used on the same line specifically
-                    const isUsedOnSameLine = blocks.some(block => 
-                      block.id !== editingBlock.id && 
-                      block.lineId === editingBlock.lineId && 
-                      block.moldId === mold.mold_id
-                    );
+                    const isUsedOnSameLine = usedBlock && 
+                      usedBlock.lineId === editingBlock.lineId;
+                    
+                    // Get line name for the used block
+                    let usageInfo = '';
+                    let tooltipText = '';
+                    if (isUsed && usedBlock) {
+                      const usedLine = lines.find(l => l.id === usedBlock.lineId);
+                      const lineName = usedLine?.name || usedBlock.lineId;
+                      
+                      // Parse the date string to format it nicely
+                      const dateParsed = parseDateString(usedBlock.startDay);
+                      let dateStr = usedBlock.startDay; // fallback
+                      if (dateParsed) {
+                        const dateObj = new Date(dateParsed.year, dateParsed.month - 1, dateParsed.day);
+                        dateStr = `${dateParsed.day} ${dateObj.toLocaleDateString('en-US', { month: 'short' })}`;
+                      }
+                      
+                      if (isUsedOnSameLine) {
+                        usageInfo = `(Already used on ${lineName} - ${dateStr})`;
+                        tooltipText = `This mold is already scheduled on ${lineName} for ${dateStr}. Scroll to that date to see the block.`;
+                      } else {
+                        usageInfo = `(Used on ${lineName} - ${dateStr})`;
+                        tooltipText = `This mold is already scheduled on ${lineName} for ${dateStr}. Scroll to that line and date to see the block.`;
+                      }
+                    }
                     
                     return (
                       <option 
                         key={mold.mold_id} 
                         value={mold.mold_id}
                         disabled={isUsed}
+                        title={tooltipText}
                       >
-                        {mold.mold_id.replace('MOLD-', '')} - {mold.mold_name} {
-                          isUsedOnSameLine ? '(Already used on this line)' : 
-                          isUsed ? '(Used on another line)' : ''
-                        }
+                        {mold.mold_id.replace('MOLD-', '')} - {mold.mold_name} {usageInfo}
                       </option>
                     );
                   })}
@@ -2909,14 +3659,45 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                     type="number"
                     min="1"
                     max="31"
-                    value={editingBlock.startDay || ''}
+                    value={(() => {
+                      const dayNum = getDayFromDateString(editingBlock.startDay);
+                      console.log('📊 Start Day input value calculation:', {
+                        editingBlockStartDay: editingBlock.startDay,
+                        parsedDayNum: dayNum,
+                        currentMonth: currentMonth.getMonth() + 1,
+                        currentYear: currentMonth.getFullYear()
+                      });
+                      return dayNum !== null ? dayNum : '';
+                    })()}
                     onChange={(e) => {
-                      const startDay = parseInt(e.target.value) || 1;
+                      const startDayNum = parseInt(e.target.value) || 1;
                       const duration = editingBlock.duration || 1;
+                      
+                      // Preserve the original month and year from the editing block's startDay
+                      const originalDateParsed = parseDateString(editingBlock.startDay);
+                      if (!originalDateParsed) {
+                        console.error('❌ Failed to parse editingBlock.startDay:', editingBlock.startDay);
+                        return;
+                      }
+                      
+                      // Use the original month/year, but handle month boundaries
+                      const date = new Date(originalDateParsed.year, originalDateParsed.month - 1, startDayNum);
+                      const actualDay = date.getDate();
+                      const actualMonth = date.getMonth() + 1;
+                      const actualYear = date.getFullYear();
+                      const startDayStr = dayNumberToDateStringWithMonth(actualDay, actualMonth, actualYear);
+                      
+                      const endDayNum = startDayNum + duration - 1;
+                      const endDate = new Date(originalDateParsed.year, originalDateParsed.month - 1, endDayNum);
+                      const endActualDay = endDate.getDate();
+                      const endActualMonth = endDate.getMonth() + 1;
+                      const endActualYear = endDate.getFullYear();
+                      const endDayStr = dayNumberToDateStringWithMonth(endActualDay, endActualMonth, endActualYear);
+                      
                       setEditingBlock({
                         ...editingBlock, 
-                        startDay, 
-                        endDay: startDay + duration - 1
+                        startDay: startDayStr, 
+                        endDay: endDayStr
                       });
                     }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -2934,11 +3715,28 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                     value={editingBlock.duration || ''}
                     onChange={(e) => {
                       const duration = parseInt(e.target.value) || 1;
-                      const startDay = editingBlock.startDay || 1;
+                      const startDayNum = getDayFromDateString(editingBlock.startDay);
+                      if (startDayNum === null) return;
+                      
+                      // Preserve the original month and year from the editing block's startDay
+                      const originalDateParsed = parseDateString(editingBlock.startDay);
+                      if (!originalDateParsed) {
+                        console.error('❌ Failed to parse editingBlock.startDay:', editingBlock.startDay);
+                        return;
+                      }
+                      
+                      const endDayNum = startDayNum + duration - 1;
+                      // Use the original month/year, but handle month boundaries
+                      const endDate = new Date(originalDateParsed.year, originalDateParsed.month - 1, endDayNum);
+                      const endActualDay = endDate.getDate();
+                      const endActualMonth = endDate.getMonth() + 1;
+                      const endActualYear = endDate.getFullYear();
+                      const endDayStr = dayNumberToDateStringWithMonth(endActualDay, endActualMonth, endActualYear);
+                      
                       setEditingBlock({
                         ...editingBlock, 
                         duration,
-                        endDay: startDay + duration - 1
+                        endDay: endDayStr
                       });
                     }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -3561,9 +4359,464 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                     ))}
                   </select>
                   <p className="text-xs text-gray-500 mt-1">
-                    The changeover mold will be created on day {editingBlock.startDay + 1} (next day) in gray color
+                    The changeover mold will be created on the next day in gray color
                   </p>
                 </div>
+              )}
+
+              {editingBlock.changeoverTime && editingBlock.changeoverTime > 0 && editingBlock.changeoverMoldId && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-3">
+                  Changeover Party Name and Colors
+                </label>
+                
+                <div className="space-y-3">
+                  {/* Group colors by party for uniform display */}
+                  {(() => {
+                    // Group colors by party code
+                    const groupedByParty: Record<string, { colors: ProductColor[], indices: number[] }> = {};
+                    const colorsWithoutParty: { color: ProductColor, index: number }[] = [];
+                    
+                    (editingBlock.changeoverProductColors || []).forEach((pc, index) => {
+                      if (pc.partyCode) {
+                        if (!groupedByParty[pc.partyCode]) {
+                          groupedByParty[pc.partyCode] = { colors: [], indices: [] };
+                        }
+                        groupedByParty[pc.partyCode].colors.push(pc);
+                        groupedByParty[pc.partyCode].indices.push(index);
+                      } else {
+                        colorsWithoutParty.push({ color: pc, index });
+                      }
+                    });
+                    
+                    // Get all party codes
+                    const allPartyCodes = Object.keys(groupedByParty);
+                    const hasNoData = allPartyCodes.length === 0 && colorsWithoutParty.length === 0;
+                    
+                    return (
+                      <>
+                        {/* Party rows with colors */}
+                        {allPartyCodes.map((partyCode) => {
+                          const partyData = groupedByParty[partyCode];
+                          const availableColors = availableColorsForParty[partyCode]
+                            ? availableColorsForParty[partyCode].map(cl => cl.color_label)
+                            : colorLabels.map(cl => cl.color_label);
+                          
+                          return (
+                            <div key={partyCode} className="border border-gray-300 rounded-lg p-3 bg-gray-50 space-y-2">
+                              {partyData.colors.map((productColor, colorIdx) => {
+                                const actualIndex = partyData.indices[colorIdx];
+                                const isFirstColor = colorIdx === 0;
+                                
+                                return (
+                                  <div key={colorIdx} className="flex items-center gap-2">
+                                    {/* Party Name - only on first row */}
+                                    {isFirstColor && (
+                                      <select
+                                        value={partyCode}
+                                        onChange={async (e) => {
+                                          const newPartyCode = e.target.value;
+                                          
+                                          // Load colors for new party
+                                          if (newPartyCode && !availableColorsForParty[newPartyCode]) {
+                                            try {
+                                              const partyColors = await colorLabelAPI.getColorsForParty(newPartyCode);
+                                              setAvailableColorsForParty(prev => ({
+                                                ...prev,
+                                                [newPartyCode]: partyColors
+                                              }));
+                                            } catch (error) {
+                                              console.error(`Error fetching colors for party ${newPartyCode}:`, error);
+                                              setAvailableColorsForParty(prev => ({
+                                                ...prev,
+                                                [newPartyCode]: colorLabels
+                                              }));
+                                            }
+                                          }
+                                          
+                                          // Update all colors for this party
+                                          const updatedColors = (editingBlock.changeoverProductColors || []).map((pc, idx) => {
+                                            if (partyData.indices.includes(idx)) {
+                                              return { ...pc, partyCode: newPartyCode };
+                                            }
+                                            return pc;
+                                          });
+                                          
+                                          // Update partyCodes array
+                                          const currentPartyCodes = editingBlock.changeoverPartyCodes || [];
+                                          let newPartyCodes = currentPartyCodes.filter(p => p !== partyCode);
+                                          if (newPartyCode && !newPartyCodes.includes(newPartyCode)) {
+                                            newPartyCodes.push(newPartyCode);
+                                          }
+                                          
+                                          setEditingBlock({
+                                            ...editingBlock,
+                                            changeoverPartyCodes: newPartyCodes,
+                                            changeoverProductColors: updatedColors
+                                          });
+                                        }}
+                                        className="w-32 border border-gray-300 rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                      >
+                                        <option value="">Select party...</option>
+                                        {partyNames.map(party => (
+                                          <option key={party.id} value={party.name}>
+                                            {party.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    )}
+                                    
+                                    {/* Spacer for non-first rows */}
+                                    {!isFirstColor && <div className="w-32"></div>}
+                                    
+                                    {/* Color Dropdown */}
+                                    <select
+                                      value={productColor.color || ''}
+                                      onChange={(e) => {
+                                        const newProductColors = [...(editingBlock.changeoverProductColors || [])];
+                                        newProductColors[actualIndex].color = e.target.value;
+                                        setEditingBlock({...editingBlock, changeoverProductColors: newProductColors});
+                                      }}
+                                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    >
+                                      <option value="">Select color...</option>
+                                      {availableColors.map(color => (
+                                        <option key={color} value={color}>{color}</option>
+                                      ))}
+                                    </select>
+                                    
+                                    {/* Quantity Input */}
+                                    <input
+                                      type="number"
+                                      placeholder="Qty"
+                                      min="0"
+                                      value={productColor.quantity === 0 ? '' : productColor.quantity}
+                                      onChange={(e) => {
+                                        const newProductColors = [...(editingBlock.changeoverProductColors || [])];
+                                        const value = e.target.value;
+                                        newProductColors[actualIndex].quantity = value === '' ? 0 : (parseInt(value) || 0);
+                                        setEditingBlock({...editingBlock, changeoverProductColors: newProductColors});
+                                      }}
+                                      className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    />
+                                    
+                                    {/* Add Color Button - only on first row */}
+                                    {isFirstColor && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const newProductColors = [
+                                            ...(editingBlock.changeoverProductColors || []),
+                                            { color: '', quantity: 0, partyCode: partyCode }
+                                          ];
+                                          setEditingBlock({...editingBlock, changeoverProductColors: newProductColors});
+                                        }}
+                                        className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium whitespace-nowrap"
+                                      >
+                                        + Add Color
+                                      </button>
+                                    )}
+                                    
+                                    {/* Spacer for non-first rows */}
+                                    {!isFirstColor && <div className="w-28"></div>}
+                                    
+                                    {/* Remove Button */}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const newProductColors = (editingBlock.changeoverProductColors || []).filter((_, i) => i !== actualIndex);
+                                        setEditingBlock({...editingBlock, changeoverProductColors: newProductColors});
+                                      }}
+                                      className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium"
+                                      title="Remove"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                        
+                        {/* Colors without party code - these become new party rows when party is selected */}
+                        {colorsWithoutParty.length > 0 && (
+                          <div className="border border-gray-300 rounded-lg p-3 bg-gray-50 space-y-2">
+                            <div className="text-xs text-gray-500 mb-1">New Party Row (select party first, then color)</div>
+                            {colorsWithoutParty.map(({ color: productColor, index: actualIndex }, colorIdx) => {
+                              const isFirstColor = colorIdx === 0;
+                              // Get selected party for this color entry
+                              const selectedParty = productColor.partyCode;
+                              // Get available colors based on selected party (if any)
+                              const allAvailableColors = selectedParty && availableColorsForParty[selectedParty]
+                                ? availableColorsForParty[selectedParty].map(cl => cl.color_label)
+                                : selectedParty
+                                  ? colorLabels.map(cl => cl.color_label)
+                                  : [];
+                              
+                              return (
+                                <div key={colorIdx} className="flex items-center gap-2">
+                                  {/* Party selector - only on first row of colorsWithoutParty */}
+                                  {isFirstColor && (
+                                    <select
+                                      value={selectedParty || ""}
+                                      onChange={async (e) => {
+                                        const newPartyCode = e.target.value;
+                                        if (newPartyCode === "No Party") {
+                                          // Explicitly set to no party (undefined) - "No Party" is a database entry
+                                          const updatedColors = (editingBlock.changeoverProductColors || []).map((pc, idx) => {
+                                            if (colorsWithoutParty.some(c => c.index === idx)) {
+                                              return { ...pc, partyCode: undefined };
+                                            }
+                                            return pc;
+                                          });
+                                          
+                                          // Remove "No Party" from partyCodes array if it exists
+                                          const currentPartyCodes = editingBlock.changeoverPartyCodes || [];
+                                          const newPartyCodes = currentPartyCodes.filter(p => p !== "No Party");
+                                          
+                                          setEditingBlock({
+                                            ...editingBlock,
+                                            changeoverPartyCodes: newPartyCodes,
+                                            changeoverProductColors: updatedColors
+                                          });
+                                        } else if (newPartyCode) {
+                                          // Load colors for new party
+                                          if (!availableColorsForParty[newPartyCode]) {
+                                            try {
+                                              const partyColors = await colorLabelAPI.getColorsForParty(newPartyCode);
+                                              setAvailableColorsForParty(prev => ({
+                                                ...prev,
+                                                [newPartyCode]: partyColors
+                                              }));
+                                            } catch (error) {
+                                              console.error(`Error fetching colors for party ${newPartyCode}:`, error);
+                                              setAvailableColorsForParty(prev => ({
+                                                ...prev,
+                                                [newPartyCode]: colorLabels
+                                              }));
+                                            }
+                                          }
+                                          
+                                          // Update all colors without party to use new party
+                                          const updatedColors = (editingBlock.changeoverProductColors || []).map((pc, idx) => {
+                                            if (colorsWithoutParty.some(c => c.index === idx)) {
+                                              return { ...pc, partyCode: newPartyCode };
+                                            }
+                                            return pc;
+                                          });
+                                          
+                                          // Update partyCodes array
+                                          const currentPartyCodes = editingBlock.changeoverPartyCodes || [];
+                                          let newPartyCodes = [...currentPartyCodes];
+                                          if (!newPartyCodes.includes(newPartyCode)) {
+                                            newPartyCodes.push(newPartyCode);
+                                          }
+                                          
+                                          setEditingBlock({
+                                            ...editingBlock,
+                                            changeoverPartyCodes: newPartyCodes,
+                                            changeoverProductColors: updatedColors
+                                          });
+                                        } else {
+                                          // Party deselected (empty value) - clear party and color
+                                          const updatedColors = (editingBlock.changeoverProductColors || []).map((pc, idx) => {
+                                            if (colorsWithoutParty.some(c => c.index === idx)) {
+                                              return { ...pc, partyCode: undefined, color: '' };
+                                            }
+                                            return pc;
+                                          });
+                                          
+                                          setEditingBlock({
+                                            ...editingBlock,
+                                            changeoverProductColors: updatedColors
+                                          });
+                                        }
+                                      }}
+                                      className="w-32 border border-gray-300 rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    >
+                                      <option value="">Select Party...</option>
+                                      {partyNames.map(party => (
+                                        <option key={party.id} value={party.name}>
+                                          {party.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  )}
+                                  
+                                  {!isFirstColor && <div className="w-32"></div>}
+                                  
+                                  {/* Color Dropdown - disabled until party is selected */}
+                                  <select
+                                    value={productColor.color || ''}
+                                    onChange={(e) => {
+                                      const newProductColors = [...(editingBlock.changeoverProductColors || [])];
+                                      newProductColors[actualIndex].color = e.target.value;
+                                      setEditingBlock({...editingBlock, changeoverProductColors: newProductColors});
+                                    }}
+                                    disabled={!selectedParty}
+                                    className={`flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                      !selectedParty ? 'bg-gray-100 cursor-not-allowed opacity-50' : ''
+                                    }`}
+                                    title={!selectedParty ? 'Please select a party first' : ''}
+                                  >
+                                    <option value="">{selectedParty ? 'Select color...' : 'Select party first...'}</option>
+                                    {allAvailableColors.map(color => (
+                                      <option key={color} value={color}>{color}</option>
+                                    ))}
+                                  </select>
+                                  
+                                  {/* Quantity Input */}
+                                  <input
+                                    type="number"
+                                    placeholder="Qty"
+                                    min="0"
+                                    value={productColor.quantity === 0 ? '' : productColor.quantity}
+                                    onChange={(e) => {
+                                      const newProductColors = [...(editingBlock.changeoverProductColors || [])];
+                                      const value = e.target.value;
+                                      newProductColors[actualIndex].quantity = value === '' ? 0 : (parseInt(value) || 0);
+                                      setEditingBlock({...editingBlock, changeoverProductColors: newProductColors});
+                                    }}
+                                    className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  />
+                                  
+                                  {/* Add Color Button - only on first row */}
+                                  {isFirstColor && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const newProductColors = [
+                                          ...(editingBlock.changeoverProductColors || []),
+                                          { color: '', quantity: 0, partyCode: undefined }
+                                        ];
+                                        setEditingBlock({...editingBlock, changeoverProductColors: newProductColors});
+                                      }}
+                                      className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium whitespace-nowrap"
+                                    >
+                                      + Add Color
+                                    </button>
+                                  )}
+                                  
+                                  {!isFirstColor && <div className="w-28"></div>}
+                                  
+                                  {/* Remove Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newProductColors = (editingBlock.changeoverProductColors || []).filter((_, i) => i !== actualIndex);
+                                      setEditingBlock({...editingBlock, changeoverProductColors: newProductColors});
+                                    }}
+                                    className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium"
+                                    title="Remove"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        
+                        {/* Initial empty row or Add Party button */}
+                        {hasNoData ? (
+                          <div className="border border-gray-300 rounded-lg p-3 bg-gray-50">
+                            <div className="flex items-center gap-2">
+                              <select
+                                value=""
+                                onChange={async (e) => {
+                                  const newPartyCode = e.target.value;
+                                  if (newPartyCode) {
+                                    // Load colors for new party
+                                    if (!availableColorsForParty[newPartyCode]) {
+                                      try {
+                                        const partyColors = await colorLabelAPI.getColorsForParty(newPartyCode);
+                                        setAvailableColorsForParty(prev => ({
+                                          ...prev,
+                                          [newPartyCode]: partyColors
+                                        }));
+                                      } catch (error) {
+                                        console.error(`Error fetching colors for party ${newPartyCode}:`, error);
+                                        setAvailableColorsForParty(prev => ({
+                                          ...prev,
+                                          [newPartyCode]: colorLabels
+                                        }));
+                                      }
+                                    }
+                                    
+                                    const newProductColors = [
+                                      { color: '', quantity: 0, partyCode: newPartyCode }
+                                    ];
+                                    
+                                    setEditingBlock({
+                                      ...editingBlock,
+                                      changeoverPartyCodes: [newPartyCode],
+                                      changeoverProductColors: newProductColors
+                                    });
+                                  }
+                                }}
+                                className="w-32 border border-gray-300 rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              >
+                                <option value="">Select Party...</option>
+                                {partyNames.map(party => (
+                                  <option key={party.id} value={party.name}>
+                                    {party.name}
+                                  </option>
+                                ))}
+                              </select>
+                              
+                              <select
+                                value=""
+                                disabled={true}
+                                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-100 cursor-not-allowed opacity-50"
+                                title="Please select a party first"
+                              >
+                                <option value="">Select party first...</option>
+                              </select>
+                              
+                              <input
+                                type="number"
+                                placeholder="Qty"
+                                min="0"
+                                className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              />
+                              
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newProductColors = [
+                                    { color: '', quantity: 0, partyCode: undefined }
+                                  ];
+                                  setEditingBlock({...editingBlock, changeoverProductColors: newProductColors});
+                                }}
+                                className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium whitespace-nowrap"
+                              >
+                                + Add Color
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Add a new party row - this creates a new entry in colorsWithoutParty
+                              // which will show a party selector, allowing user to create a new party group
+                              const newProductColors = [
+                                ...(editingBlock.changeoverProductColors || []),
+                                { color: '', quantity: 0, partyCode: undefined }
+                              ];
+                              setEditingBlock({...editingBlock, changeoverProductColors: newProductColors});
+                            }}
+                            className="w-full py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                          >
+                            + Add Party Row
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
               )}
 
               <div>

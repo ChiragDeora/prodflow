@@ -32,8 +32,8 @@ const StoreDispatchModule: React.FC<StoreDispatchModuleProps> = ({ onSubNavClick
 
   return (
     <div className="h-full flex flex-col">
-      {/* Tab Navigation */}
-      <div className="border-b border-gray-200 bg-white">
+      {/* Tab Navigation (never print) */}
+      <div className="border-b border-gray-200 bg-white app-subnav">
         <nav className="flex space-x-8 px-6 overflow-x-auto">
           <button
             onClick={() => {
@@ -209,7 +209,8 @@ const StoreDispatchModule: React.FC<StoreDispatchModuleProps> = ({ onSubNavClick
               </>
             ) : (
               <>
-                <div className="flex items-center mb-4">
+                {/* Back bar - hide on print */}
+                <div className="flex items-center mb-4 print:hidden">
                   <button
                     onClick={() => setPurchaseSubTab(null)}
                     className="text-gray-600 hover:text-gray-900 flex items-center gap-2"
@@ -308,7 +309,8 @@ const StoreDispatchModule: React.FC<StoreDispatchModuleProps> = ({ onSubNavClick
               </>
             ) : (
               <>
-                <div className="flex items-center mb-4">
+                {/* Back bar - hide on print */}
+                <div className="flex items-center mb-4 print:hidden">
                   <button
                     onClick={() => setInwardSubTab(null)}
                     className="text-gray-600 hover:text-gray-900 flex items-center gap-2"
@@ -427,7 +429,8 @@ const StoreDispatchModule: React.FC<StoreDispatchModuleProps> = ({ onSubNavClick
               </>
             ) : (
               <>
-                <div className="flex items-center mb-4">
+                {/* Back bar - hide on print */}
+                <div className="flex items-center mb-4 print:hidden">
                   <button
                     onClick={() => setOutwardSubTab(null)}
                     className="text-gray-600 hover:text-gray-900 flex items-center gap-2"

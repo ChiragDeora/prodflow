@@ -140,10 +140,10 @@ const CANONICAL_HEADERS: Record<DataType, string[]> = {
     'Sl', 'Item Name', 'SFG-Code', 'Pcs', 'Part Wt (gm/pcs)', 'Colour', 'HP %', 'ICP %', 'RCP %', 'LDPE %', 'GPPS %', 'MB %'
   ],
   fg_bom: [
-    'Sl', 'Item Code', 'Party Name', 'Pack Size', 'SFG-1', 'SFG-1 Qty', 'SFG-2', 'SFG-2 Qty', 'CNT Code', 'CNT QTY', 'Polybag Code', 'Poly Qty', 'BOPP 1', 'Qty/Meter', 'BOPP 2', 'Qty/Meter 2'
+    'Sl', 'Item Code', 'Item Name', 'Party Name', 'Pack Size', 'SFG-1', 'SFG-1 Qty', 'SFG-2', 'SFG-2 Qty', 'CNT Code', 'CNT QTY', 'Polybag Code', 'Poly Qty', 'BOPP 1', 'Qty/Meter', 'BOPP 2', 'Qty/Meter 2'
   ],
         local_bom: [
-          'Sl', 'Item Code', 'Pack Size', 'SFG-1', 'SFG-1 Qty', 'SFG-2', 'SFG-2 Qty', 'CNT Code', 'CNT QTY', 'Polybag Code', 'Poly Qty', 'BOPP 1', 'Qty/Meter', 'BOPP 2', 'Qty/Meter 2'
+          'Sl', 'Item Code', 'Item Name', 'Pack Size', 'SFG-1', 'SFG-1 Qty', 'SFG-2', 'SFG-2 Qty', 'CNT Code', 'CNT QTY', 'Polybag Code', 'Poly Qty', 'BOPP 1', 'Qty/Meter', 'BOPP 2', 'Qty/Meter 2', 'CBM'
         ],
   dpr: [], // DPR will be configured with multi-sheet structure - headers defined in sheet mappings
   color_labels: [
@@ -359,6 +359,7 @@ const TEMPLATE_MAPPINGS = {
   fg_bom: {
     'Sl': 'sl_no',
     'Item Code': 'item_code',
+    'Item Name': 'item_name',
     'Party Name': 'party_name',
     'Pack Size': 'pack_size',
     'SFG-1': 'sfg_1',
@@ -385,6 +386,9 @@ const TEMPLATE_MAPPINGS = {
     'Item Code': 'item_code',
     'ITEM CODE': 'item_code',
     'ItemCode': 'item_code',
+    'Item Name': 'item_name',
+    'ITEM NAME': 'item_name',
+    'ItemName': 'item_name',
     'Pack Size': 'pack_size',
     'PACK SIZE': 'pack_size',
     'PackSize': 'pack_size',
@@ -426,7 +430,11 @@ const TEMPLATE_MAPPINGS = {
     'Qty Meter 2': 'qty_meter_2',
     'QTY METER 2': 'qty_meter_2',
     'Quantity/Meter 2': 'qty_meter_2',
-    'Quantity per Meter 2': 'qty_meter_2'
+    'Quantity per Meter 2': 'qty_meter_2',
+    'CBM': 'cbm',
+    'cbm': 'cbm',
+    'Cubic Meter': 'cbm',
+    'CUBIC METER': 'cbm'
   }
 } as const;
 
@@ -2779,16 +2787,50 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
     console.log('🔍 Available columns:', availableColumns);
     console.log('🔍 Template mapping:', mapping);
 
-    // Build flexible header mapping
+    // Build flexible header mapping with improved matching
     Object.entries(mapping).forEach(([expected, dbField]) => {
-      if (availableColumns.includes(expected)) flexibleMapping[expected] = dbField;
-      else {
-        const similar = availableColumns.find(c => c.toLowerCase().trim() === expected.toLowerCase().trim());
-        if (similar) flexibleMapping[similar] = dbField;
+      // Exact match first
+      if (availableColumns.includes(expected)) {
+        flexibleMapping[expected] = dbField;
+        return;
+      }
+      
+      // Case-insensitive exact match
+      const caseInsensitiveMatch = availableColumns.find(c => c.toLowerCase().trim() === expected.toLowerCase().trim());
+      if (caseInsensitiveMatch) {
+        flexibleMapping[caseInsensitiveMatch] = dbField;
+        return;
+      }
+      
+      // For item_name, try more flexible matching (handles variations like "Item Name", "ItemName", "ITEM NAME", etc.)
+      if (dbField === 'item_name') {
+        const itemNamePatterns = [
+          /^item\s*name$/i,
+          /^itemname$/i,
+          /^item_name$/i,
+          /^name$/i
+        ];
+        const itemNameMatch = availableColumns.find(c => {
+          const normalized = c.trim();
+          return itemNamePatterns.some(pattern => pattern.test(normalized));
+        });
+        if (itemNameMatch) {
+          flexibleMapping[itemNameMatch] = dbField;
+          console.log(`✅ Found Item Name column with flexible matching: "${itemNameMatch}" -> item_name`);
+        }
       }
     });
 
     console.log('🔍 Flexible mapping:', flexibleMapping);
+    
+    // Debug: Check if item_name is being mapped for BOM types
+    if (type === 'local_bom' || type === 'fg_bom' || type === 'sfg_bom') {
+      const itemNameMappings = Object.entries(flexibleMapping).filter(([excelCol, dbField]) => dbField === 'item_name');
+      console.log(`🔍 ${type.toUpperCase()}: item_name mappings found:`, itemNameMappings);
+      console.log(`🔍 ${type.toUpperCase()}: Available columns that might be Item Name:`, availableColumns.filter(c => 
+        c.toLowerCase().includes('item') && c.toLowerCase().includes('name')
+      ));
+    }
 
     // Raw materials special
     if (type === 'raw_materials') return mapRawMaterialsData(data);
@@ -2811,6 +2853,13 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
 
       Object.entries(flexibleMapping).forEach(([excelCol, dbCol]) => {
         let value = row[excelCol];
+        
+        // Debug: Log item_name mapping for LOCAL BOM, FG BOM, and SFG BOM
+        if (dbCol === 'item_name' && (type === 'local_bom' || type === 'fg_bom' || type === 'sfg_bom')) {
+          if (index < 3) {
+            console.log(`🔍 ${type.toUpperCase()} Row ${index}: item_name mapping attempt - excelCol="${excelCol}", raw value:`, value, 'all row keys:', Object.keys(row));
+          }
+        }
 
         // Machines
         if (type === 'machines') {
@@ -2892,7 +2941,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           console.log('🔍 LOCAL BOM HEADERS:', Object.keys(row));
           console.log('🔍 LOCAL BOM MAPPING:', flexibleMapping);
           
-          if (['qty_meter', 'qty_meter_2', 'sfg_1_qty', 'sfg_2_qty', 'cnt_qty', 'poly_qty'].includes(dbCol)) {
+          if (['qty_meter', 'qty_meter_2', 'sfg_1_qty', 'sfg_2_qty', 'cnt_qty', 'poly_qty', 'cbm'].includes(dbCol)) {
             console.log('🔍 Processing field:', dbCol, 'Excel value:', value, 'Type:', typeof value);
             if (value === '' || value === null || value === undefined) {
               value = null;
@@ -2901,18 +2950,54 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
               if (isNaN(parsed)) {
                 value = null;
               } else {
-                // Limit to exactly 2 decimal places without rounding
-                value = Math.floor(parsed * 100) / 100;
+                // For CBM, use 4 decimal places; for qty_meter fields, use 2 decimal places
+                if (dbCol === 'cbm') {
+                  // CBM: 4 decimal places to match DECIMAL(10,4)
+                  value = Math.floor(parsed * 10000) / 10000;
+                } else {
+                  // Limit to exactly 2 decimal places without rounding
+                  value = Math.floor(parsed * 100) / 100;
+                }
               }
             }
             console.log('🔍 After precision conversion:', value, 'Type:', typeof value);
           }
+          
+          // Handle item_name for LOCAL BOM
+          if (dbCol === 'item_name') {
+            console.log(`🔍 LOCAL BOM Row ${index}: item_name mapping - excelCol="${excelCol}", value="${value}", type=${typeof value}`);
+            if (value) {
+              const itemNameStr = String(value).trim();
+              // Check if it looks like a numeric code (all digits, 9+ characters)
+              if (/^\d{9,}$/.test(itemNameStr)) {
+                // This looks like a code, not a descriptive name - set to empty
+                console.log(`🔍 LOCAL BOM: Clearing item_name "${itemNameStr}" - looks like numeric code`);
+                value = '';
+              } else {
+                console.log(`🔍 LOCAL BOM: Keeping item_name "${itemNameStr}" - looks like valid name`);
+              }
+            } else {
+              console.log(`🔍 LOCAL BOM Row ${index}: item_name is empty/null/undefined`);
+            }
+          }
         }
 
-        // SFG BOM: Remove 100 prefix from codes and update item names
+        // SFG BOM: Remove 100 prefix from codes and check item_name
         if (type === 'sfg_bom') {
           if (dbCol === 'sfg_code' && value) {
             value = removeOldPrefix(String(value));
+          }
+          // If item_name looks like a numeric code (9+ digits), clear it immediately
+          // We'll also check in post-processing after sfg_code is set
+          if (dbCol === 'item_name' && value) {
+            const itemNameStr = String(value).trim();
+            // Check if it looks like a numeric code (all digits, 9+ characters)
+            // This catches cases where Excel has codes like "110110001" in the Item Name column
+            if (/^\d{9,}$/.test(itemNameStr)) {
+              // This looks like a code, not a descriptive name - set to empty
+              console.log(`🔍 SFG BOM: Clearing item_name "${itemNameStr}" - looks like numeric code`);
+              value = '';
+            }
           }
         }
 
@@ -3001,9 +3086,52 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           mapped.sfg_code = removeOldPrefix(String(mapped.sfg_code));
         }
         // Update item_name: Remove 100 prefix and ensure RP/CK is displayed
-        if (mapped.item_name) {
-          const sfgCode = mapped.sfg_code ? String(mapped.sfg_code) : '';
-          mapped.item_name = updateItemNameWithRPOrCK(String(mapped.item_name), sfgCode);
+        // BUT: If item_name is the same as sfg_code or looks like a numeric code, don't use it
+        const itemNameStr = mapped.item_name ? String(mapped.item_name).trim() : '';
+        const sfgCodeStr = mapped.sfg_code ? String(mapped.sfg_code).trim() : '';
+        
+        // Debug logging
+        if (index < 3) {
+          console.log(`🔍 SFG BOM Row ${index}: item_name="${itemNameStr}", sfg_code="${sfgCodeStr}"`);
+        }
+        
+        // Always check if item_name should be cleared
+        let shouldClearItemName = false;
+        
+        if (itemNameStr) {
+          // Check if item_name is the same as sfg_code (Excel might have code in both columns)
+          if (itemNameStr === sfgCodeStr && itemNameStr.length > 0) {
+            shouldClearItemName = true;
+            if (index < 3) console.log(`🔍 Clearing item_name: matches sfg_code`);
+          } 
+          // Check if item_name looks like a numeric code (all digits, 9+ characters)
+          else if (/^\d{9,}$/.test(itemNameStr)) {
+            shouldClearItemName = true;
+            if (index < 3) console.log(`🔍 Clearing item_name: looks like numeric code`);
+          }
+        }
+        
+        if (shouldClearItemName) {
+          // Don't use the code as item_name, set it to empty so user can see it needs fixing
+          mapped.item_name = '';
+        } else if (itemNameStr && itemNameStr !== sfgCodeStr) {
+          // Only process item_name if it's different from sfg_code and not a numeric code
+          // Also check: if sfg_code is numeric, don't try to derive item_name from it
+          if (sfgCodeStr && /^\d{9,}$/.test(sfgCodeStr)) {
+            // sfg_code is numeric - don't derive item_name from it, keep original or empty
+            mapped.item_name = itemNameStr;
+          } else {
+            // sfg_code is descriptive - safe to process
+            mapped.item_name = updateItemNameWithRPOrCK(itemNameStr, sfgCodeStr);
+          }
+        } else {
+          // If item_name is empty or null, ensure it's set to empty string
+          mapped.item_name = '';
+        }
+        
+        // Final debug
+        if (index < 3) {
+          console.log(`🔍 SFG BOM Row ${index} FINAL: item_name="${mapped.item_name}", sfg_code="${mapped.sfg_code}"`);
         }
       }
 
@@ -3018,6 +3146,26 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
         // Remove 200 prefix from item_code if present
         if (mapped.item_code) {
           mapped.item_code = removeOldPrefix(String(mapped.item_code));
+        }
+        // Handle item_name: ensure it's not the same as item_code or numeric
+        const itemNameStr = mapped.item_name ? String(mapped.item_name).trim() : '';
+        const itemCodeStr = mapped.item_code ? String(mapped.item_code).trim() : '';
+        
+        if (itemNameStr) {
+          // Check if item_name is the same as item_code (Excel might have code in both columns)
+          if (itemNameStr === itemCodeStr) {
+            // Don't use the code as item_name, set it to empty
+            mapped.item_name = '';
+          } 
+          // Check if item_name looks like a numeric code (all digits, 9+ characters)
+          else if (/^\d{9,}$/.test(itemNameStr)) {
+            // This looks like a code, not a descriptive name - set to empty
+            mapped.item_name = '';
+          }
+          // Otherwise, keep the item_name as is
+        } else {
+          // If item_name is empty or null, ensure it's set to empty string
+          mapped.item_name = '';
         }
       }
 
@@ -3420,27 +3568,38 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           break;
         }
         case 'bom_masters': {
-          // For backward compatibility, treat as SFG BOM
+          // For backward compatibility, treat as SFG BOM - UPDATE existing or CREATE new
           const existing = await bomMasterAPI.getByCategory('SFG');
-          const existingCodes = new Set(existing.map(b => b.sfg_code));
-          const toCreate = mappedData.bom_masters.filter(b => {
-            const code = b.sfg_code;
-            if (existingCodes.has(code)) { duplicateCount++; return false; }
-            return true;
+          // Create a map of sfg_code to id for quick lookup
+          const codeToIdMap = new Map<string, string>();
+          existing.forEach(b => {
+            if (b.sfg_code) {
+              codeToIdMap.set(b.sfg_code, b.id);
+            }
           });
           
-          // Create SFG BOM masters one by one
           const createdBOMs = [];
-          for (const bom of toCreate) {
+          const updatedBOMs = [];
+          
+          for (const bom of mappedData.bom_masters) {
             try {
+              // Ensure item_name is not the same as sfg_code before processing
+              let itemName = bom.item_name || '';
+              const sfgCode = bom.sfg_code || '';
+              
+              // Final check: if item_name equals sfg_code or is numeric, clear it
+              if (itemName && (itemName === sfgCode || /^\d{9,}$/.test(String(itemName).trim()))) {
+                itemName = '';
+              }
+              
               const bomData = {
                 status: 'draft' as const,
                 created_by: user?.username || 'excel_import',
                 // Common fields
                 sl_no: bom.sl_no || 0,
                 // SFG-specific fields
-                item_name: bom.item_name || '',
-                sfg_code: bom.sfg_code || '',
+                item_name: itemName,
+                sfg_code: sfgCode,
                 pcs: bom.pcs || 0,
                 part_weight_gm_pcs: bom.part_weight_gm_pcs || 0,
                 colour: bom.colour || '',
@@ -3451,38 +3610,60 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
                 gpps_percentage: bom.gpps_percentage || 0,
                 mb_percentage: bom.mb_percentage || 0
               };
-              const created = await bomMasterAPI.create(bomData);
-              if (created) createdBOMs.push(created);
+              
+              // Check if record exists by sfg_code
+              const existingId = sfgCode ? codeToIdMap.get(sfgCode) : null;
+              
+              if (existingId) {
+                // UPDATE existing record
+                const updated = await bomMasterAPI.update(existingId, bomData);
+                if (updated) updatedBOMs.push(updated);
+              } else {
+                // CREATE new record
+                const created = await bomMasterAPI.create(bomData);
+                if (created) createdBOMs.push(created);
+              }
             } catch (error) {
-              console.warn('Failed to create SFG BOM master:', bom.sfg_code, error);
+              console.warn('Failed to import SFG BOM master:', bom.sfg_code, error);
               duplicateCount++;
             }
           }
-          result = createdBOMs;
+          result = [...createdBOMs, ...updatedBOMs];
           break;
         }
         case 'sfg_bom': {
-          // Import SFG BOM data
+          // Import SFG BOM data - UPDATE existing records or CREATE new ones
           const existing = await bomMasterAPI.getByCategory('SFG');
-          const existingCodes = new Set(existing.map(b => b.sfg_code));
-          const toCreate = mappedData.sfg_bom.filter(b => {
-            const code = b.sfg_code;
-            if (existingCodes.has(code)) { duplicateCount++; return false; }
-            return true;
+          // Create a map of sfg_code to id for quick lookup
+          const codeToIdMap = new Map<string, string>();
+          existing.forEach(b => {
+            if (b.sfg_code) {
+              codeToIdMap.set(b.sfg_code, b.id);
+            }
           });
           
-          // Create SFG BOM masters one by one
           const createdBOMs = [];
-          for (const bom of toCreate) {
+          const updatedBOMs = [];
+          
+          for (const bom of mappedData.sfg_bom) {
             try {
+              // Ensure item_name is not the same as sfg_code before processing
+              let itemName = bom.item_name || '';
+              const sfgCode = bom.sfg_code || '';
+              
+              // Final check: if item_name equals sfg_code or is numeric, clear it
+              if (itemName && (itemName === sfgCode || /^\d{9,}$/.test(String(itemName).trim()))) {
+                itemName = '';
+              }
+              
               const bomData = {
                 status: 'draft' as const,
                 created_by: user?.username || 'excel_import',
                 // Common fields
                 sl_no: bom.sl_no || 0,
                 // SFG-specific fields
-                item_name: bom.item_name || '',
-                sfg_code: bom.sfg_code || '',
+                item_name: itemName,
+                sfg_code: sfgCode,
                 pcs: bom.pcs || 0,
                 part_weight_gm_pcs: bom.part_weight_gm_pcs || 0,
                 colour: bom.colour || '',
@@ -3493,38 +3674,61 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
                 gpps_percentage: bom.gpps_percentage || 0,
                 mb_percentage: bom.mb_percentage || 0
               };
-              const created = await bomMasterAPI.create(bomData);
-              if (created) createdBOMs.push(created);
+              
+              // Check if record exists by sfg_code
+              const existingId = sfgCode ? codeToIdMap.get(sfgCode) : null;
+              
+              if (existingId) {
+                // UPDATE existing record
+                const updated = await bomMasterAPI.update(existingId, bomData);
+                if (updated) updatedBOMs.push(updated);
+              } else {
+                // CREATE new record
+                const created = await bomMasterAPI.create(bomData);
+                if (created) createdBOMs.push(created);
+              }
             } catch (error) {
-              console.warn('Failed to create SFG BOM master:', bom.sfg_code, error);
+              console.warn('Failed to import SFG BOM master:', bom.sfg_code, error);
               duplicateCount++;
             }
           }
-          result = createdBOMs;
+          result = [...createdBOMs, ...updatedBOMs];
           break;
         }
 
         case 'fg_bom': {
-          // Import FG BOM data
+          // Import FG BOM data - UPDATE existing records or CREATE new ones
           const existing = await bomMasterAPI.getByCategory('FG');
-          const existingCodes = new Set(existing.map(b => b.item_code));
-          const toCreate = mappedData.fg_bom.filter(b => {
-            const code = b.item_code;
-            if (existingCodes.has(code)) { duplicateCount++; return false; }
-            return true;
+          // Create a map of item_code to id for quick lookup
+          const codeToIdMap = new Map<string, string>();
+          existing.forEach(b => {
+            if (b.item_code) {
+              codeToIdMap.set(b.item_code, b.id);
+            }
           });
           
-          // Create FG BOM masters one by one
           const createdBOMs = [];
-          for (const bom of toCreate) {
+          const updatedBOMs = [];
+          
+          for (const bom of mappedData.fg_bom) {
             try {
+              // Ensure item_name is not the same as item_code before processing
+              let itemName = bom.item_name || '';
+              const itemCode = bom.item_code || '';
+              
+              // Final check: if item_name equals item_code or is numeric, clear it
+              if (itemName && (itemName === itemCode || /^\d{9,}$/.test(String(itemName).trim()))) {
+                itemName = '';
+              }
+              
               const bomData = {
                 status: 'draft' as const,
                 created_by: user?.username || 'excel_import',
                 // Common fields
                 sl_no: bom.sl_no || 0,
                 // FG-specific fields
-                item_code: bom.item_code || '',
+                item_code: itemCode,
+                item_name: itemName, // Add item_name support for FG BOM
                 party_name: bom.party_name || '',
                 pack_size: bom.pack_size || '',
                 sfg_1: bom.sfg_1 || '',
@@ -3540,38 +3744,61 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
                 bopp_2: bom.bopp_2 || '',
                 qty_meter_2: bom.qty_meter_2 ?? 0
               };
-              const created = await bomMasterAPI.create(bomData);
-              if (created) createdBOMs.push(created);
+              
+              // Check if record exists by item_code
+              const existingId = itemCode ? codeToIdMap.get(itemCode) : null;
+              
+              if (existingId) {
+                // UPDATE existing record
+                const updated = await bomMasterAPI.update(existingId, bomData);
+                if (updated) updatedBOMs.push(updated);
+              } else {
+                // CREATE new record
+                const created = await bomMasterAPI.create(bomData);
+                if (created) createdBOMs.push(created);
+              }
             } catch (error) {
-              console.warn('Failed to create FG BOM master:', bom.item_code, error);
+              console.warn('Failed to import FG BOM master:', bom.item_code, error);
               duplicateCount++;
             }
           }
-          result = createdBOMs;
+          result = [...createdBOMs, ...updatedBOMs];
           break;
         }
 
         case 'local_bom': {
-          // Import LOCAL BOM data
+          // Import LOCAL BOM data - UPDATE existing records or CREATE new ones
           const existing = await bomMasterAPI.getByCategory('LOCAL');
-          const existingCodes = new Set(existing.map(b => b.item_code));
-          const toCreate = mappedData.local_bom.filter(b => {
-            const code = b.item_code;
-            if (existingCodes.has(code)) { duplicateCount++; return false; }
-            return true;
+          // Create a map of item_code to id for quick lookup
+          const codeToIdMap = new Map<string, string>();
+          existing.forEach(b => {
+            if (b.item_code) {
+              codeToIdMap.set(b.item_code, b.id);
+            }
           });
           
-          // Create LOCAL BOM masters one by one
           const createdBOMs = [];
-          for (const bom of toCreate) {
+          const updatedBOMs = [];
+          
+          for (const bom of mappedData.local_bom) {
             try {
+              // Ensure item_name is not the same as item_code before processing
+              let itemName = bom.item_name || '';
+              const itemCode = bom.item_code || '';
+              
+              // Final check: if item_name equals item_code or is numeric, clear it
+              if (itemName && (itemName === itemCode || /^\d{9,}$/.test(String(itemName).trim()))) {
+                itemName = '';
+              }
+              
               const bomData = {
                 status: 'draft' as const,
                 created_by: user?.username || 'excel_import',
                 // Common fields
                 sl_no: bom.sl_no || 0,
                 // LOCAL-specific fields
-                item_code: bom.item_code || '',
+                item_code: itemCode,
+                item_name: itemName, // Add item_name support for LOCAL BOM
                 pack_size: bom.pack_size || '',
                 sfg_1: bom.sfg_1 || '',
                 sfg_1_qty: bom.sfg_1_qty || 0,
@@ -3584,16 +3811,28 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
                 bopp_1: bom.bopp_1 || '',
                 qty_meter: bom.qty_meter ?? 0,
                 bopp_2: bom.bopp_2 || '',
-                qty_meter_2: bom.qty_meter_2 ?? 0
+                qty_meter_2: bom.qty_meter_2 ?? 0,
+                cbm: bom.cbm ?? null // Add CBM support
               };
-              const created = await bomMasterAPI.create(bomData);
-              if (created) createdBOMs.push(created);
+              
+              // Check if record exists by item_code
+              const existingId = itemCode ? codeToIdMap.get(itemCode) : null;
+              
+              if (existingId) {
+                // UPDATE existing record
+                const updated = await bomMasterAPI.update(existingId, bomData);
+                if (updated) updatedBOMs.push(updated);
+              } else {
+                // CREATE new record
+                const created = await bomMasterAPI.create(bomData);
+                if (created) createdBOMs.push(created);
+              }
             } catch (error) {
-              console.warn('Failed to create LOCAL BOM master:', bom.item_code, error);
+              console.warn('Failed to import LOCAL BOM master:', bom.item_code, error);
               duplicateCount++;
             }
           }
-          result = createdBOMs;
+          result = [...createdBOMs, ...updatedBOMs];
           break;
         }
       }
@@ -4271,6 +4510,14 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
                                 const mapping = TEMPLATE_MAPPINGS[dataType as keyof typeof TEMPLATE_MAPPINGS];
                                 const dbField = mapping?.[header as keyof typeof mapping];
                                 const value = dbField ? (row as any)[dbField] : null;
+                                
+                                // Debug: Log item_name specifically for SFG, FG, and LOCAL BOM
+                                if (idx === 0 && header === 'Item Name' && (dataType === 'sfg_bom' || dataType === 'fg_bom' || dataType === 'local_bom')) {
+                                  console.log(`🔍 Preview - ${dataType} Item Name header, dbField="${dbField}", value="${value}", row:`, row);
+                                  console.log(`🔍 Preview - Full row keys:`, Object.keys(row));
+                                  console.log(`🔍 Preview - item_name in row:`, row.item_name);
+                                }
+                                
                                 return (
                                   <td key={`${header}-${index}`} className="py-2 px-3 text-gray-600">
                                     {value !== null && value !== undefined ? String(value) : '-'}

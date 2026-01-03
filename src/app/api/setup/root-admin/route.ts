@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 import bcrypt from 'bcrypt';
+
+const getSupabase = () => createClient();
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = getSupabase();
     const { password } = await request.json();
 
     if (!password) {
@@ -99,6 +102,7 @@ export async function POST(request: NextRequest) {
 // Check if setup is needed
 export async function GET() {
   try {
+    const supabase = getSupabase();
     const { data: user } = await supabase
       .from('auth_users')
       .select('password_hash, username, email')

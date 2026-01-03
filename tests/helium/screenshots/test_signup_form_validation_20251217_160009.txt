@@ -1,0 +1,11 @@
+Test: test_signup_form_validation
+Timestamp: 20251217_160009
+Error:
+Traceback (most recent call last):
+  File "/Users/chiragdeora/Developer/production-scheduler/tests/helium/run.py", line 69, in run_single_test
+    test_func()
+  File "/Users/chiragdeora/Developer/production-scheduler/tests/helium/test_auth.py", line 304, in test_signup_form_validation
+    driver.find_element_by_css_selector("button[type='submit']").click()
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'WebDriver' object has no attribute 'find_element_by_css_selector'
+

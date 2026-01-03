@@ -7,7 +7,7 @@ import {
   ChevronRight, ChevronDown, CheckCircle, AlertTriangle,
   Lock, Unlock, Archive, RotateCcw
 } from 'lucide-react';
-import { BOMMasterWithVersions, BOMVersion, BOMComponent, BOMAudit, bomMasterAPI } from '@/lib/supabase';
+import type { BOMMasterWithVersions, BOMVersion, BOMComponent, BOMAudit } from '@/lib/supabase';
 import { removeOldPrefix, updateItemNameWithRPOrCK } from '@/utils/bomCodeUtils';
 
 import ExcelFileReader from '../../ExcelFileReader';
@@ -59,12 +59,18 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
     try {
       setLoading(true);
       setError(null);
-      // Use the category-specific API call
-      const data = await bomMasterAPI.getByCategory(selectedCategory);
-      
-      console.log(`${selectedCategory} BOM data received:`, data?.length || 0, 'records');
-      console.log('First record:', data?.[0]);
-      setBomMasters(data || []);
+      const response = await fetch(`/api/bom?category=${selectedCategory}`);
+      const result = await response.json();
+
+      if (result.success) {
+        const data = (result.data || []) as BOMMasterWithVersions[];
+        console.log(`${selectedCategory} BOM data received:`, data.length, 'records');
+        console.log('First record:', data[0]);
+        setBomMasters(data);
+      } else {
+        console.error(`Error loading ${selectedCategory} BOM masters:`, result.error);
+        setError(`Failed to load ${selectedCategory} BOM masters`);
+      }
     } catch (error) {
       console.error(`Error loading ${selectedCategory} BOM masters:`, error);
       setError(`Failed to load ${selectedCategory} BOM masters`);
@@ -180,7 +186,8 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
           ].join(' ').toLowerCase();
         case 'LOCAL':
           return [
-            (bom.item_code || '')
+            (bom.item_code || ''),
+            (bom.item_name || '')
           ].join(' ').toLowerCase();
         default:
           return '';
@@ -507,6 +514,9 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
                         <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-32 whitespace-nowrap">
                           ITEM CODE
                         </th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-32 whitespace-nowrap">
+                          ITEM NAME
+                        </th>
                         <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-28 whitespace-nowrap">
                           PARTY NAME
                         </th>
@@ -558,6 +568,9 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
                       <>
                         <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-32 whitespace-nowrap">
                           ITEM CODE
+                        </th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-32 whitespace-nowrap">
+                          ITEM NAME
                         </th>
                         <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20 whitespace-nowrap">
                           PACK SIZE
@@ -620,8 +633,23 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
                             {(() => {
                               const itemName = (bom as any).item_name || '';
                               const sfgCode = (bom as any).sfg_code || '';
-                              // Update item name to include RP/CK indicator if not already present
-                              return updateItemNameWithRPOrCK(itemName, sfgCode) || '-';
+                              
+                              // If item_name exists and is not empty, display it directly
+                              if (itemName && itemName.trim() !== '') {
+                                // Don't process it further - just display what's in the database
+                                return itemName;
+                              }
+                              
+                              // If item_name is empty, don't try to derive it from numeric codes
+                              // Only use updateItemNameWithRPOrCK if sfg_code is NOT numeric
+                              if (sfgCode && !/^\d{9,}$/.test(sfgCode)) {
+                                // sfg_code is descriptive (like "RpRo10-C"), safe to process
+                                const derived = updateItemNameWithRPOrCK('', sfgCode);
+                                return derived || '-';
+                              }
+                              
+                              // item_name is empty and sfg_code is numeric - just show empty
+                              return '-';
                             })()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
@@ -668,6 +696,9 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
                               // Remove 200 prefix if present for display
                               return removeOldPrefix(code) || '-';
                             })()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(bom as any).item_name || '-'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).party_name || '-'}
@@ -733,6 +764,9 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
                               // Remove 200 prefix if present for display
                               return removeOldPrefix(code) || '-';
                             })()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            {(bom as any).item_name || '-'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                             {(bom as any).pack_size || '-'}

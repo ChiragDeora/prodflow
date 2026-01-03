@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Eye, CheckCircle, Clock, AlertTriangle, Package, History } from 'lucide-react';
-import { BOMMasterWithVersions, BOMVersion, BOMComponent } from '@/lib/supabase';
+import type { BOMMasterWithVersions, BOMVersion, BOMComponent } from '@/lib/supabase';
 
 interface BOMVersionViewerProps {
   bom: BOMMasterWithVersions;

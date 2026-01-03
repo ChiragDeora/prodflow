@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 import bcrypt from 'bcrypt';
 import { validateObject, commonSchemas } from '@/lib/validation';
 
+const getSupabase = () => createClient();
+
 export async function POST(request: NextRequest) {
   try {
+    const supabase = getSupabase();
     const body = await request.json();
 
     // Validate and sanitize input
@@ -130,6 +133,15 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Signup error:', error);
+    
+    // Return validation errors to the user
+    if (error instanceof Error && error.message.startsWith('Validation failed:')) {
+      return NextResponse.json(
+        { error: error.message.replace('Validation failed: ', '') },
+        { status: 400 }
+      );
+    }
+    
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

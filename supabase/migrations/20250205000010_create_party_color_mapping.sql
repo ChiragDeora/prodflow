@@ -3,6 +3,14 @@
 -- Maps party names to available colors/labels
 -- Example: Gesa party can have White, Black, Natural
 --          Klex party can have one color
+-- 
+-- This table is used for BOTH regular production blocks AND changeover blocks.
+-- When a party is selected (either for regular production or changeover),
+-- this mapping determines which colors are available in the dropdown.
+-- 
+-- The same party_color_mapping is used regardless of whether it's for:
+-- - Regular production block product colors
+-- - Changeover block product colors (configured in "Changeover Party Name and Colors" section)
 -- ============================================================================
 
 -- Create junction table for party-color mapping

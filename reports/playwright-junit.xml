@@ -1,0 +1,855 @@
+<testsuites id="" name="" tests="122" failures="0" skipped="93" errors="0" time="513.732232">
+<testsuite name="admin.spec.ts" timestamp="2025-12-17T07:07:33.385Z" hostname="headed" tests="11" failures="0" skipped="4" time="63.273" errors="0">
+<testcase name="Admin Dashboard › Admin Page Access › should load admin page" classname="admin.spec.ts" time="9.593">
+<properties>
+<property name="skip" value="Could not log in as admin">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Admin Dashboard › Admin Page Access › should display admin content if authorized" classname="admin.spec.ts" time="6.332">
+<properties>
+<property name="skip" value="Could not log in as admin">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Admin Dashboard › User Management UI › should have user-related UI elements" classname="admin.spec.ts" time="4.362">
+<properties>
+<property name="skip" value="Could not log in as admin">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Admin Dashboard › User Management UI › should have action buttons" classname="admin.spec.ts" time="10">
+<system-out>
+<![CDATA[Action buttons: add=0, edit=0, delete=0
+]]>
+</system-out>
+</testcase>
+<testcase name="Admin Dashboard › User Management UI › should be able to search users if search exists" classname="admin.spec.ts" time="5.981">
+</testcase>
+<testcase name="Admin Dashboard › Modal Interactions › should open modal when clicking add button" classname="admin.spec.ts" time="5.613">
+</testcase>
+<testcase name="Admin Dashboard › Modal Interactions › should close modal with escape key" classname="admin.spec.ts" time="5.782">
+</testcase>
+<testcase name="Admin Dashboard › Tabs Navigation › should be able to switch tabs if tabs exist" classname="admin.spec.ts" time="5.252">
+<system-out>
+<![CDATA[Found 0 tabs
+]]>
+</system-out>
+</testcase>
+<testcase name="Admin Dashboard › Delete Confirmation › should show confirmation before destructive actions" classname="admin.spec.ts" time="5.187">
+</testcase>
+<testcase name="Admin Access Control › admin page requires authentication" classname="admin.spec.ts" time="1.223">
+<system-out>
+<![CDATA[Direct admin access result: http://localhost:3000/admin/dashboard
+]]>
+</system-out>
+</testcase>
+<testcase name="Admin Smoke @smoke › admin page responds" classname="admin.spec.ts" time="3.948">
+<properties>
+<property name="skip" value="Login required">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+<testsuite name="auth.spec.ts" timestamp="2025-12-17T07:07:33.385Z" hostname="headed" tests="13" failures="0" skipped="0" time="26.828" errors="0">
+<testcase name="Authentication › Login Page UI › should display login form elements" classname="auth.spec.ts" time="1.281">
+</testcase>
+<testcase name="Authentication › Login Page UI › should have page title or heading" classname="auth.spec.ts" time="1.224">
+</testcase>
+<testcase name="Authentication › Login Page UI › should have signup link" classname="auth.spec.ts" time="1.237">
+</testcase>
+<testcase name="Authentication › Login Page UI › should navigate to signup when clicking signup link" classname="auth.spec.ts" time="2.188">
+</testcase>
+<testcase name="Authentication › Login Page UI › should toggle password visibility" classname="auth.spec.ts" time="1.796">
+</testcase>
+<testcase name="Authentication › Login Form Validation › should not submit with empty username" classname="auth.spec.ts" time="2.561">
+</testcase>
+<testcase name="Authentication › Login Form Validation › should not submit with empty password" classname="auth.spec.ts" time="2.196">
+</testcase>
+<testcase name="Authentication › Login Form Validation › should show error for invalid credentials" classname="auth.spec.ts" time="1.906">
+</testcase>
+<testcase name="Authentication › Login Functionality › should attempt login with provided credentials" classname="auth.spec.ts" time="3.903">
+<system-out>
+<![CDATA[Login attempt: loggedIn=false, hasError=true
+]]>
+</system-out>
+</testcase>
+<testcase name="Authentication › Login Functionality › should show loading state while submitting" classname="auth.spec.ts" time="1.911">
+</testcase>
+<testcase name="Authentication - Rate Limiting › should handle rate limiting gracefully" classname="auth.spec.ts" time="4.392">
+<system-out>
+<![CDATA[After multiple login attempts: Too many login attempts
+]]>
+</system-out>
+</testcase>
+<testcase name="Auth Smoke Tests @smoke › login page loads correctly" classname="auth.spec.ts" time="0.976">
+</testcase>
+<testcase name="Auth Smoke Tests @smoke › can interact with login form" classname="auth.spec.ts" time="1.257">
+</testcase>
+</testsuite>
+<testsuite name="main-app.spec.ts" timestamp="2025-12-17T07:07:33.385Z" hostname="headed" tests="21" failures="0" skipped="17" time="81.725" errors="0">
+<testcase name="Main Application - After Login › Application Layout › should display main content area" classname="main-app.spec.ts" time="3.879">
+<properties>
+<property name="skip" value="Could not log in - check test credentials in test.config.ts">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Main Application - After Login › Application Layout › should display navigation/sidebar" classname="main-app.spec.ts" time="3.886">
+<properties>
+<property name="skip" value="Could not log in - check test credentials in test.config.ts">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Main Application - After Login › Application Layout › should have user-related UI element" classname="main-app.spec.ts" time="3.908">
+<properties>
+<property name="skip" value="Could not log in - check test credentials in test.config.ts">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Main Application - After Login › Module Navigation › should have Dashboard navigation option" classname="main-app.spec.ts" time="3.97">
+<properties>
+<property name="skip" value="Could not log in - check test credentials in test.config.ts">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Main Application - After Login › Module Navigation › should have Masters navigation option" classname="main-app.spec.ts" time="3.984">
+<properties>
+<property name="skip" value="Could not log in - check test credentials in test.config.ts">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Main Application - After Login › Module Navigation › should have Production navigation option" classname="main-app.spec.ts" time="3.889">
+<properties>
+<property name="skip" value="Could not log in - check test credentials in test.config.ts">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Main Application - After Login › Module Navigation › should have Quality navigation option" classname="main-app.spec.ts" time="3.919">
+<properties>
+<property name="skip" value="Could not log in - check test credentials in test.config.ts">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Main Application - After Login › Module Navigation › should have Maintenance navigation option" classname="main-app.spec.ts" time="3.907">
+<properties>
+<property name="skip" value="Could not log in - check test credentials in test.config.ts">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Main Application - After Login › Module Navigation › should have Reports navigation option" classname="main-app.spec.ts" time="3.89">
+<properties>
+<property name="skip" value="Could not log in - check test credentials in test.config.ts">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Main Application - After Login › Module Navigation › should have Store navigation option" classname="main-app.spec.ts" time="3.904">
+<properties>
+<property name="skip" value="Could not log in - check test credentials in test.config.ts">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Main Application - After Login › Module Navigation › should have Approvals navigation option" classname="main-app.spec.ts" time="3.876">
+<properties>
+<property name="skip" value="Could not log in - check test credentials in test.config.ts">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Main Application - After Login › Module Navigation › should be able to click on a module navigation item" classname="main-app.spec.ts" time="3.905">
+<properties>
+<property name="skip" value="Could not log in - check test credentials in test.config.ts">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Main Application - After Login › Common UI Elements › should have buttons on the page" classname="main-app.spec.ts" time="3.941">
+<properties>
+<property name="skip" value="Could not log in - check test credentials in test.config.ts">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Main Application - After Login › Common UI Elements › should have clickable elements" classname="main-app.spec.ts" time="3.943">
+<properties>
+<property name="skip" value="Could not log in - check test credentials in test.config.ts">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Main Application - After Login › Common UI Elements › page should be interactive without errors" classname="main-app.spec.ts" time="4.039">
+<properties>
+<property name="skip" value="Could not log in - check test credentials in test.config.ts">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Main Application - After Login › Search and Filter › should have search input if available" classname="main-app.spec.ts" time="3.999">
+<properties>
+<property name="skip" value="Could not log in - check test credentials in test.config.ts">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Main Application - After Login › Logout › should be able to logout" classname="main-app.spec.ts" time="4.143">
+<properties>
+<property name="skip" value="Could not log in - check test credentials in test.config.ts">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Main App - Public Pages › home page loads" classname="main-app.spec.ts" time="5.554">
+</testcase>
+<testcase name="Main App - Public Pages › unauthorized page handles gracefully" classname="main-app.spec.ts" time="5.815">
+</testcase>
+<testcase name="Main App Smoke @smoke › app responds to requests" classname="main-app.spec.ts" time="2.446">
+</testcase>
+<testcase name="Main App Smoke @smoke › login page is accessible" classname="main-app.spec.ts" time="0.928">
+</testcase>
+</testsuite>
+<testsuite name="modules.spec.ts" timestamp="2025-12-17T07:07:33.385Z" hostname="headed" tests="77" failures="0" skipped="72" time="318.029" errors="0">
+<testcase name="All Modules - Comprehensive Testing › Masters Module › should load Masters module" classname="modules.spec.ts" time="3.989">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › should have Machine Master section" classname="modules.spec.ts" time="6.497">
+<system-out>
+<![CDATA[Machine tab clicked: true
+[Masters > Machine] UI Elements: { buttons: [33m349[39m, tables: [33m1[39m, forms: [33m0[39m, inputs: [33m0[39m, selects: [33m0[39m }
+]]>
+</system-out>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › Machine Master - should have Add button" classname="modules.spec.ts" time="7.11">
+<system-out>
+<![CDATA[Machine Master Add button: true
+]]>
+</system-out>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › should have Mold Master section" classname="modules.spec.ts" time="5.989">
+<system-out>
+<![CDATA[Mold tab clicked: true
+[Masters > Mold] UI Elements: { buttons: [33m206[39m, tables: [33m1[39m, forms: [33m0[39m, inputs: [33m0[39m, selects: [33m0[39m }
+]]>
+</system-out>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › Mold Master - should have Add button" classname="modules.spec.ts" time="5.484">
+<system-out>
+<![CDATA[Mold Master Add button: true
+]]>
+</system-out>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › should have Raw Material Master section" classname="modules.spec.ts" time="6.012">
+<system-out>
+<![CDATA[Raw Material tab clicked: true
+[Masters > Raw Material] UI Elements: { buttons: [33m65[39m, tables: [33m1[39m, forms: [33m0[39m, inputs: [33m0[39m, selects: [33m0[39m }
+]]>
+</system-out>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › Raw Material Master - should have Add button" classname="modules.spec.ts" time="3.905">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › should have Packing Material Master section" classname="modules.spec.ts" time="3.933">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › Packing Material Master - should have Add button" classname="modules.spec.ts" time="4">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › should have Line Master section" classname="modules.spec.ts" time="3.951">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › Line Master - should have Add button" classname="modules.spec.ts" time="3.911">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › should have Color Label Master section" classname="modules.spec.ts" time="4.486">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › Color Label Master - should have Add button" classname="modules.spec.ts" time="3.985">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › should have Party Name Master section" classname="modules.spec.ts" time="5.06">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › Party Name Master - should have Add button" classname="modules.spec.ts" time="3.986">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › should have Others Master section" classname="modules.spec.ts" time="4.043">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › Others Master - should have Add button" classname="modules.spec.ts" time="4.001">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › Machine Master - should display machine list" classname="modules.spec.ts" time="3.922">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › Mold Master - should display mold list" classname="modules.spec.ts" time="3.966">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › Raw Materials - should have categories/filters" classname="modules.spec.ts" time="3.918">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Masters Module › Packing Materials - should have add/edit functionality" classname="modules.spec.ts" time="3.904">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Store &amp; Dispatch Module › should load Store module" classname="modules.spec.ts" time="3.919">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Store &amp; Dispatch Module › should have GRN form/section" classname="modules.spec.ts" time="3.943">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Store &amp; Dispatch Module › should have Purchase Order form/section" classname="modules.spec.ts" time="3.916">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Store &amp; Dispatch Module › should have Material Indent form/section" classname="modules.spec.ts" time="3.935">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Store &amp; Dispatch Module › should have Delivery Challan form/section" classname="modules.spec.ts" time="3.891">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Store &amp; Dispatch Module › should have FGN form/section" classname="modules.spec.ts" time="3.919">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Store &amp; Dispatch Module › should have Dispatch Memo form/section" classname="modules.spec.ts" time="3.919">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Store &amp; Dispatch Module › should have Order Book form/section" classname="modules.spec.ts" time="3.956">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Store &amp; Dispatch Module › should have Vendor Registration form/section" classname="modules.spec.ts" time="3.982">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Store &amp; Dispatch Module › GRN Form - should have required fields" classname="modules.spec.ts" time="3.951">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Store &amp; Dispatch Module › Purchase Order - should have vendor selection" classname="modules.spec.ts" time="3.952">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Store &amp; Dispatch Module › Store History - should display transactions" classname="modules.spec.ts" time="4.031">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Store &amp; Dispatch Module › Open Indent - should show pending indents" classname="modules.spec.ts" time="3.92">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Production Module › should load Production module" classname="modules.spec.ts" time="3.953">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Production Module › Silo Management - should display silos" classname="modules.spec.ts" time="3.922">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Production Module › Silo Management - should have inventory view" classname="modules.spec.ts" time="3.969">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Production Module › Silo Management - should have transactions" classname="modules.spec.ts" time="3.903">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Production Module › Silo Management - should have alerts" classname="modules.spec.ts" time="3.96">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Production Module › Mould Reports - should display reports" classname="modules.spec.ts" time="4.055">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Quality Control Module › should load Quality module" classname="modules.spec.ts" time="3.939">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Quality Control Module › Container Inspection - should have form" classname="modules.spec.ts" time="3.906">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Quality Control Module › Incoming Material Inspection - should have form" classname="modules.spec.ts" time="3.952">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Maintenance Module › should load Maintenance module" classname="modules.spec.ts" time="3.902">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Maintenance Module › should have Checklist section" classname="modules.spec.ts" time="3.923">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Maintenance Module › should have Daily Reading section" classname="modules.spec.ts" time="3.904">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Maintenance Module › should have Breakdown section" classname="modules.spec.ts" time="3.903">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Maintenance Module › should have History section" classname="modules.spec.ts" time="3.991">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Maintenance Module › should have Line Maintenance section" classname="modules.spec.ts" time="3.947">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Maintenance Module › Machine Checklist - should have checklist form" classname="modules.spec.ts" time="3.922">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Maintenance Module › Daily Readings - should have input fields" classname="modules.spec.ts" time="4.578">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Maintenance Module › Mold Breakdown - should track breakdowns" classname="modules.spec.ts" time="4.226">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Reports Module › should load Reports module" classname="modules.spec.ts" time="3.919">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Reports Module › Daily Weight Report - should have date filter" classname="modules.spec.ts" time="3.889">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Reports Module › Daily Weight Report - should have export" classname="modules.spec.ts" time="3.93">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Reports Module › First Pieces Approval - should display approvals" classname="modules.spec.ts" time="4.025">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Reports Module › Reports - should have shift filter" classname="modules.spec.ts" time="3.934">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Approvals Module › should load Approvals module" classname="modules.spec.ts" time="3.921">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Approvals Module › should display pending approvals" classname="modules.spec.ts" time="3.902">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Approvals Module › should have approve/reject buttons" classname="modules.spec.ts" time="3.885">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Production Planner Module › should load Production Planner" classname="modules.spec.ts" time="3.905">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Production Planner Module › should have date/period selector" classname="modules.spec.ts" time="3.917">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Production Planner Module › should display schedule grid or table" classname="modules.spec.ts" time="4.317">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Scheduler Module › should load Scheduler" classname="modules.spec.ts" time="4.136">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Scheduler Module › should have view options (daily/weekly/monthly)" classname="modules.spec.ts" time="3.903">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Profile Module › should load Profile" classname="modules.spec.ts" time="4.122">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Profile Module › should display user information" classname="modules.spec.ts" time="4.05">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › Profile Module › should have change password option" classname="modules.spec.ts" time="3.905">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › BOM Module › should load BOM module" classname="modules.spec.ts" time="3.937">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › BOM Module › should have BOM list" classname="modules.spec.ts" time="3.872">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › BOM Module › should have create BOM button" classname="modules.spec.ts" time="3.922">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="All Modules - Comprehensive Testing › BOM Module › should have version history" classname="modules.spec.ts" time="3.937">
+<properties>
+<property name="skip" value="Login required - update test.config.ts with valid credentials">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Common UI Patterns › all buttons should be clickable" classname="modules.spec.ts" time="3.909">
+<properties>
+<property name="skip" value="Login required">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Common UI Patterns › tables should have headers" classname="modules.spec.ts" time="3.889">
+<properties>
+<property name="skip" value="Login required">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Common UI Patterns › forms should have submit buttons" classname="modules.spec.ts" time="3.951">
+<properties>
+<property name="skip" value="Login required">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Common UI Patterns › page should not have console errors" classname="modules.spec.ts" time="3.904">
+<properties>
+<property name="skip" value="Login required">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Modules Smoke @smoke › can navigate through modules" classname="modules.spec.ts" time="3.907">
+<properties>
+<property name="skip" value="Login required">
+</property>
+</properties>
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+</testsuites>

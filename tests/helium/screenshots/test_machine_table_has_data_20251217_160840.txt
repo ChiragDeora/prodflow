@@ -1,0 +1,4 @@
+Test: test_machine_table_has_data
+Timestamp: 20251217_160840
+Error:
+Machine table should exist

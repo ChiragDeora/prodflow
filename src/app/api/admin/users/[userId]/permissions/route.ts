@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 import { verifyRootAdmin } from '@/lib/auth-utils';
+
+const getSupabase = () => createClient();
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
+    const supabase = getSupabase();
     const adminUser = await verifyRootAdmin(request);
     if (!adminUser) {
       return NextResponse.json(
@@ -151,6 +154,7 @@ export async function POST(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
+    const supabase = getSupabase();
     const adminUser = await verifyRootAdmin(request);
     if (!adminUser) {
       return NextResponse.json(
@@ -199,24 +203,76 @@ export async function POST(
       );
     }
 
-    // Verify all permission IDs exist
-    const { data: validPermissions, error: permissionError } = await supabase
-      .from('auth_permissions')
-      .select('id, name, description')
-      .in('id', permissions);
+    // Support both permission IDs (UUIDs) and permission names (e.g. "dpr.basic_info.view")
+    const isUuid = (value: string) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        value
+      );
 
-    if (permissionError || validPermissions.length !== permissions.length) {
+    const idInputs: string[] = [];
+    const nameInputs: string[] = [];
+
+    for (const p of permissions) {
+      if (typeof p !== 'string') continue;
+      if (isUuid(p)) {
+        idInputs.push(p);
+      } else {
+        nameInputs.push(p);
+      }
+    }
+
+    // Verify all permissions exist, resolving any names to IDs
+    let validPermissions: any[] = [];
+
+    if (idInputs.length > 0) {
+      const { data, error } = await supabase
+        .from('auth_permissions')
+        .select('id, name, description')
+        .in('id', idInputs);
+
+      if (error) {
+        return NextResponse.json(
+          { error: 'Failed to validate permission IDs' },
+          { status: 500 }
+        );
+      }
+
+      validPermissions = validPermissions.concat(data || []);
+    }
+
+    if (nameInputs.length > 0) {
+      const { data, error } = await supabase
+        .from('auth_permissions')
+        .select('id, name, description')
+        .in('name', nameInputs);
+
+      if (error) {
+        return NextResponse.json(
+          { error: 'Failed to validate permission names' },
+          { status: 500 }
+        );
+      }
+
+      validPermissions = validPermissions.concat(data || []);
+    }
+
+    // Ensure we resolved every requested permission
+    if (validPermissions.length !== permissions.length) {
       return NextResponse.json(
-        { error: 'One or more permission IDs are invalid' },
+        { error: 'One or more permissions are invalid' },
         { status: 400 }
       );
     }
+
+    const permissionIds: string[] = [
+      ...new Set(validPermissions.map((p) => p.id as string)),
+    ];
 
     let results = [];
 
     if (action === 'grant') {
       // Grant permissions
-      const permissionsToInsert = permissions.map(permissionId => ({
+      const permissionsToInsert = permissionIds.map(permissionId => ({
         user_id: userId,
         permission_id: permissionId,
         granted_by: adminUser.id,
@@ -243,7 +299,7 @@ export async function POST(
       results = grantedPermissions;
 
       // Log permission grants in history
-      const historyEntries = permissions.map(permissionId => ({
+      const historyEntries = permissionIds.map(permissionId => ({
         user_id: userId,
         permission_id: permissionId,
         action: 'granted',
@@ -259,7 +315,7 @@ export async function POST(
         .from('auth_user_permissions')
         .update({ is_active: false })
         .eq('user_id', userId)
-        .in('permission_id', permissions)
+        .in('permission_id', permissionIds)
         .select();
 
       if (revokeError) {

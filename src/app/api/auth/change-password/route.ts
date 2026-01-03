@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 import { verifySession, hashPassword, verifyPassword, logAuditAction } from '@/lib/auth-utils';
+
+const getSupabase = () => createClient();
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = getSupabase();
     const sessionData = await verifySession(request);
     if (!sessionData) {
       return NextResponse.json(

@@ -1,0 +1,2288 @@
+{
+  "config": {
+    "configFile": "/Users/chiragdeora/Developer/production-scheduler/playwright.config.ts",
+    "rootDir": "/Users/chiragdeora/Developer/production-scheduler/tests/e2e",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": "/Users/chiragdeora/Developer/production-scheduler/tests/e2e/auth.setup.ts",
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "reporter": [
+      [
+        "html",
+        {
+          "outputFolder": "playwright-report"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "reports/playwright-results.json"
+        }
+      ],
+      [
+        "list",
+        null
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "quiet": false,
+    "projects": [
+      {
+        "outputDir": "/Users/chiragdeora/Developer/production-scheduler/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "auth-tests",
+        "name": "auth-tests",
+        "testDir": "/Users/chiragdeora/Developer/production-scheduler/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/auth.spec.ts"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/Users/chiragdeora/Developer/production-scheduler/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/chiragdeora/Developer/production-scheduler/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/modules.spec.ts",
+          "**/main-app.spec.ts",
+          "**/admin.spec.ts"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/Users/chiragdeora/Developer/production-scheduler/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "headed",
+        "name": "headed",
+        "testDir": "/Users/chiragdeora/Developer/production-scheduler/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/Users/chiragdeora/Developer/production-scheduler/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "smoke",
+        "name": "smoke",
+        "testDir": "/Users/chiragdeora/Developer/production-scheduler/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.smoke.spec.ts"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.57.0",
+    "workers": 1,
+    "webServer": {
+      "command": "npm run dev",
+      "url": "http://localhost:3000",
+      "reuseExistingServer": true,
+      "timeout": 120000
+    }
+  },
+  "suites": [
+    {
+      "title": "admin.spec.ts",
+      "file": "admin.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Admin Dashboard",
+          "file": "admin.spec.ts",
+          "line": 27,
+          "column": 6,
+          "specs": [],
+          "suites": [
+            {
+              "title": "Admin Access",
+              "file": "admin.spec.ts",
+              "line": 42,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "admin page loads",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 9062,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Admin URL: http://localhost:3000/admin\n"
+                            },
+                            {
+                              "text": "✓ Admin page accessible\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:40:29.755Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d4043a9dd1ab94463227-6c438e309d1e7fa26249",
+                  "file": "admin.spec.ts",
+                  "line": 43,
+                  "column": 9
+                },
+                {
+                  "title": "admin page has content",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 3996,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Admin UI: buttons=11, tables=1, tabs=0\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:40:43.997Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d4043a9dd1ab94463227-c34d7d047734e8243a37",
+                  "file": "admin.spec.ts",
+                  "line": 56,
+                  "column": 9
+                }
+              ]
+            },
+            {
+              "title": "User Management",
+              "file": "admin.spec.ts",
+              "line": 71,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "users tab/section exists",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 4083,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Users tab clicked: true\n"
+                            },
+                            {
+                              "text": "Users display: table=1, list=4\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:40:48.015Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d4043a9dd1ab94463227-f93b75d1694756d1944e",
+                  "file": "admin.spec.ts",
+                  "line": 72,
+                  "column": 9
+                },
+                {
+                  "title": "can search users",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 5041,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Search performed\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:40:52.123Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d4043a9dd1ab94463227-acc569012c68b9779d02",
+                  "file": "admin.spec.ts",
+                  "line": 89,
+                  "column": 9
+                },
+                {
+                  "title": "add user button exists",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 5152,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Add user button: false\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:40:57.181Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d4043a9dd1ab94463227-1b02a9fb386c3a610ed2",
+                  "file": "admin.spec.ts",
+                  "line": 105,
+                  "column": 9
+                },
+                {
+                  "title": "user table has action buttons",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 4461,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Edit buttons: 1, Delete buttons: 0\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:41:02.362Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d4043a9dd1ab94463227-5a37f6bfbab08d60b2c6",
+                  "file": "admin.spec.ts",
+                  "line": 130,
+                  "column": 9
+                }
+              ]
+            },
+            {
+              "title": "Permissions Management",
+              "file": "admin.spec.ts",
+              "line": 145,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "permissions tab/section exists",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 4518,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Permissions tab clicked: true\n"
+                            },
+                            {
+                              "text": "Permission controls: checkboxes=0, toggles=0\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:41:06.842Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d4043a9dd1ab94463227-41267752440cd186f503",
+                  "file": "admin.spec.ts",
+                  "line": 146,
+                  "column": 9
+                }
+              ]
+            },
+            {
+              "title": "Modal Interactions",
+              "file": "admin.spec.ts",
+              "line": 163,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "modals open and close properly",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 3605,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:41:11.373Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d4043a9dd1ab94463227-4a1008e0842241538086",
+                  "file": "admin.spec.ts",
+                  "line": 164,
+                  "column": 9
+                },
+                {
+                  "title": "cancel button closes modal",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 4363,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:41:14.998Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d4043a9dd1ab94463227-d2d4c6009ce94829ad02",
+                  "file": "admin.spec.ts",
+                  "line": 193,
+                  "column": 9
+                }
+              ]
+            },
+            {
+              "title": "Form Validation",
+              "file": "admin.spec.ts",
+              "line": 215,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "required fields are marked",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 3881,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:41:19.379Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d4043a9dd1ab94463227-9817ae3d32fad498f284",
+                  "file": "admin.spec.ts",
+                  "line": 216,
+                  "column": 9
+                }
+              ]
+            },
+            {
+              "title": "Delete Confirmation",
+              "file": "admin.spec.ts",
+              "line": 248,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "delete shows confirmation",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 4345,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:41:23.279Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d4043a9dd1ab94463227-e50d0fbf9b81e603e6b2",
+                  "file": "admin.spec.ts",
+                  "line": 249,
+                  "column": 9
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Admin Smoke @smoke",
+          "file": "admin.spec.ts",
+          "line": 280,
+          "column": 6,
+          "specs": [
+            {
+              "title": "admin page responds",
+              "ok": true,
+              "tags": [
+                "smoke"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "headed",
+                  "projectName": "headed",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 874,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-17T07:41:27.637Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d4043a9dd1ab94463227-4b84bc9073216280fdae",
+              "file": "admin.spec.ts",
+              "line": 281,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "auth.spec.ts",
+      "file": "auth.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Authentication",
+          "file": "auth.spec.ts",
+          "line": 41,
+          "column": 6,
+          "specs": [],
+          "suites": [
+            {
+              "title": "Login Page UI",
+              "file": "auth.spec.ts",
+              "line": 47,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should display login form elements",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 1636,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:41:28.558Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d748ac400d08b85935ef-12165ade15f8b518da50",
+                  "file": "auth.spec.ts",
+                  "line": 48,
+                  "column": 9
+                },
+                {
+                  "title": "should have page title or heading",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 1628,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:41:30.203Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d748ac400d08b85935ef-32d804d3d62f4e5d0e73",
+                  "file": "auth.spec.ts",
+                  "line": 67,
+                  "column": 9
+                },
+                {
+                  "title": "should have signup link",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 1692,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:41:31.838Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d748ac400d08b85935ef-4af6434062673abccef1",
+                  "file": "auth.spec.ts",
+                  "line": 74,
+                  "column": 9
+                },
+                {
+                  "title": "should navigate to signup when clicking signup link",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 6595,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:41:33.538Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d748ac400d08b85935ef-b5761164287b63cd6c0b",
+                  "file": "auth.spec.ts",
+                  "line": 83,
+                  "column": 9
+                },
+                {
+                  "title": "should toggle password visibility",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 2283,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:41:40.146Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d748ac400d08b85935ef-b65d0fa003017abdfc2a",
+                  "file": "auth.spec.ts",
+                  "line": 93,
+                  "column": 9
+                }
+              ]
+            },
+            {
+              "title": "Login Form Validation",
+              "file": "auth.spec.ts",
+              "line": 113,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should not submit with empty username",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 3202,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:41:42.443Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d748ac400d08b85935ef-5a0cb752958c4c6cab3d",
+                  "file": "auth.spec.ts",
+                  "line": 114,
+                  "column": 9
+                },
+                {
+                  "title": "should not submit with empty password",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 3644,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:41:45.658Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d748ac400d08b85935ef-d14048a75dd0dcc2d93c",
+                  "file": "auth.spec.ts",
+                  "line": 127,
+                  "column": 9
+                },
+                {
+                  "title": "should show error for invalid credentials",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 3130,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:41:49.312Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d748ac400d08b85935ef-1626a4a7093c4105211f",
+                  "file": "auth.spec.ts",
+                  "line": 140,
+                  "column": 9
+                }
+              ]
+            },
+            {
+              "title": "Login Functionality",
+              "file": "auth.spec.ts",
+              "line": 158,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should attempt login with provided credentials",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 5517,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Login attempt: loggedIn=false, hasError=false\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:41:52.455Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d748ac400d08b85935ef-cfd251fc78ffeccac1d3",
+                  "file": "auth.spec.ts",
+                  "line": 159,
+                  "column": 9
+                },
+                {
+                  "title": "should show loading state while submitting",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 2552,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:41:57.986Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "d748ac400d08b85935ef-d9844d6582dfa6b4dc04",
+                  "file": "auth.spec.ts",
+                  "line": 177,
+                  "column": 9
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Authentication - Rate Limiting",
+          "file": "auth.spec.ts",
+          "line": 194,
+          "column": 6,
+          "specs": [
+            {
+              "title": "rate limiting test - skipped to avoid lockout",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "/Users/chiragdeora/Developer/production-scheduler/tests/e2e/auth.spec.ts",
+                        "line": 195,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "expectedStatus": "skipped",
+                  "projectId": "headed",
+                  "projectName": "headed",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-17T07:42:00.556Z",
+                      "annotations": [
+                        {
+                          "type": "skip",
+                          "location": {
+                            "file": "/Users/chiragdeora/Developer/production-scheduler/tests/e2e/auth.spec.ts",
+                            "line": 195,
+                            "column": 8
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d748ac400d08b85935ef-c1d3c1d59c0c8f50ec0f",
+              "file": "auth.spec.ts",
+              "line": 195,
+              "column": 8
+            }
+          ]
+        },
+        {
+          "title": "Auth Smoke Tests @smoke",
+          "file": "auth.spec.ts",
+          "line": 203,
+          "column": 6,
+          "specs": [
+            {
+              "title": "login page loads correctly",
+              "ok": true,
+              "tags": [
+                "smoke"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "headed",
+                  "projectName": "headed",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 959,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-17T07:42:00.556Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d748ac400d08b85935ef-43263b1f30c31eb559cb",
+              "file": "auth.spec.ts",
+              "line": 204,
+              "column": 7
+            },
+            {
+              "title": "can interact with login form",
+              "ok": true,
+              "tags": [
+                "smoke"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "headed",
+                  "projectName": "headed",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2220,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-17T07:42:01.524Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d748ac400d08b85935ef-05cc0a375fcf3c790062",
+              "file": "auth.spec.ts",
+              "line": 213,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "main-app.spec.ts",
+      "file": "main-app.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Main Application",
+          "file": "main-app.spec.ts",
+          "line": 27,
+          "column": 6,
+          "specs": [],
+          "suites": [
+            {
+              "title": "Application Layout",
+              "file": "main-app.spec.ts",
+              "line": 33,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should load main page",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 5411,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Current URL: http://localhost:3000/\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:42:03.770Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "5278d6834487aa2b250c-1cd532badeb0ca8ea8ae",
+                  "file": "main-app.spec.ts",
+                  "line": 34,
+                  "column": 9
+                },
+                {
+                  "title": "should have navigation elements",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 5398,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "UI Elements - Buttons: 21, Links: 0, Nav: 1\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:42:09.196Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "5278d6834487aa2b250c-f1dffcdf4846ab7c36e7",
+                  "file": "main-app.spec.ts",
+                  "line": 45,
+                  "column": 9
+                },
+                {
+                  "title": "should have sidebar or menu",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 7403,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Sidebar/Menu exists: true\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:42:14.608Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "5278d6834487aa2b250c-9c906f40b57663e1a676",
+                  "file": "main-app.spec.ts",
+                  "line": 55,
+                  "column": 9
+                }
+              ]
+            },
+            {
+              "title": "Navigation Flow",
+              "file": "main-app.spec.ts",
+              "line": 63,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "can navigate to different modules",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 6558,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Navigation results: {\n  Master: \u001b[33mtrue\u001b[39m,\n  Production: \u001b[33mtrue\u001b[39m,\n  Store: \u001b[33mfalse\u001b[39m,\n  Quality: \u001b[33mfalse\u001b[39m,\n  Report: \u001b[33mfalse\u001b[39m\n}\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:42:22.023Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "5278d6834487aa2b250c-937bef6474c52b7d0aff",
+                  "file": "main-app.spec.ts",
+                  "line": 64,
+                  "column": 9
+                }
+              ]
+            },
+            {
+              "title": "UI Elements",
+              "file": "main-app.spec.ts",
+              "line": 87,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "buttons are visible and interactive",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 3837,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Visible buttons: 21\n"
+                            },
+                            {
+                              "text": "First button enabled: true\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:42:28.592Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "5278d6834487aa2b250c-1701bc34e71b0c4a1e94",
+                  "file": "main-app.spec.ts",
+                  "line": 88,
+                  "column": 9
+                },
+                {
+                  "title": "page has proper structure",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 3377,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Header: false, Main content: false\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:42:32.440Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "5278d6834487aa2b250c-df29b05a66c898ae84cf",
+                  "file": "main-app.spec.ts",
+                  "line": 103,
+                  "column": 9
+                }
+              ]
+            },
+            {
+              "title": "Responsive Elements",
+              "file": "main-app.spec.ts",
+              "line": 112,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "mobile menu toggle if exists",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 3695,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:42:35.831Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "5278d6834487aa2b250c-cc7a348fd2d9fac2193e",
+                  "file": "main-app.spec.ts",
+                  "line": 113,
+                  "column": 9
+                }
+              ]
+            },
+            {
+              "title": "User Actions",
+              "file": "main-app.spec.ts",
+              "line": 125,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "logout functionality exists",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "headed",
+                      "projectName": "headed",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 3961,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Logout found with: button:has-text(\"Sign out\")\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-12-17T07:42:39.549Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "5278d6834487aa2b250c-ad85ded6f9cdbe3ffb41",
+                  "file": "main-app.spec.ts",
+                  "line": 126,
+                  "column": 9
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Public Pages",
+          "file": "main-app.spec.ts",
+          "line": 160,
+          "column": 6,
+          "specs": [
+            {
+              "title": "login page accessible",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "headed",
+                  "projectName": "headed",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 913,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-17T07:42:43.521Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "5278d6834487aa2b250c-fd217e393f771ac168ad",
+              "file": "main-app.spec.ts",
+              "line": 161,
+              "column": 7
+            },
+            {
+              "title": "signup page accessible",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "headed",
+                  "projectName": "headed",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1356,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-17T07:42:44.482Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "5278d6834487aa2b250c-3df4522bd418e5a0c243",
+              "file": "main-app.spec.ts",
+              "line": 167,
+              "column": 7
+            },
+            {
+              "title": "404 page handles gracefully",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "headed",
+                  "projectName": "headed",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5276,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-17T07:42:45.863Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "5278d6834487aa2b250c-b97d2cf1d107bcf931f7",
+              "file": "main-app.spec.ts",
+              "line": 173,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "title": "Main App Smoke @smoke",
+          "file": "main-app.spec.ts",
+          "line": 180,
+          "column": 6,
+          "specs": [
+            {
+              "title": "app is responsive",
+              "ok": true,
+              "tags": [
+                "smoke"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "headed",
+                  "projectName": "headed",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3082,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-17T07:42:51.161Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "5278d6834487aa2b250c-759082a1e774c4607e73",
+              "file": "main-app.spec.ts",
+              "line": 181,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "modules.spec.ts",
+      "file": "modules.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Complete App Flow",
+          "file": "modules.spec.ts",
+          "line": 68,
+          "column": 6,
+          "specs": [
+            {
+              "title": "Full application walkthrough - ALL modules",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "headed",
+                  "projectName": "headed",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 19457,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n🚀 Starting at: http://localhost:3000/\n\n"
+                        },
+                        {
+                          "text": "\n📌 SECTION: Dashboard\n"
+                        },
+                        {
+                          "text": "📊 [Dashboard] { buttons: \u001b[33m21\u001b[39m, tables: \u001b[33m0\u001b[39m, inputs: \u001b[33m0\u001b[39m, selects: \u001b[33m1\u001b[39m }\n"
+                        },
+                        {
+                          "text": "\n📌 SECTION: Masters Module\n"
+                        },
+                        {
+                          "text": "Masters nav clicked: true\n"
+                        },
+                        {
+                          "text": "📊 [Masters - Main] { buttons: \u001b[33m350\u001b[39m, tables: \u001b[33m1\u001b[39m, inputs: \u001b[33m0\u001b[39m, selects: \u001b[33m1\u001b[39m }\n"
+                        },
+                        {
+                          "text": "  ✓ Machine Master\n"
+                        },
+                        {
+                          "text": "📊 [Masters > Machine] { buttons: \u001b[33m349\u001b[39m, tables: \u001b[33m1\u001b[39m, inputs: \u001b[33m0\u001b[39m, selects: \u001b[33m0\u001b[39m }\n"
+                        },
+                        {
+                          "text": "    → Add button found\n"
+                        },
+                        {
+                          "text": "    → Table with 107 rows\n"
+                        },
+                        {
+                          "text": "  ✓ Mold Master\n"
+                        },
+                        {
+                          "text": "📊 [Masters > Mold] { buttons: \u001b[33m206\u001b[39m, tables: \u001b[33m1\u001b[39m, inputs: \u001b[33m0\u001b[39m, selects: \u001b[33m0\u001b[39m }\n"
+                        },
+                        {
+                          "text": "    → Add button found\n"
+                        },
+                        {
+                          "text": "    → Table with 61 rows\n"
+                        },
+                        {
+                          "text": "  ✓ Raw Material Master\n"
+                        },
+                        {
+                          "text": "📊 [Masters > Raw Material] { buttons: \u001b[33m65\u001b[39m, tables: \u001b[33m1\u001b[39m, inputs: \u001b[33m0\u001b[39m, selects: \u001b[33m0\u001b[39m }\n"
+                        },
+                        {
+                          "text": "    → Add button found\n"
+                        },
+                        {
+                          "text": "    → Table with 14 rows\n"
+                        },
+                        {
+                          "text": "  ✓ Packing Master\n"
+                        },
+                        {
+                          "text": "📊 [Masters > Packing] { buttons: \u001b[33m249\u001b[39m, tables: \u001b[33m1\u001b[39m, inputs: \u001b[33m0\u001b[39m, selects: \u001b[33m0\u001b[39m }\n"
+                        },
+                        {
+                          "text": "    → Add button found\n"
+                        },
+                        {
+                          "text": "    → Table with 74 rows\n"
+                        },
+                        {
+                          "text": "  ✓ Line Master\n"
+                        },
+                        {
+                          "text": "📊 [Masters > Line] { buttons: \u001b[33m77\u001b[39m, tables: \u001b[33m1\u001b[39m, inputs: \u001b[33m0\u001b[39m, selects: \u001b[33m0\u001b[39m }\n"
+                        },
+                        {
+                          "text": "    → Add button found\n"
+                        },
+                        {
+                          "text": "    → Table with 18 rows\n"
+                        },
+                        {
+                          "text": "  ○ Color tab not found\n"
+                        },
+                        {
+                          "text": "  ○ Party tab not found\n"
+                        },
+                        {
+                          "text": "  ✓ Other Master\n"
+                        },
+                        {
+                          "text": "📊 [Masters > Other] { buttons: \u001b[33m146\u001b[39m, tables: \u001b[33m2\u001b[39m, inputs: \u001b[33m0\u001b[39m, selects: \u001b[33m0\u001b[39m }\n"
+                        },
+                        {
+                          "text": "    → Add button found\n"
+                        },
+                        {
+                          "text": "    → Table with 40 rows\n"
+                        },
+                        {
+                          "text": "\n📌 SECTION: Production Module\n"
+                        },
+                        {
+                          "text": "Production nav clicked: false\n"
+                        },
+                        {
+                          "text": "\n📌 SECTION: Store & Dispatch Module\n"
+                        },
+                        {
+                          "text": "Store nav clicked: false\n"
+                        },
+                        {
+                          "text": "\n📌 SECTION: Quality Control Module\n"
+                        },
+                        {
+                          "text": "Quality nav clicked: false\n"
+                        },
+                        {
+                          "text": "\n📌 SECTION: Maintenance Module\n"
+                        },
+                        {
+                          "text": "Maintenance nav clicked: false\n"
+                        },
+                        {
+                          "text": "\n📌 SECTION: Reports Module\n"
+                        },
+                        {
+                          "text": "Reports nav clicked: false\n"
+                        },
+                        {
+                          "text": "\n📌 SECTION: Approvals Module\n"
+                        },
+                        {
+                          "text": "Approvals nav clicked: false\n"
+                        },
+                        {
+                          "text": "\n📌 SECTION: Scheduler Module\n"
+                        },
+                        {
+                          "text": "Scheduler nav clicked: false\n"
+                        },
+                        {
+                          "text": "\n📌 SECTION: Production Planner\n"
+                        },
+                        {
+                          "text": "Planner nav clicked: false\n"
+                        },
+                        {
+                          "text": "\n📌 SECTION: BOM Module\n"
+                        },
+                        {
+                          "text": "BOM nav clicked: true\n"
+                        },
+                        {
+                          "text": "📊 [BOM - Main] { buttons: \u001b[33m381\u001b[39m, tables: \u001b[33m1\u001b[39m, inputs: \u001b[33m2\u001b[39m, selects: \u001b[33m1\u001b[39m }\n"
+                        },
+                        {
+                          "text": "  ✓ Version\n"
+                        },
+                        {
+                          "text": "\n📌 SECTION: Profile\n"
+                        },
+                        {
+                          "text": "Profile nav clicked: false\n"
+                        },
+                        {
+                          "text": "\n📌 SECTION: Admin\n"
+                        },
+                        {
+                          "text": "  ✓ Admin page accessible\n"
+                        },
+                        {
+                          "text": "📊 [Admin - Main] { buttons: \u001b[33m11\u001b[39m, tables: \u001b[33m1\u001b[39m, inputs: \u001b[33m1\u001b[39m, selects: \u001b[33m2\u001b[39m }\n"
+                        },
+                        {
+                          "text": "  ✓ User tab\n"
+                        },
+                        {
+                          "text": "  ✓ Permission tab\n"
+                        },
+                        {
+                          "text": "  ✓ Settings tab\n"
+                        },
+                        {
+                          "text": "\n✅ Complete flow test finished!\n\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-17T07:42:54.296Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c30cd39e1c87f9ff656a-1516def8a7410b34f0e2",
+              "file": "modules.spec.ts",
+              "line": 70,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "title": "Masters Module - Detailed",
+          "file": "modules.spec.ts",
+          "line": 396,
+          "column": 6,
+          "specs": [
+            {
+              "title": "Machine Master - full interaction",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "headed",
+                  "projectName": "headed",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 9088,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "📊 [Machine Master] { buttons: \u001b[33m349\u001b[39m, tables: \u001b[33m1\u001b[39m, inputs: \u001b[33m0\u001b[39m, selects: \u001b[33m0\u001b[39m }\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-17T07:43:13.774Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c30cd39e1c87f9ff656a-f42a4c6fd243b97eb986",
+              "file": "modules.spec.ts",
+              "line": 404,
+              "column": 7
+            },
+            {
+              "title": "Mold Master - full interaction",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "headed",
+                  "projectName": "headed",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6508,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "📊 [Mold Master] { buttons: \u001b[33m206\u001b[39m, tables: \u001b[33m1\u001b[39m, inputs: \u001b[33m0\u001b[39m, selects: \u001b[33m0\u001b[39m }\n"
+                        },
+                        {
+                          "text": "  → 61 molds in table\n"
+                        },
+                        {
+                          "text": "  → 0 edit buttons\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-17T07:43:22.891Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c30cd39e1c87f9ff656a-29d0c22c0221ef8b8517",
+              "file": "modules.spec.ts",
+              "line": 432,
+              "column": 7
+            },
+            {
+              "title": "Raw Material Master - filters and search",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "headed",
+                  "projectName": "headed",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 8740,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  → 0 filter dropdowns\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-17T07:43:29.417Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c30cd39e1c87f9ff656a-dd55350819c7f57837b9",
+              "file": "modules.spec.ts",
+              "line": 451,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "title": "Store & Dispatch - Detailed",
+          "file": "modules.spec.ts",
+          "line": 469,
+          "column": 6,
+          "specs": [
+            {
+              "title": "GRN Form - validation",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "headed",
+                  "projectName": "headed",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5889,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "📊 [GRN Form] { buttons: \u001b[33m21\u001b[39m, tables: \u001b[33m0\u001b[39m, inputs: \u001b[33m0\u001b[39m, selects: \u001b[33m1\u001b[39m }\n"
+                        },
+                        {
+                          "text": "  → 0 required field indicators\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-17T07:43:38.190Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c30cd39e1c87f9ff656a-6d34c867898047c903a9",
+              "file": "modules.spec.ts",
+              "line": 477,
+              "column": 7
+            },
+            {
+              "title": "Purchase Order - vendor selection",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "headed",
+                  "projectName": "headed",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6569,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  → Vendor selection: false\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-17T07:43:44.093Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c30cd39e1c87f9ff656a-6caef40b6e528306866e",
+              "file": "modules.spec.ts",
+              "line": 488,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "title": "Production - Detailed",
+          "file": "modules.spec.ts",
+          "line": 499,
+          "column": 6,
+          "specs": [
+            {
+              "title": "Silo Management - all views",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "headed",
+                  "projectName": "headed",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5764,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-17T07:43:50.677Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c30cd39e1c87f9ff656a-4f6367acd19e3b840dfe",
+              "file": "modules.spec.ts",
+              "line": 507,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "title": "Reports - Detailed",
+          "file": "modules.spec.ts",
+          "line": 523,
+          "column": 6,
+          "specs": [
+            {
+              "title": "Daily Weight Report - date filter",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "headed",
+                  "projectName": "headed",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "interrupted",
+                      "duration": 3952,
+                      "error": {
+                        "message": "Error: page.waitForLoadState: Test ended.",
+                        "stack": "Error: page.waitForLoadState: Test ended.\n    at /Users/chiragdeora/Developer/production-scheduler/tests/e2e/modules.spec.ts:526:16",
+                        "location": {
+                          "file": "/Users/chiragdeora/Developer/production-scheduler/tests/e2e/modules.spec.ts",
+                          "column": 16,
+                          "line": 526
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 524 |\u001b[39m   test\u001b[33m.\u001b[39mbeforeEach(\u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n \u001b[90m 525 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgoto(\u001b[32m'/'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 526 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForLoadState(\u001b[32m'networkidle'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 527 |\u001b[39m     \u001b[36mawait\u001b[39m clickNav(page\u001b[33m,\u001b[39m \u001b[32m'Report'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 528 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForTimeout(\u001b[35m500\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 529 |\u001b[39m   })\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/chiragdeora/Developer/production-scheduler/tests/e2e/modules.spec.ts",
+                            "column": 16,
+                            "line": 526
+                          },
+                          "message": "Error: page.waitForLoadState: Test ended.\n\n\u001b[0m \u001b[90m 524 |\u001b[39m   test\u001b[33m.\u001b[39mbeforeEach(\u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n \u001b[90m 525 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgoto(\u001b[32m'/'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 526 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForLoadState(\u001b[32m'networkidle'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 527 |\u001b[39m     \u001b[36mawait\u001b[39m clickNav(page\u001b[33m,\u001b[39m \u001b[32m'Report'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 528 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForTimeout(\u001b[35m500\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 529 |\u001b[39m   })\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/chiragdeora/Developer/production-scheduler/tests/e2e/modules.spec.ts:526:16\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-17T07:43:56.460Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/chiragdeora/Developer/production-scheduler/test-results/modules-Reports---Detailed-Daily-Weight-Report---date-filter-headed/test-failed-1.png"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/chiragdeora/Developer/production-scheduler/tests/e2e/modules.spec.ts",
+                        "column": 16,
+                        "line": 526
+                      }
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "c30cd39e1c87f9ff656a-16d80e1a0bba2fcd9e2d",
+              "file": "modules.spec.ts",
+              "line": 531,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "title": "Smoke Tests @smoke",
+          "file": "modules.spec.ts",
+          "line": 549,
+          "column": 6,
+          "specs": [
+            {
+              "title": "all major nav items exist",
+              "ok": true,
+              "tags": [
+                "smoke"
+              ],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "headed",
+                  "projectName": "headed",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "c30cd39e1c87f9ff656a-be78ffa4476ea38e902f",
+              "file": "modules.spec.ts",
+              "line": 550,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2025-12-17T07:39:49.933Z",
+    "duration": 250923.164,
+    "expected": 43,
+    "skipped": 3,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

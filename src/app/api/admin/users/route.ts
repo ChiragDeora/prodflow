@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 import { verifyRootAdmin } from '@/lib/auth-utils';
+
+const getSupabase = () => createClient();
 
 export async function GET(request: NextRequest) {
   try {
+    const supabase = getSupabase();
     const adminUser = await verifyRootAdmin(request);
     if (!adminUser) {
       return NextResponse.json(
@@ -23,6 +26,7 @@ export async function GET(request: NextRequest) {
         phone,
         status,
         department,
+        job_title,
         is_root_admin,
         password_reset_required,
         last_login,
@@ -31,6 +35,8 @@ export async function GET(request: NextRequest) {
         created_at,
         updated_at
       `)
+      // Do not show deactivated (deleted/archived) users in the main list
+      .neq('status', 'deactivated')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -62,6 +68,7 @@ export async function GET(request: NextRequest) {
         phone: user.phone,
         status: user.status,
         department: user.department,
+        jobTitle: user.job_title,
         isRootAdmin: user.is_root_admin,
         requiresPasswordReset: user.password_reset_required,
         lastLogin: user.last_login,

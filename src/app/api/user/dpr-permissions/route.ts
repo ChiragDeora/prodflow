@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 import { verifySession } from '@/lib/auth-utils';
+
+const getSupabase = () => createClient();
 
 export async function GET(request: NextRequest) {
   try {
+    const supabase = getSupabase();
     const sessionData = await verifySession(request);
     if (!sessionData || !sessionData.user) {
       return NextResponse.json(
@@ -68,12 +71,13 @@ export async function GET(request: NextRequest) {
 
     if (userPermissions) {
       for (const up of userPermissions) {
-        const permissionName = (up.permissions as any)?.name;
-        if (permissionName && permissionName.startsWith('dpr.')) {
+        const permissionName = (up.permissions as any)?.name as string | undefined;
+        if (!permissionName) continue;
+
+        // New-style DPR module permissions: "production.dpr.*"
+        if (permissionName.startsWith('production.dpr.')) {
+          // Expose the raw permission name only (no legacy dpr.* mapping).
           permissions[permissionName] = true;
-          if (permissionName === 'dpr.settings.manage') {
-            canManageSettings = true;
-          }
         }
       }
     }

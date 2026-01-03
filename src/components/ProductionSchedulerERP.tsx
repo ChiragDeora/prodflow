@@ -1313,7 +1313,7 @@ const ProductionSchedulerERP: React.FC = () => {
     };
 
     return (
-      <div className={`${sidebarOpen ? 'w-64' : 'w-16'} bg-gray-900 text-white transition-all duration-300 flex flex-col h-screen`}>
+      <div className={`${sidebarOpen ? 'w-64' : 'w-16'} bg-gray-900 text-white transition-all duration-300 flex flex-col h-screen app-sidebar`}>
         <div className="p-3 border-b border-gray-700">
           <div className={`flex items-center ${sidebarOpen ? 'justify-between' : 'justify-center'}`}>
             {sidebarOpen && <h2 className="text-lg font-semibold">ProdFlow</h2>}

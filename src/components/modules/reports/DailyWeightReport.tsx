@@ -154,12 +154,24 @@ const DailyWeightReport: React.FC<DailyWeightReportProps> = ({ linesMaster, mold
           return timeA.localeCompare(timeB);
         });
 
-        const slots: TimeSlotData[] = sortedDbData.map((entry: any) => {
+        // Find the mold from mold master (use the last entry's mold for the current mold)
+        const lastMoldName = sortedDbData[sortedDbData.length - 1].mold_name;
+        const mold = molds.find(m => m.mold_name === lastMoldName);
+
+        const submittedSlots: TimeSlotData[] = sortedDbData.map((entry: any) => {
           // Convert time_slot from database format to display format
           let timeSlot;
-          if (entry.time_slot.includes(':')) {
+          if (entry.time_slot.includes(' - ')) {
             // Already in correct format "08:00 - 10:00"
             timeSlot = entry.time_slot;
+          } else if (entry.time_slot.includes(':') && !entry.time_slot.includes(' - ')) {
+            // Format like "08:00" - use start_time and end_time from database to reconstruct
+            // Or infer from the 2-hour slot pattern
+            const startHour = entry.time_slot.substring(0, 2);
+            const startHourNum = parseInt(startHour, 10);
+            const endHourNum = (startHourNum + 2) % 24;
+            const endHour = endHourNum.toString().padStart(2, '0');
+            timeSlot = `${startHour}:00 - ${endHour}:00`;
           } else {
             // Convert "08-10" to "08:00 - 10:00" or "24-02" to "00:00 - 02:00"
             const [start, end] = entry.time_slot.split('-');
@@ -167,11 +179,14 @@ const DailyWeightReport: React.FC<DailyWeightReportProps> = ({ linesMaster, mold
             timeSlot = `${startTime}:00 - ${end}:00`;
           }
           
+          // Find the mold for this specific entry
+          const entryMold = molds.find(m => m.mold_name === entry.mold_name);
+          
           // Map cavity_weights array to CavityWeight format
           const cavityWeights = Array.from({ length: maxCavities }, (_, i) => ({
             cavity: `C${i + 1}`,
             weight: entry.cavity_weights[i] || null,
-            isActive: i < entry.cavity_weights.length
+            isActive: i < (entryMold?.cavities || entry.cavity_weights.length)
           }));
           
           return {
@@ -185,32 +200,67 @@ const DailyWeightReport: React.FC<DailyWeightReportProps> = ({ linesMaster, mold
             submitted: true,
             moldId: entry.mold_name,
             moldName: entry.mold_name,
-            moldStdWeight: 0, // Will be updated from mold master
+            moldStdWeight: entryMold?.std_weight || 0,
             isChangeoverPoint: entry.is_changeover_point || false,
             previousMoldName: entry.previous_mold_name
           };
         });
         
-        // Find the mold from mold master
-        const firstMoldName = dbData[0].mold_name;
-        const mold = molds.find(m => m.mold_name === firstMoldName);
+        // Define all time slots for the day
+        const allTimeSlots = [
+          '08:00 - 10:00', '10:00 - 12:00', '12:00 - 14:00', '14:00 - 16:00', 
+          '16:00 - 18:00', '18:00 - 20:00',
+          '20:00 - 22:00', '22:00 - 00:00', '00:00 - 02:00', '02:00 - 04:00',
+          '04:00 - 06:00', '06:00 - 08:00'
+        ];
+        
+        // Get already submitted time slots
+        const submittedTimeSlots = submittedSlots.map(slot => slot.timeSlot);
+        
+        // Generate pending slots for remaining time slots (using the current/last mold)
+        const pendingSlots: TimeSlotData[] = [];
+        if (mold) {
+          const remainingTimeSlots = allTimeSlots.filter(ts => !submittedTimeSlots.includes(ts));
+          const timestamp = Date.now();
+          
+          const cavityWeights = Array.from({ length: maxCavities }, (_, i) => ({
+            cavity: `C${i + 1}`,
+            weight: null,
+            isActive: i < mold.cavities
+          }));
+          
+          remainingTimeSlots.forEach((timeSlot, index) => {
+            pendingSlots.push({
+              id: `${timestamp}-${mold.id}-${index}`,
+              timeSlot,
+              cycleTime: mold.cycle_time,
+              cavityWeights: cavityWeights.map(cw => ({ ...cw })), // Clone to avoid reference issues
+              avgWeight: 0,
+              notes: '',
+              status: 'Pending' as const,
+              submitted: false,
+              moldId: mold.id,
+              moldName: mold.mold_name,
+              moldStdWeight: mold.std_weight,
+              isChangeoverPoint: false
+            });
+          });
+        }
+        
+        // Combine submitted and pending slots, sort by time slot order
+        const allSlots = [...submittedSlots, ...pendingSlots].sort((a, b) => {
+          return allTimeSlots.indexOf(a.timeSlot) - allTimeSlots.indexOf(b.timeSlot);
+        });
         
         if (mold) {
-          // Update mold std weight in slots
-          slots.forEach(slot => {
-            if (slot.moldName === mold.mold_name) {
-              slot.moldStdWeight = mold.std_weight;
-            }
-          });
-          
           console.log(`🎯 Setting mold ${mold.mold_name} for line ${lineId}`);
           setSelectedMoldPerLine(prev => ({ ...prev, [lineId]: mold }));
           setMoldLockedPerLine(prev => ({ ...prev, [lineId]: true }));
         } else {
-          console.warn(`⚠️ Mold "${firstMoldName}" not found in mold master for line ${lineId}`);
+          console.warn(`⚠️ Mold "${lastMoldName}" not found in mold master for line ${lineId}`);
         }
         
-        setTimeSlotsPerLine(prev => ({ ...prev, [lineId]: slots }));
+        setTimeSlotsPerLine(prev => ({ ...prev, [lineId]: allSlots }));
       } else {
         console.log(`ℹ️ No existing data found for line ${lineId} on ${selectedProductionDate}`);
         // Clear any existing data for this line
@@ -550,8 +600,8 @@ const DailyWeightReport: React.FC<DailyWeightReportProps> = ({ linesMaster, mold
       const currentUser = user?.fullName || user?.username || 'Unknown User';
       const productionDate = selectedProductionDate;
 
-      // Format time slot for database (e.g., "08:00 - 10:00" => "08-10")
-      const timeSlotFormatted = slot.timeSlot.replace(/\s/g, '').replace('-', '-').substring(0, 5);
+      // Format time slot for database - store the full format "08:00 - 10:00"
+      const timeSlotFormatted = slot.timeSlot;
       
       // Extract start and end times
       const times = slot.timeSlot.split(' - ');

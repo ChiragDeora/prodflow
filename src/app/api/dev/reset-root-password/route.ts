@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 import bcrypt from 'bcrypt';
+
+const getSupabase = () => createClient();
 
 // DEVELOPMENT ONLY - This endpoint should be removed in production
 export async function POST(request: NextRequest) {
@@ -13,6 +15,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const supabase = getSupabase();
     const { newPassword } = await request.json();
 
     if (!newPassword) {

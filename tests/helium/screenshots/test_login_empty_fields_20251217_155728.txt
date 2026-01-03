@@ -1,0 +1,11 @@
+Test: test_login_empty_fields
+Timestamp: 20251217_155728
+Error:
+Traceback (most recent call last):
+  File "/Users/chiragdeora/Developer/production-scheduler/tests/helium/run.py", line 69, in run_single_test
+    test_func()
+  File "/Users/chiragdeora/Developer/production-scheduler/tests/helium/test_auth.py", line 85, in test_login_empty_fields
+    submit_btn = driver.find_element_by_css_selector("button[type='submit']") if is_element_present("button[type='submit']") else None
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'WebDriver' object has no attribute 'find_element_by_css_selector'
+

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Calendar, Search, Filter, FileText, Truck, Eye, Download, Package, ArrowRightCircle } from 'lucide-react';
-import { deliveryChallanAPI, misAPI, jobWorkChallanAPI } from '../../../lib/supabase';
+import { deliveryChallanAPI, misAPI, jobWorkChallanAPI, DeliveryChallan, DeliveryChallanItem, MIS, MISItem, JobWorkChallan, JobWorkChallanItem } from '../../../lib/supabase';
+import HistoryDetailView from './HistoryDetailView';
 
 interface DispatchForm {
   id: string;
@@ -25,6 +26,9 @@ const DispatchHistory: React.FC = () => {
   const [selectedType, setSelectedType] = useState<'all' | 'delivery-challan' | 'mis' | 'job-work-challan'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedForm, setSelectedForm] = useState<DispatchForm | null>(null);
+  const [detailedForm, setDetailedForm] = useState<DeliveryChallan | MIS | JobWorkChallan | null>(null);
+  const [detailedItems, setDetailedItems] = useState<DeliveryChallanItem[] | MISItem[] | JobWorkChallanItem[]>([]);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   // Get available years from forms
   const availableYears = React.useMemo(() => {
@@ -144,8 +148,37 @@ const DispatchHistory: React.FC = () => {
     setFilteredForms(filtered);
   }, [forms, selectedYear, selectedDate, selectedType, searchTerm]);
 
-  const handleViewForm = (form: DispatchForm) => {
+  const handleViewForm = async (form: DispatchForm) => {
     setSelectedForm(form);
+    setLoadingDetails(true);
+    setDetailedForm(null);
+    setDetailedItems([]);
+    
+    try {
+      if (form.type === 'delivery-challan') {
+        const data = await deliveryChallanAPI.getById(form.id);
+        if (data) {
+          setDetailedForm(data.challan);
+          setDetailedItems(data.items || []);
+        }
+      } else if (form.type === 'mis') {
+        const data = await misAPI.getById(form.id);
+        if (data) {
+          setDetailedForm(data.mis);
+          setDetailedItems(data.items || []);
+        }
+      } else if (form.type === 'job-work-challan') {
+        const data = await jobWorkChallanAPI.getById(form.id);
+        if (data) {
+          setDetailedForm(data.challan);
+          setDetailedItems(data.items || []);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading form details:', error);
+    } finally {
+      setLoadingDetails(false);
+    }
   };
 
   const handleCloseView = () => {
@@ -175,23 +208,63 @@ const DispatchHistory: React.FC = () => {
   const jobWorkChallans = filteredForms.filter(f => f.type === 'job-work-challan');
 
   if (selectedForm) {
+    // Prepare document info
+    const documentInfo: Array<{ label: string; value: string | number | null | undefined }> = [
+      { label: 'Document Number', value: detailedForm && 'doc_no' in detailedForm ? detailedForm.doc_no : selectedForm.docNo },
+      { label: 'Date', value: formatDate(detailedForm && 'date' in detailedForm ? detailedForm.date : selectedForm.date || selectedForm.createdAt) }
+    ];
+
+    if (selectedForm.type === 'delivery-challan' && detailedForm) {
+      const challan = detailedForm as DeliveryChallan;
+      if (challan.sr_no) documentInfo.push({ label: 'Serial Number', value: challan.sr_no });
+      if (challan.to_address) documentInfo.push({ label: 'To Address', value: challan.to_address });
+      if (challan.vehicle_no) documentInfo.push({ label: 'Vehicle Number', value: challan.vehicle_no });
+      if (challan.state) documentInfo.push({ label: 'State', value: challan.state });
+    } else if (selectedForm.type === 'mis' && detailedForm) {
+      const mis = detailedForm as MIS;
+      if (mis.dept_name) documentInfo.push({ label: 'Department', value: mis.dept_name });
+      if (mis.memo_no) documentInfo.push({ label: 'Memo Number', value: mis.memo_no });
+    } else if (selectedForm.type === 'job-work-challan' && detailedForm) {
+      const challan = detailedForm as JobWorkChallan;
+      if (challan.party_name) documentInfo.push({ label: 'Party Name', value: challan.party_name });
+      if (challan.gst_no) documentInfo.push({ label: 'GST Number', value: challan.gst_no });
+      if (challan.vehicle_no) documentInfo.push({ label: 'Vehicle Number', value: challan.vehicle_no });
+    }
+
+    // Prepare item columns
+    const itemColumns = selectedForm.type === 'delivery-challan'
+      ? [
+          { key: 'sr_no', label: 'Sr. No.' },
+          { key: 'material_description', label: 'Material Description' },
+          { key: 'qty', label: 'Quantity' },
+          { key: 'uom', label: 'UOM' },
+          { key: 'remarks', label: 'Remarks', format: (v: any) => v || '-' }
+        ]
+      : selectedForm.type === 'mis'
+      ? [
+          { key: 'sr_no', label: 'Sr. No.' },
+          { key: 'item_name', label: 'Item Name' },
+          { key: 'no_box', label: 'No. Box' },
+          { key: 'remarks', label: 'Remarks', format: (v: any) => v || '-' }
+        ]
+      : [
+          { key: 'sr_no', label: 'Sr. No.' },
+          { key: 'material_description', label: 'Material Description' },
+          { key: 'qty', label: 'Quantity' },
+          { key: 'uom', label: 'UOM' },
+          { key: 'remarks', label: 'Remarks', format: (v: any) => v || '-' }
+        ];
+
     return (
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">{getFormTitle(selectedForm)}</h2>
-          <button
-            onClick={handleCloseView}
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-          >
-            Close
-          </button>
-        </div>
-        <div className="border border-gray-300 rounded-lg p-6 bg-gray-50">
-          <pre className="whitespace-pre-wrap text-sm">
-            {JSON.stringify(selectedForm, null, 2)}
-          </pre>
-        </div>
-      </div>
+      <HistoryDetailView
+        title={getFormTitle(selectedForm)}
+        date={selectedForm.date || selectedForm.createdAt}
+        onClose={handleCloseView}
+        documentInfo={documentInfo}
+        items={detailedItems}
+        itemColumns={itemColumns}
+        loading={loadingDetails}
+      />
     );
   }
 

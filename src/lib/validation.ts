@@ -172,9 +172,8 @@ export const commonSchemas = {
   },
   password: {
     required: true,
-    minLength: 12,
+    minLength: 6,
     maxLength: 128,
-    pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
     type: 'string' as const
   },
   phone: {

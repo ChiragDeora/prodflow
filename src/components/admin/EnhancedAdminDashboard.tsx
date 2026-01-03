@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthProvider';
-import DPRPermissionsManagement from './DPRPermissionsManagement';
 import { 
   Users, 
   Shield, 
@@ -48,6 +47,7 @@ interface User {
   isLocked: boolean;
   createdAt: string;
   updatedAt: string;
+  accessScope?: 'FACTORY_ONLY' | 'UNIVERSAL';
 }
 
 interface Permission {
@@ -138,7 +138,92 @@ interface PermissionSchemaResponse {
   };
 }
 
-type TabType = 'users' | 'permissions' | 'templates' | 'audit' | 'settings' | 'dpr-permissions';
+interface UserActionAuditLog {
+  id: string;
+  action: string;
+  resource_type: string;
+  resource_id?: string | null;
+  details?: any;
+  outcome: string;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  is_super_admin_override?: boolean;
+  created_at: string;
+  actor?: {
+    id: string;
+    full_name?: string;
+    email?: string;
+  };
+}
+
+type TabType = 'users' | 'permissions' | 'templates' | 'audit' | 'settings';
+
+// Lightweight DPR dashboard field definitions used for the
+// per-user "column settings" admin panel.
+interface DprViewFieldDef {
+  key: string;
+  header: string;
+  label: string;
+}
+
+const DPR_VIEW_FIELDS: DprViewFieldDef[] = [
+  // SHIFT TOTAL
+  { key: 'summary.shiftTotal.targetQty',     header: 'SHIFT TOTAL',              label: 'Target Qty (Nos)' },
+  { key: 'summary.shiftTotal.actualQty',     header: 'SHIFT TOTAL',              label: 'Actual Qty (Nos)' },
+  { key: 'summary.shiftTotal.okProdQty',     header: 'SHIFT TOTAL',              label: 'Ok Prod Qty (Nos)' },
+  { key: 'summary.shiftTotal.okProdKgs',     header: 'SHIFT TOTAL',              label: 'Ok Prod (Kgs)' },
+  { key: 'summary.shiftTotal.okProdPercent', header: 'SHIFT TOTAL',              label: 'Ok Prod (%)' },
+  { key: 'summary.shiftTotal.rejKgs',        header: 'SHIFT TOTAL',              label: 'Rej (Kgs)' },
+  { key: 'summary.shiftTotal.lumps',         header: 'SHIFT TOTAL',              label: 'Lumps (Kgs)' },
+  { key: 'summary.shiftTotal.runTime',       header: 'SHIFT TOTAL',              label: 'Run Time (mins)' },
+  { key: 'summary.shiftTotal.downTime',      header: 'SHIFT TOTAL',              label: 'Down Time (min)' },
+  { key: 'summary.shiftTotal.totalTime',     header: 'SHIFT TOTAL',              label: 'Total Time (min)' },
+
+  // ACHIEVEMENT METRICS
+  { key: 'summary.achievement.actualVsTarget',  header: 'ACHIEVEMENT METRICS',   label: 'Actual vs Target' },
+  { key: 'summary.achievement.rejVsOkProd',     header: 'ACHIEVEMENT METRICS',   label: 'Rej vs Ok Prod' },
+  { key: 'summary.achievement.runTimeVsTotal',  header: 'ACHIEVEMENT METRICS',   label: 'Run Time vs Total' },
+  { key: 'summary.achievement.downTimeVsTotal', header: 'ACHIEVEMENT METRICS',   label: 'Down Time vs Total' },
+
+  // Basic Info
+  { key: 'table.basic.machineNo',    header: 'Basic Info',                      label: 'M/c No.' },
+  { key: 'table.basic.operatorName', header: 'Basic Info',                      label: 'Opt Name' },
+  { key: 'table.basic.product',      header: 'Basic Info',                      label: 'Product' },
+  { key: 'table.basic.cavity',       header: 'Basic Info',                      label: 'Cavity' },
+
+  // Process Parameters
+  { key: 'table.process.targetCycle',      header: 'Process Parameters',         label: 'Trg Cycle (sec)' },
+  { key: 'table.process.targetRunTime',    header: 'Process Parameters',         label: 'Trg Run Time (min)' },
+  { key: 'table.process.partWeight',       header: 'Process Parameters',         label: 'Part Wt (gm)' },
+  { key: 'table.process.actualPartWeight', header: 'Process Parameters',         label: 'Act part wt (gm)' },
+  { key: 'table.process.actualCycle',      header: 'Process Parameters',         label: 'Act Cycle (sec)' },
+  { key: 'table.process.partWeightCheck',  header: 'Process Parameters',         label: 'Part Wt Check' },
+  { key: 'table.process.cycleTimeCheck',   header: 'Process Parameters',         label: 'Cycle Time Check' },
+
+  // No of Shots
+  { key: 'table.shots.start', header: 'No of Shots',                            label: 'No of Shots (Start)' },
+  { key: 'table.shots.end',   header: 'No of Shots',                            label: 'No of Shots (End)' },
+
+  // Production Data
+  { key: 'table.production.targetQty',     header: 'Production Data',            label: 'Target Qty (Nos)' },
+  { key: 'table.production.actualQty',     header: 'Production Data',            label: 'Actual Qty (Nos)' },
+  { key: 'table.production.okProdQty',     header: 'Production Data',            label: 'Ok Prod Qty (Nos)' },
+  { key: 'table.production.okProdKgs',     header: 'Production Data',            label: 'Ok Prod (Kgs)' },
+  { key: 'table.production.okProdPercent', header: 'Production Data',            label: 'Ok Prod (%)' },
+  { key: 'table.production.rejKgs',        header: 'Production Data',            label: 'Rej (Kgs)' },
+
+  // Runtime
+  { key: 'table.runtime.runTime',          header: 'Run Time',                   label: 'Run Time (mins)' },
+  { key: 'table.runtime.downTime',         header: 'Run Time',                   label: 'Down time (min)' },
+
+  // Stoppage
+  { key: 'table.stoppage.reason',      header: 'Stoppage Time & Remarks',       label: 'Reason' },
+  { key: 'table.stoppage.startTime',   header: 'Stoppage Time & Remarks',       label: 'Start Time' },
+  { key: 'table.stoppage.endTime',     header: 'Stoppage Time & Remarks',       label: 'End Time' },
+  { key: 'table.stoppage.totalTime',   header: 'Stoppage Time & Remarks',       label: 'Total Time (min)' },
+  { key: 'table.stoppage.mouldChange', header: 'Stoppage Time & Remarks',       label: 'Mould change' },
+  { key: 'table.stoppage.remark',      header: 'Stoppage Time & Remarks',       label: 'REMARK' },
+];
 
 const EnhancedAdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('users');
@@ -156,6 +241,10 @@ const EnhancedAdminDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [auditLogs, setAuditLogs] = useState<UserActionAuditLog[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditFilterAction, setAuditFilterAction] = useState<string>('all');
+  const [auditSearch, setAuditSearch] = useState('');
   const [showPermissionMatrix, setShowPermissionMatrix] = useState(false);
   const [showGrantPermissions, setShowGrantPermissions] = useState(false);
   const [showRevokePermissions, setShowRevokePermissions] = useState(false);
@@ -169,10 +258,22 @@ const EnhancedAdminDashboard: React.FC = () => {
     email: '',
     phone: '',
     status: 'active',
-    department: ''
+    department: '',
+    jobTitle: '',
+    accessScope: 'FACTORY_ONLY' as 'FACTORY_ONLY' | 'UNIVERSAL'
   });
   const [newPassword, setNewPassword] = useState('');
   const [showPasswordField, setShowPasswordField] = useState(false);
+  const [templatesLoaded, setTemplatesLoaded] = useState(false);
+
+  // DPR view settings state
+  const [showDprViewSettings, setShowDprViewSettings] = useState(false);
+  const [dprUsers, setDprUsers] = useState<{ id: string; fullName: string; email: string; status: string }[]>([]);
+  const [dprUsersLoading, setDprUsersLoading] = useState(false);
+  const [selectedDprUserId, setSelectedDprUserId] = useState<string | null>(null);
+  const [dprFieldSettings, setDprFieldSettings] = useState<Record<string, boolean>>({});
+  const [dprFieldLoading, setDprFieldLoading] = useState(false);
+  const [fullViewAccess, setFullViewAccess] = useState<boolean>(false);
 
   const { user } = useAuth();
 
@@ -185,11 +286,9 @@ const EnhancedAdminDashboard: React.FC = () => {
   const loadInitialData = async () => {
     try {
       setIsLoading(true);
-      // Only load essential data initially - permissions will be loaded on demand
-      await Promise.all([
-        loadUsers(),
-        loadTemplates()
-      ]);
+      // Only load essential data initially - templates and permissions
+      // will be loaded on demand so that the dashboard appears faster.
+      await loadUsers();
     } catch (error) {
       console.error('Error loading initial data:', error);
       setError('Failed to load dashboard data');
@@ -197,6 +296,43 @@ const EnhancedAdminDashboard: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // Lazily load templates when the Templates tab is opened for the first time
+  useEffect(() => {
+    if (user?.isRootAdmin && activeTab === 'templates' && !templatesLoaded) {
+      setTemplatesLoaded(true);
+      loadTemplates();
+    }
+  }, [activeTab, templatesLoaded, user]);
+
+  // Lazily load audit trail when the Audit tab is opened for the first time
+  const loadAuditTrail = async () => {
+    try {
+      setAuditLoading(true);
+      const response = await fetch('/api/admin/audit/user-actions?limit=200', {
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAuditLogs(data.logs || []);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to load audit trail');
+      }
+    } catch (error) {
+      console.error('Load audit trail error:', error);
+      setError('Network error loading audit trail');
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.isRootAdmin && activeTab === 'audit' && !auditLoading && auditLogs.length === 0) {
+      loadAuditTrail();
+    }
+  }, [activeTab, auditLogs.length, auditLoading, user]);
 
   const loadUsers = async () => {
     try {
@@ -378,6 +514,96 @@ const EnhancedAdminDashboard: React.FC = () => {
     }
   };
 
+  // Load users who have DPR production permission
+  const loadDprUsers = async () => {
+    try {
+      setDprUsersLoading(true);
+      const response = await fetch('/api/admin/dpr-users', {
+        credentials: 'include'
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setDprUsers(data.users || []);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to load DPR users');
+      }
+    } catch (error) {
+      console.error('Load DPR users error:', error);
+      setError('Network error loading DPR users');
+    } finally {
+      setDprUsersLoading(false);
+    }
+  };
+
+  // Load DPR field settings for a specific user
+  const loadDprViewSettings = async (userId: string) => {
+    try {
+      setDprFieldLoading(true);
+      const response = await fetch(`/api/admin/dpr-view-settings/${userId}`, {
+        credentials: 'include'
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const existing = (data.settings || {}) as Record<string, boolean>;
+        if (!data.settings) {
+          // Default to all visible
+          const defaults: Record<string, boolean> = {};
+          DPR_VIEW_FIELDS.forEach(field => {
+            defaults[field.key] = true;
+          });
+          setDprFieldSettings(defaults);
+          setFullViewAccess(true); // Default to enabled
+        } else {
+          setDprFieldSettings(existing);
+          // Extract fullView setting (stored as 'fullView' key)
+          setFullViewAccess(existing['fullView'] !== false); // Default to true if not set
+        }
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to load DPR view settings');
+      }
+    } catch (error) {
+      console.error('Load DPR view settings error:', error);
+      setError('Network error loading DPR view settings');
+    } finally {
+      setDprFieldLoading(false);
+    }
+  };
+
+  const saveDprViewSettings = async () => {
+    if (!selectedDprUserId) return;
+    try {
+      setDprFieldLoading(true);
+      // Include fullView setting in the settings object
+      const settingsToSave = {
+        ...dprFieldSettings,
+        fullView: fullViewAccess
+      };
+      const response = await fetch(`/api/admin/dpr-view-settings/${selectedDprUserId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ settings: settingsToSave }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to save DPR view settings');
+      } else {
+        setSuccessMessage('DPR column settings saved');
+        setTimeout(() => setSuccessMessage(''), 3000);
+      }
+    } catch (error) {
+      console.error('Save DPR view settings error:', error);
+      setError('Network error saving DPR view settings');
+    } finally {
+      setDprFieldLoading(false);
+    }
+  };
+
   const handleEditUser = async (userToEdit: User) => {
     try {
       setActionLoading(userToEdit.id);
@@ -393,7 +619,9 @@ const EnhancedAdminDashboard: React.FC = () => {
           email: data.user.email || '',
           phone: data.user.phone || '',
           status: data.user.status || 'active',
-          department: data.user.department || ''
+          department: data.user.department || '',
+          jobTitle: data.user.jobTitle || '',
+          accessScope: data.user.accessScope || (data.user.isRootAdmin ? 'UNIVERSAL' : 'FACTORY_ONLY')
         });
         setNewPassword('');
         setShowPasswordField(false);
@@ -422,7 +650,9 @@ const EnhancedAdminDashboard: React.FC = () => {
         email: editFormData.email,
         phone: editFormData.phone,
         status: editFormData.status,
-        department: editFormData.department
+        department: editFormData.department,
+        jobTitle: editFormData.jobTitle,
+        accessScope: editFormData.accessScope
       };
 
       const response = await fetch(`/api/admin/users/${editingUser.id}`, {
@@ -476,6 +706,116 @@ const EnhancedAdminDashboard: React.FC = () => {
     }
   };
 
+  const handleApproveUser = async (userToApprove: User) => {
+    try {
+      setActionLoading(userToApprove.id);
+
+      // Ensure department, designation and permissions are set before approval
+      const validationResponse = await fetch(`/api/admin/users/${userToApprove.id}/permissions`, {
+        credentials: 'include'
+      });
+
+      if (!validationResponse.ok) {
+        const errorData = await validationResponse.json();
+        setError(errorData.error || 'Failed to validate user before approval');
+        return;
+      }
+
+      const validationData = await validationResponse.json();
+      const profile = validationData.user || {};
+      const hasDepartment = !!profile.department;
+      const hasDesignation = !!(profile.job_title || userToApprove.jobTitle);
+
+      const directPermissions = (validationData.direct_permissions || []) as any[];
+      const rolePermissions = (validationData.role_permissions || []) as any[];
+
+      const activeDirectPermissions = directPermissions.filter((p) => p.is_active !== false).length;
+      const activeRolePermissions = rolePermissions.filter((p) => p.is_active !== false).length;
+      const hasPermissions = activeDirectPermissions + activeRolePermissions > 0;
+
+      if (!hasDepartment || !hasDesignation || !hasPermissions) {
+        const missing: string[] = [];
+        if (!hasDepartment) missing.push('department');
+        if (!hasDesignation) missing.push('designation');
+        if (!hasPermissions) missing.push('permissions');
+
+        setError(
+          `Before approving this user, please first set their ${missing.join(
+            ', '
+          )} and grant at least one permission. Once that is done, you can approve the user.`
+        );
+        return;
+      }
+
+      if (!confirm(`Are you sure you want to approve ${userToApprove.fullName}?`)) {
+        return;
+      }
+
+      const response = await fetch(`/api/admin/users/${userToApprove.id}/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // Role assignment is optional; send empty payload for now
+        body: JSON.stringify({}),
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSuccessMessage(data.message || 'User approved successfully');
+        await loadUsers();
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to approve user');
+      }
+    } catch (error) {
+      console.error('Approve user error:', error);
+      setError('Network error approving user');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRejectUser = async (userToReject: User) => {
+    if (!confirm(`Are you sure you want to reject ${userToReject.fullName}?`)) {
+      return;
+    }
+
+    const reason =
+      (typeof window !== 'undefined'
+        ? window.prompt('Enter a reason for rejection (optional):', 'No reason provided')
+        : 'No reason provided') || 'No reason provided';
+
+    try {
+      setActionLoading(userToReject.id);
+      const response = await fetch(`/api/admin/users/${userToReject.id}/reject`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reason }),
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSuccessMessage(data.message || 'User rejected successfully');
+        await loadUsers();
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to reject user');
+      }
+    } catch (error) {
+      console.error('Reject user error:', error);
+      setError('Network error rejecting user');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const filteredUsers = users.filter(user => {
     const matchesSearch = 
       user.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -488,16 +828,13 @@ const EnhancedAdminDashboard: React.FC = () => {
     return matchesSearch && matchesDepartment && matchesStatus;
   });
 
-  const getDepartmentIcon = (department?: string) => {
-    switch (department) {
-      case 'store': return '🏪';
-      case 'production': return '🏭';
-      case 'planning_procurement': return '📋';
-      case 'quality': return '🔍';
-      case 'maintenance': return '🔧';
-      case 'admin': return '👑';
-      default: return '👤';
+  const getUserInitials = (fullName?: string) => {
+    if (!fullName) return '?';
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length === 1) {
+      return parts[0].charAt(0).toUpperCase();
     }
+    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
   };
 
   const getStatusColor = (status: string) => {
@@ -508,6 +845,67 @@ const EnhancedAdminDashboard: React.FC = () => {
       case 'deactivated': return 'bg-gray-100 text-gray-800 border-gray-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
+  };
+
+  const getAuditActionLabel = (action: string) => {
+    switch (action) {
+      case 'approve_user': return 'User Approved';
+      case 'reject_user': return 'User Rejected';
+      // "delete_user" now represents a logical deactivation,
+      // not a hard delete, so reflect that in the UI.
+      case 'delete_user': return 'User Deactivated';
+      case 'update_user': return 'User Updated';
+      case 'grant_user_permissions': return 'Permissions Granted';
+      case 'revoke_user_permissions': return 'Permissions Revoked';
+      case 'reset_password': return 'Password Reset';
+      case 'change_user_password': return 'Password Changed';
+      default: return action.replace(/_/g, ' ');
+    }
+  };
+
+  const getAuditActionColor = (action: string) => {
+    switch (action) {
+      case 'approve_user':
+      case 'grant_user_permissions':
+        return 'bg-green-50 text-green-800 border-green-200';
+      case 'reject_user':
+      case 'delete_user':
+      case 'revoke_user_permissions':
+        return 'bg-red-50 text-red-800 border-red-200';
+      case 'reset_password':
+      case 'change_user_password':
+        return 'bg-amber-50 text-amber-800 border-amber-200';
+      case 'update_user':
+        return 'bg-blue-50 text-blue-800 border-blue-200';
+      default:
+        return 'bg-gray-50 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getAuditTargetUserName = (log: UserActionAuditLog): string => {
+    const details = log.details || {};
+    const target =
+      details.target_user ||
+      details.approved_user ||
+      details.rejected_user ||
+      details.deleted_user ||
+      details.user ||
+      details.targetUser;
+
+    if (!target) {
+      return 'Unknown user';
+    }
+
+    if (typeof target === 'string') {
+      return target;
+    }
+
+    return (
+      target.full_name ||
+      target.fullName ||
+      target.email ||
+      'Unknown user'
+    );
   };
 
   // DEPRECATED: getDepartmentMapping - Now using schema-based approach from /api/admin/permissions/schema
@@ -646,24 +1044,16 @@ const EnhancedAdminDashboard: React.FC = () => {
     return matrix;
   };
 
+  // Visible tabs in the Admin Dashboard.
+  // Permission Matrix and Permission Templates have been removed
+  // from the UI to simplify the experience; their underlying
+  // logic is still available internally if needed in future.
   const tabs = [
     {
       id: 'users' as TabType,
       label: 'User Management',
       icon: Users,
       description: 'Manage users and their permissions'
-    },
-    {
-      id: 'permissions' as TabType,
-      label: 'Permission Matrix',
-      icon: Shield,
-      description: 'View and manage granular permissions'
-    },
-    {
-      id: 'templates' as TabType,
-      label: 'Permission Templates',
-      icon: FileText,
-      description: 'Create and manage permission templates'
     },
     {
       id: 'audit' as TabType,
@@ -676,14 +1066,34 @@ const EnhancedAdminDashboard: React.FC = () => {
       label: 'System Settings',
       icon: Settings,
       description: 'Configure system-wide settings'
-    },
-    {
-      id: 'dpr-permissions' as TabType,
-      label: 'DPR Permissions',
-      icon: Factory,
-      description: 'Manage DPR column category permissions'
     }
   ];
+
+  const filteredAuditLogs = auditLogs.filter((log) => {
+    const matchesAction = auditFilterAction === 'all' || log.action === auditFilterAction;
+    const search = auditSearch.trim().toLowerCase();
+
+    if (!search) {
+      return matchesAction;
+    }
+
+    const targetName = getAuditTargetUserName(log).toLowerCase();
+    const actorName = (log.actor?.full_name || '').toLowerCase();
+    const actorEmail = (log.actor?.email || '').toLowerCase();
+    const actionLabel = getAuditActionLabel(log.action).toLowerCase();
+
+    const haystack = `${targetName} ${actorName} ${actorEmail} ${actionLabel}`;
+
+    const matchesSearch = haystack.includes(search);
+    return matchesAction && matchesSearch;
+  });
+
+  const totalAuditActions = auditLogs.length;
+  const totalUsersCreated = auditLogs.filter(log => log.action === 'approve_user').length;
+  const totalUsersRemoved = auditLogs.filter(log => log.action === 'reject_user' || log.action === 'delete_user').length;
+  const totalPermissionChanges = auditLogs.filter(
+    log => log.action === 'grant_user_permissions' || log.action === 'revoke_user_permissions'
+  ).length;
 
   if (!user?.isRootAdmin) {
     // Redirect to unauthorized page instead of showing inline message
@@ -793,7 +1203,7 @@ const EnhancedAdminDashboard: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <Filter className="w-4 h-4 text-gray-500" />
                   <select
                     value={departmentFilter}
@@ -820,6 +1230,20 @@ const EnhancedAdminDashboard: React.FC = () => {
                     <option value="suspended">Suspended</option>
                     <option value="deactivated">Deactivated</option>
                   </select>
+
+                  {/* DPR column settings dashboard trigger */}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setShowDprViewSettings(true);
+                      if (dprUsers.length === 0) {
+                        await loadDprUsers();
+                      }
+                    }}
+                    className="ml-2 px-3 py-2 text-xs font-medium rounded-lg border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100"
+                  >
+                    DPR Column Settings
+                  </button>
                 </div>
               </div>
 
@@ -850,8 +1274,10 @@ const EnhancedAdminDashboard: React.FC = () => {
                       <tr key={user.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
-                            <div className="text-2xl mr-3">
-                              {getDepartmentIcon(user.department)}
+                            <div className="flex-shrink-0 mr-3">
+                              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-sm font-semibold shadow-sm">
+                                {getUserInitials(user.fullName)}
+                              </div>
                             </div>
                             <div>
                               <div className="text-sm font-medium text-gray-900 flex items-center">
@@ -896,21 +1322,41 @@ const EnhancedAdminDashboard: React.FC = () => {
                           {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Never'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex items-center space-x-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <button
                               onClick={() => loadUserPermissions(user.id)}
                               disabled={actionLoading === user.id}
-                              className="text-blue-600 hover:text-blue-900 disabled:opacity-50 flex items-center"
+                              className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                             >
                               <Key className="w-4 h-4 mr-1" />
                               {actionLoading === user.id ? 'Loading...' : 'Permissions'}
                             </button>
                             {!user.isRootAdmin && (
                               <>
+                                {user.status === 'pending' && (
+                                  <>
+                                    <button
+                                      onClick={() => handleApproveUser(user)}
+                                      disabled={actionLoading === user.id}
+                                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                                    >
+                                      <CheckCircle className="w-4 h-4 mr-1" />
+                                      Approve
+                                    </button>
+                                    <button
+                                      onClick={() => handleRejectUser(user)}
+                                      disabled={actionLoading === user.id}
+                                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                                    >
+                                      <X className="w-4 h-4 mr-1" />
+                                      Reject
+                                    </button>
+                                  </>
+                                )}
                                 <button 
                                   onClick={() => handleEditUser(user)}
                                   disabled={actionLoading === user.id}
-                                  className="text-green-600 hover:text-green-900 disabled:opacity-50 flex items-center"
+                                  className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                                 >
                                   <Edit className="w-4 h-4 mr-1" />
                                   Edit
@@ -948,7 +1394,7 @@ const EnhancedAdminDashboard: React.FC = () => {
                                     }
                                   }}
                                   disabled={actionLoading === user.id}
-                                  className="text-red-600 hover:text-red-900 disabled:opacity-50 flex items-center"
+                                  className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border border-red-200 text-red-700 bg-red-50 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                                 >
                                   <UserX className="w-4 h-4 mr-1" />
                                   {user.status === 'suspended' ? 'Activate' : 'Suspend'}
@@ -1067,16 +1513,166 @@ const EnhancedAdminDashboard: React.FC = () => {
 
           {activeTab === 'audit' && (
             <div className="space-y-6">
-              <div className="text-center py-12">
-                <History className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">Audit Trail</h3>
-                <p className="text-gray-600">Permission change history and audit logs</p>
+              {/* Summary cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
+                  <div className="flex items-center">
+                    <History className="w-8 h-8 text-blue-500" />
+                    <div className="ml-4">
+                      <div className="text-2xl font-bold text-blue-600">{totalAuditActions}</div>
+                      <div className="text-gray-600 text-sm">Total Actions</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
+                  <div className="flex items-center">
+                    <UserCheck className="w-8 h-8 text-green-500" />
+                    <div className="ml-4">
+                      <div className="text-2xl font-bold text-green-600">{totalUsersCreated}</div>
+                      <div className="text-gray-600 text-sm">Users Approved</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg shadow p-4 border-l-4 border-red-500">
+                  <div className="flex items-center">
+                    <UserX className="w-8 h-8 text-red-500" />
+                    <div className="ml-4">
+                      <div className="text-2xl font-bold text-red-600">{totalUsersRemoved}</div>
+                      <div className="text-gray-600 text-sm">Users Removed</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg shadow p-4 border-l-4 border-amber-500">
+                  <div className="flex items-center">
+                    <Key className="w-8 h-8 text-amber-500" />
+                    <div className="ml-4">
+                      <div className="text-2xl font-bold text-amber-600">{totalPermissionChanges}</div>
+                      <div className="text-gray-600 text-sm">Permission Changes</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filters */}
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder="Search by user name, email, or action..."
+                      value={auditSearch}
+                      onChange={(e) => setAuditSearch(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-gray-500" />
+                  <select
+                    value={auditFilterAction}
+                    onChange={(e) => setAuditFilterAction(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="all">All Actions</option>
+                    <option value="approve_user">User Approved</option>
+                    <option value="reject_user">User Rejected</option>
+                    {/* "delete_user" now corresponds to a logical deactivation */}
+                    <option value="delete_user">User Deactivated</option>
+                    <option value="update_user">User Updated</option>
+                    <option value="grant_user_permissions">Permissions Granted</option>
+                    <option value="revoke_user_permissions">Permissions Revoked</option>
+                    <option value="reset_password">Password Reset</option>
+                    <option value="change_user_password">Password Changed</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Audit table */}
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                {auditLoading ? (
+                  <div className="p-8 flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
+                    <p className="text-gray-600">Loading audit trail...</p>
+                  </div>
+                ) : filteredAuditLogs.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <History className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-800 mb-2">No audit events found</h3>
+                    <p className="text-gray-600">
+                      Actions you take here (approving, rejecting, deleting users or changing permissions) will appear in this trail.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            When
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Action
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Target User
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Details
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredAuditLogs.map((log) => {
+                          const targetName = getAuditTargetUserName(log);
+                          const actionLabel = getAuditActionLabel(log.action);
+                          const badgeClasses = getAuditActionColor(log.action);
+
+                          return (
+                            <tr key={log.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {new Date(log.created_at).toLocaleString()}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${badgeClasses}`}>
+                                  {actionLabel}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {targetName}
+                              </td>
+                              <td className="px-6 py-4 text-sm text-gray-600">
+                                {log.action === 'grant_user_permissions' || log.action === 'revoke_user_permissions' ? (
+                                  <span>
+                                    {log.details?.permission_count || log.details?.permission_names?.length || 0} permission(s){' '}
+                                    {log.action === 'grant_user_permissions' ? 'changed' : 'revoked'}
+                                    {log.details?.reason ? ` • ${log.details.reason}` : ''}
+                                  </span>
+                                ) : log.action === 'approve_user' || log.action === 'reject_user' || log.action === 'delete_user' ? (
+                                  <span>
+                                    {log.details?.reason
+                                      ? log.details.reason
+                                      : log.action === 'approve_user'
+                                        ? 'User approved'
+                                        : log.action === 'reject_user'
+                                          ? 'User rejected'
+                                          : 'User deleted'}
+                                  </span>
+                                ) : log.action === 'reset_password' || log.action === 'change_user_password' ? (
+                                  <span>Password was reset/changed for this user.</span>
+                                ) : (
+                                  <span>See details in database audit log.</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
-          )}
-
-          {activeTab === 'dpr-permissions' && (
-            <DPRPermissionsManagement />
           )}
 
           {activeTab === 'settings' && (
@@ -1249,6 +1845,196 @@ const EnhancedAdminDashboard: React.FC = () => {
                     </table>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DPR Column Settings Modal */}
+      {showDprViewSettings && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <Factory className="w-5 h-5 text-blue-600" />
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    DPR Column Settings
+                  </h2>
+                  <p className="text-xs text-gray-500">
+                    Control which DPR metrics and columns are visible for each user who has Production DPR access.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowDprViewSettings(false);
+                  setSelectedDprUserId(null);
+                  setDprFieldSettings({});
+                  setFullViewAccess(false);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex flex-1 overflow-hidden">
+              {/* Left: DPR-enabled users */}
+              <div className="w-64 border-r border-gray-200 overflow-y-auto">
+                <div className="p-4">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                    <Users className="w-4 h-4 mr-2 text-gray-500" />
+                    DPR Users
+                  </h3>
+                  {dprUsersLoading ? (
+                    <p className="text-xs text-gray-500">Loading users…</p>
+                  ) : dprUsers.length === 0 ? (
+                    <p className="text-xs text-gray-500">
+                      No users have Production DPR permission yet.
+                    </p>
+                  ) : (
+                    <div className="space-y-1">
+                      {dprUsers.map((u) => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={async () => {
+                            setSelectedDprUserId(u.id);
+                            setDprFieldSettings({});
+                            setFullViewAccess(false);
+                            await loadDprViewSettings(u.id);
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded-md text-xs ${
+                            selectedDprUserId === u.id
+                              ? 'bg-blue-50 text-blue-700 font-semibold'
+                              : 'hover:bg-gray-50 text-gray-700'
+                          }`}
+                        >
+                          <div className="truncate">{u.fullName}</div>
+                          <div className="text-[10px] text-gray-500 truncate">
+                            {u.email}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right: Field checkboxes */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {!selectedDprUserId ? (
+                  <div className="h-full flex items-center justify-center text-sm text-gray-500">
+                    Select a DPR user on the left to configure their dashboard.
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Full View Access Toggle - at the top */}
+                    <div className="border border-gray-200 rounded-lg bg-purple-50">
+                      <div className="px-4 py-3 border-b border-gray-200 bg-purple-100 flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-gray-800 flex items-center">
+                          <Eye className="w-4 h-4 mr-2 text-purple-600" />
+                          Full View Access
+                        </h3>
+                      </div>
+                      <div className="p-4">
+                        <label className="flex items-center space-x-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                            checked={fullViewAccess}
+                            disabled={dprFieldLoading}
+                            onChange={(e) => setFullViewAccess(e.target.checked)}
+                          />
+                          <div>
+                            <span className="text-sm font-medium text-gray-800">
+                              Allow Full View Button
+                            </span>
+                            <p className="text-xs text-gray-600 mt-1">
+                              When enabled, this user will see the "Full View" button on their DPR dashboard.
+                            </p>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Field visibility checkboxes */}
+                    {Array.from(
+                      DPR_VIEW_FIELDS.reduce<Map<string, DprViewFieldDef[]>>((map, field) => {
+                        const group = field.header;
+                        if (!map.has(group)) map.set(group, []);
+                        map.get(group)!.push(field);
+                        return map;
+                      }, new Map())
+                    ).map(([header, fields]) => (
+                      <div key={header} className="border border-gray-200 rounded-lg">
+                        <div className="px-4 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+                          <h3 className="text-sm font-semibold text-gray-800">
+                            {header}
+                          </h3>
+                        </div>
+                        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                          {fields.map((field) => {
+                            const checked =
+                              dprFieldSettings[field.key] !== undefined
+                                ? dprFieldSettings[field.key]
+                                : true;
+                            return (
+                              <label
+                                key={field.key}
+                                className="flex items-center text-xs text-gray-700 space-x-2"
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  checked={checked}
+                                  disabled={dprFieldLoading}
+                                  onChange={(e) =>
+                                    setDprFieldSettings((prev) => ({
+                                      ...prev,
+                                      [field.key]: e.target.checked,
+                                    }))
+                                  }
+                                />
+                                <span>{field.label}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <p className="text-xs text-gray-500">
+                These settings control what the user can <strong>see</strong> on their DPR dashboard. Data entry rules are unchanged.
+              </p>
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDprViewSettings(false);
+                    setSelectedDprUserId(null);
+                    setDprFieldSettings({});
+                    setFullViewAccess(false);
+                  }}
+                  className="px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  disabled={!selectedDprUserId || dprFieldLoading}
+                  onClick={saveDprViewSettings}
+                  className="px-4 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {dprFieldLoading ? 'Saving…' : 'Save Settings'}
+                </button>
               </div>
             </div>
           </div>
@@ -1816,6 +2602,18 @@ const EnhancedAdminDashboard: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
+            Designation / Job Title
+          </label>
+          <input
+            type="text"
+            value={editFormData.jobTitle}
+            onChange={(e) => setEditFormData({ ...editFormData, jobTitle: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
                     Status *
                   </label>
                   <select
@@ -1847,6 +2645,39 @@ const EnhancedAdminDashboard: React.FC = () => {
                     <option value="maintenance">Maintenance</option>
                     <option value="admin">Admin</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Access Scope
+                  </label>
+                  {editingUser?.isRootAdmin ? (
+                    <div className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-700">
+                      <span className="flex items-center">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 mr-2">
+                          Root Admin
+                        </span>
+                        UNIVERSAL (Always)
+                      </span>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Root admin always has universal network access and cannot be restricted.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <select
+                        value={editFormData.accessScope}
+                        onChange={(e) => setEditFormData({ ...editFormData, accessScope: e.target.value as 'FACTORY_ONLY' | 'UNIVERSAL' })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="FACTORY_ONLY">FACTORY_ONLY - Factory network only</option>
+                        <option value="UNIVERSAL">UNIVERSAL - Any network</option>
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        FACTORY_ONLY: User can access ProdFlow only when connected to the factory network. UNIVERSAL: User can access from any network.
+                      </p>
+                    </>
+                  )}
                 </div>
 
                 <div className="pt-4 border-t border-gray-200">
@@ -1900,7 +2731,7 @@ const EnhancedAdminDashboard: React.FC = () => {
                 </button>
                 <button
                   onClick={handleSaveUser}
-                  disabled={actionLoading !== null || !editFormData.fullName || !editFormData.email || (showPasswordField && newPassword && newPassword.length < 6)}
+                  disabled={actionLoading !== null || !editFormData.fullName || !editFormData.email || (showPasswordField && newPassword.length > 0 && newPassword.length < 6)}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {actionLoading ? 'Saving...' : 'Save Changes'}

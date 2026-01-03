@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 import { verifyRootAdmin } from '@/lib/auth-utils';
+
+const getSupabase = () => createClient();
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
+    const supabase = getSupabase();
     const adminUser = await verifyRootAdmin(request);
     if (!adminUser) {
       return NextResponse.json(
@@ -28,13 +31,15 @@ export async function GET(
         phone,
         status,
         department,
+        job_title,
         is_root_admin,
         password_reset_required,
         last_login,
         failed_login_attempts,
         account_locked_until,
         created_at,
-        updated_at
+        updated_at,
+        access_scope
       `)
       .eq('id', userId)
       .single();
@@ -55,13 +60,15 @@ export async function GET(
         phone: user.phone,
         status: user.status,
         department: user.department,
+        jobTitle: user.job_title,
         isRootAdmin: user.is_root_admin,
         requiresPasswordReset: user.password_reset_required,
         lastLogin: user.last_login,
         failedLoginAttempts: user.failed_login_attempts,
         isLocked: user.account_locked_until && new Date(user.account_locked_until) > new Date(),
         createdAt: user.created_at,
-        updatedAt: user.updated_at
+        updatedAt: user.updated_at,
+        accessScope: user.is_root_admin ? 'UNIVERSAL' : (user.access_scope || 'FACTORY_ONLY')
       }
     });
 
@@ -79,6 +86,7 @@ export async function PUT(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
+    const supabase = getSupabase();
     const adminUser = await verifyRootAdmin(request);
     if (!adminUser) {
       return NextResponse.json(
@@ -93,7 +101,7 @@ export async function PUT(
     // Get current user to check if they're root admin
     const { data: currentUser, error: userError } = await supabase
       .from('auth_users')
-      .select('id, is_root_admin')
+      .select('id, username, email, full_name, status, is_root_admin, access_scope')
       .eq('id', userId)
       .single();
 
@@ -132,6 +140,34 @@ export async function PUT(
     if (body.department !== undefined) {
       updateData.department = body.department;
     }
+    if (body.jobTitle !== undefined) {
+      updateData.job_title = body.jobTitle;
+    }
+    if (body.accessScope !== undefined) {
+      // Root admin must always be UNIVERSAL - enforce this rule
+      if (currentUser.is_root_admin) {
+        updateData.access_scope = 'UNIVERSAL';
+      } else {
+        // Validate access_scope value
+        if (!['FACTORY_ONLY', 'UNIVERSAL'].includes(body.accessScope)) {
+          return NextResponse.json(
+            { error: 'Invalid access_scope value. Must be FACTORY_ONLY or UNIVERSAL.' },
+            { status: 400 }
+          );
+        }
+        updateData.access_scope = body.accessScope;
+      }
+    }
+
+    // If status is being changed to "deactivated" (our logical delete),
+    // anonymize the user's identity while keeping the record for audit logs
+    if (body.status === 'deactivated' && currentUser.status !== 'deactivated') {
+      const now = Date.now();
+      updateData.status = 'deactivated';
+      updateData.username = `${currentUser.username}__deleted_${now}`;
+      updateData.email = `deleted+${now}__${currentUser.email}`;
+      updateData.full_name = `[DELETED] ${currentUser.full_name}`;
+    }
 
     // Update user
     const { data: updatedUser, error: updateError } = await supabase
@@ -146,13 +182,15 @@ export async function PUT(
         phone,
         status,
         department,
+        job_title,
         is_root_admin,
         password_reset_required,
         last_login,
         failed_login_attempts,
         account_locked_until,
         created_at,
-        updated_at
+        updated_at,
+        access_scope
       `)
       .single();
 
@@ -194,13 +232,15 @@ export async function PUT(
         phone: updatedUser.phone,
         status: updatedUser.status,
         department: updatedUser.department,
+        jobTitle: updatedUser.job_title,
         isRootAdmin: updatedUser.is_root_admin,
         requiresPasswordReset: updatedUser.password_reset_required,
         lastLogin: updatedUser.last_login,
         failedLoginAttempts: updatedUser.failed_login_attempts,
         isLocked: updatedUser.account_locked_until && new Date(updatedUser.account_locked_until) > new Date(),
         createdAt: updatedUser.created_at,
-        updatedAt: updatedUser.updated_at
+        updatedAt: updatedUser.updated_at,
+        accessScope: updatedUser.is_root_admin ? 'UNIVERSAL' : (updatedUser.access_scope || 'FACTORY_ONLY')
       }
     });
 

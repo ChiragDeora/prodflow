@@ -86,3 +86,30 @@ body {
   width: 64px;
   height: 64px;
 }
+
+/* Print-specific adjustments */
+@media print {
+  /* Clean white background for all prints */
+  body {
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Never print main sidebar or app sub-nav bars */
+  .app-sidebar,
+  .app-subnav {
+    display: none !important;
+  }
+
+  /* Prod Planner: scale full grid to fit on page */
+  .prod-planner-print-root {
+    overflow: visible !important;
+  }
+
+  .prod-planner-print-grid {
+    transform-origin: top left;
+    /* Adjust this scale if you want the grid larger/smaller on paper */
+    transform: scale(0.55);
+  }
+}

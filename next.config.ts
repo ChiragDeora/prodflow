@@ -4,10 +4,8 @@ const nextConfig: NextConfig = {
   // Security configurations
   poweredByHeader: false, // Remove X-Powered-By header
   
-  // Experimental features for security
-  experimental: {
-    serverComponentsExternalPackages: ['bcrypt'],
-  },
+  // Server external packages
+  serverExternalPackages: ['bcrypt'],
 
   // Headers configuration
   async headers() {
@@ -63,27 +61,45 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // Body size limits for API routes
-  api: {
-    bodyParser: {
-      sizeLimit: '1mb', // 1MB limit for request bodies
-    },
-    responseLimit: '8mb', // 8MB limit for responses
-  },
-
   // Environment variables validation
   env: {
     CUSTOM_KEY: process.env.CUSTOM_KEY,
   },
 
-  // Webpack configuration for security
+  // Webpack configuration for security and performance
   webpack: (config, { isServer }) => {
     // Remove console.log in production
     if (!isServer && process.env.NODE_ENV === 'production') {
       config.optimization.minimizer = config.optimization.minimizer || [];
     }
     
+    // Optimize for large files - improve compilation performance
+    config.optimization = {
+      ...config.optimization,
+      moduleIds: 'deterministic',
+    };
+    
+    // Increase performance for large TypeScript files
+    if (!isServer) {
+      config.resolve = {
+        ...config.resolve,
+        extensions: ['.tsx', '.ts', '.jsx', '.js', '.json'],
+      };
+    }
+    
     return config;
+  },
+
+  // TypeScript configuration for faster compilation
+  typescript: {
+    // We'll handle type checking separately if needed
+    ignoreBuildErrors: false,
+  },
+
+  // Experimental features for better performance
+  experimental: {
+    // Optimize package imports
+    optimizePackageImports: ['lucide-react'],
   },
 
   // Redirects for security
