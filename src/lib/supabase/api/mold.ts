@@ -14,6 +14,20 @@ export const moldAPI = {
       throw error;
     }
     
+    // Debug: Log first mold to check column names
+    if (data && data.length > 0) {
+      const firstMold = data[0];
+      console.log('🔍 moldAPI.getAll() - First mold columns:', {
+        has_int_wt: 'int_wt' in firstMold,
+        has_rp_bill_wt: 'rp_bill_wt' in firstMold,
+        has_std_wt: 'std_wt' in firstMold,
+        has_rp_wt: 'rp_wt' in firstMold,
+        int_wt_value: firstMold.int_wt,
+        rp_bill_wt_value: firstMold.rp_bill_wt,
+        allKeys: Object.keys(firstMold).filter(k => k.includes('wt') || k.includes('weight'))
+      });
+    }
+    
     // Sort the data properly for alphanumeric sr_no values
     const sortedData = (data || []).sort((a, b) => {
       const srNoA = a.sr_no || '';

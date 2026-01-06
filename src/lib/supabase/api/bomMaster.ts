@@ -91,10 +91,23 @@ export const bomMasterAPI = {
           tableName = 'sfg_bom_with_versions';
       }
       
+      // Use a fresh query with no caching
+      // Explicitly select all columns including item_name to ensure it's included
       const { data, error } = await supabase
         .from(tableName)
-        .select('*')
+        .select('*', { count: 'exact' })
         .order('sl_no', { ascending: true });
+      
+      // Log for debugging - check if item_name is present
+      if (data && data.length > 0) {
+        const firstRecord = data[0];
+        console.log(`🔍 Fetched ${category} BOM from ${tableName}:`, data.length, 'records');
+        console.log(`🔍 First record keys:`, Object.keys(firstRecord));
+        console.log(`🔍 First record item_name:`, firstRecord.item_name);
+        console.log(`🔍 First record item_code:`, firstRecord.item_code);
+      } else {
+        console.log(`🔍 Fetched ${category} BOM from ${tableName}:`, 0, 'records');
+      }
       
       if (error) {
         handleSupabaseError(error, 'fetching BOM masters by category');

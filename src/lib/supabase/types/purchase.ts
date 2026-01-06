@@ -103,6 +103,7 @@ export interface PurchaseOrderItem {
   id: string;
   purchase_order_id: string;
   sr_no: number;
+  item_code?: string;
   description: string;
   qty?: number;
   unit?: string;

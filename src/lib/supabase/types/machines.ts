@@ -37,8 +37,8 @@ export interface Mold {
   cavity?: number;
   cycle_time?: number;
   dwg_wt?: number; // Drawing Weight
-  std_wt?: number; // Standard Weight
-  rp_wt?: number; // RP Weight
+  int_wt?: number; // Internal Weight
+  rp_bill_wt?: number; // RP Bill Weight
   dimensions?: string;
   mold_wt?: number; // Mold Weight
   hrc_make?: string;

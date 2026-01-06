@@ -255,6 +255,14 @@ const DispatchHistory: React.FC = () => {
           { key: 'remarks', label: 'Remarks', format: (v: any) => v || '-' }
         ];
 
+    // Determine stock status and document type for stock posting
+    const stockStatus = detailedForm && 'stock_status' in detailedForm 
+      ? (detailedForm as any).stock_status 
+      : undefined;
+    
+    // Only enable stock posting for job work challan (FG stock ledger)
+    const documentType = selectedForm.type === 'job-work-challan' ? 'job-work-challan' : undefined;
+
     return (
       <HistoryDetailView
         title={getFormTitle(selectedForm)}
@@ -264,6 +272,13 @@ const DispatchHistory: React.FC = () => {
         items={detailedItems}
         itemColumns={itemColumns}
         loading={loadingDetails}
+        documentId={selectedForm.id}
+        documentType={documentType}
+        stockStatus={stockStatus}
+        onStockPost={() => {
+          // Refresh the form details after posting
+          handleViewForm(selectedForm);
+        }}
       />
     );
   }
@@ -348,36 +363,47 @@ const DispatchHistory: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-800">MIS ({misForms.length})</h3>
           </div>
           {misForms.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {misForms.map((form) => (
-                <div
-                  key={form.id}
-                  className="border border-gray-300 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => handleViewForm(form)}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-5 h-5 text-blue-600" />
-                      <span className="font-semibold text-gray-800">MIS</span>
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="bg-gray-50 border-b border-gray-200 px-4 py-3">
+                <div className="grid grid-cols-12 gap-4 text-sm font-semibold text-gray-700">
+                  <div className="col-span-1">Type</div>
+                  <div className="col-span-2">Doc No</div>
+                  <div className="col-span-2">Date</div>
+                  <div className="col-span-5">Department</div>
+                  <div className="col-span-2 text-right">Action</div>
+                </div>
+              </div>
+              <div className="divide-y divide-gray-200">
+                {misForms.map((form) => (
+                  <div
+                    key={form.id}
+                    className="px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
+                    onClick={() => handleViewForm(form)}
+                  >
+                    <div className="grid grid-cols-12 gap-4 items-center text-sm">
+                      <div className="col-span-1 flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-blue-600" />
+                        <span className="text-gray-800">MIS</span>
+                      </div>
+                      <div className="col-span-2 text-gray-700 font-medium">{form.docNo || 'N/A'}</div>
+                      <div className="col-span-2 text-gray-600">{formatDate(form.date || form.createdAt)}</div>
+                      <div className="col-span-5 text-gray-600">{form.deptName || 'N/A'}</div>
+                      <div className="col-span-2 text-right">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewForm(form);
+                          }}
+                          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center justify-center gap-2 text-sm inline-flex"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-1 text-sm text-gray-600">
-                    <div><span className="font-medium">Doc No:</span> {form.docNo || 'N/A'}</div>
-                    <div><span className="font-medium">Date:</span> {formatDate(form.date || form.createdAt)}</div>
-                    <div><span className="font-medium">Department:</span> {form.deptName || 'N/A'}</div>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleViewForm(form);
-                    }}
-                    className="mt-3 w-full px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center justify-center gap-2 text-sm"
-                  >
-                    <Eye className="w-4 h-4" />
-                    View
-                  </button>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500">
@@ -395,37 +421,49 @@ const DispatchHistory: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-800">Job Work Challans ({jobWorkChallans.length})</h3>
           </div>
           {jobWorkChallans.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {jobWorkChallans.map((form) => (
-                <div
-                  key={form.id}
-                  className="border border-gray-300 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => handleViewForm(form)}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <ArrowRightCircle className="w-5 h-5 text-orange-600" />
-                      <span className="font-semibold text-gray-800">Job Work Challan</span>
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="bg-gray-50 border-b border-gray-200 px-4 py-3">
+                <div className="grid grid-cols-12 gap-4 text-sm font-semibold text-gray-700">
+                  <div className="col-span-1">Type</div>
+                  <div className="col-span-2">Doc No</div>
+                  <div className="col-span-2">Date</div>
+                  <div className="col-span-3">Party</div>
+                  <div className="col-span-2">GST No</div>
+                  <div className="col-span-2 text-right">Action</div>
+                </div>
+              </div>
+              <div className="divide-y divide-gray-200">
+                {jobWorkChallans.map((form) => (
+                  <div
+                    key={form.id}
+                    className="px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
+                    onClick={() => handleViewForm(form)}
+                  >
+                    <div className="grid grid-cols-12 gap-4 items-center text-sm">
+                      <div className="col-span-1 flex items-center gap-2">
+                        <ArrowRightCircle className="w-4 h-4 text-orange-600" />
+                        <span className="text-gray-800">JW</span>
+                      </div>
+                      <div className="col-span-2 text-gray-700 font-medium">{form.docNo || 'N/A'}</div>
+                      <div className="col-span-2 text-gray-600">{formatDate(form.date || form.createdAt)}</div>
+                      <div className="col-span-3 text-gray-600">{form.partyName || 'N/A'}</div>
+                      <div className="col-span-2 text-gray-600">{form.gstNo || 'N/A'}</div>
+                      <div className="col-span-2 text-right">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewForm(form);
+                          }}
+                          className="px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 flex items-center justify-center gap-2 text-sm inline-flex"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-1 text-sm text-gray-600">
-                    <div><span className="font-medium">Doc No:</span> {form.docNo || 'N/A'}</div>
-                    <div><span className="font-medium">Date:</span> {formatDate(form.date || form.createdAt)}</div>
-                    <div><span className="font-medium">Party:</span> {form.partyName || 'N/A'}</div>
-                    <div><span className="font-medium">GST No:</span> {form.gstNo || 'N/A'}</div>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleViewForm(form);
-                    }}
-                    className="mt-3 w-full px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 flex items-center justify-center gap-2 text-sm"
-                  >
-                    <Eye className="w-4 h-4" />
-                    View
-                  </button>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500">
@@ -443,37 +481,49 @@ const DispatchHistory: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-800">Delivery Challans ({deliveryChallans.length})</h3>
           </div>
           {deliveryChallans.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {deliveryChallans.map((form) => (
-                <div
-                  key={form.id}
-                  className="border border-gray-300 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => handleViewForm(form)}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Truck className="w-5 h-5 text-green-600" />
-                      <span className="font-semibold text-gray-800">Delivery Challan</span>
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="bg-gray-50 border-b border-gray-200 px-4 py-3">
+                <div className="grid grid-cols-12 gap-4 text-sm font-semibold text-gray-700">
+                  <div className="col-span-1">Type</div>
+                  <div className="col-span-2">Sr. No</div>
+                  <div className="col-span-2">Date</div>
+                  <div className="col-span-3">To</div>
+                  <div className="col-span-2">Vehicle No</div>
+                  <div className="col-span-2 text-right">Action</div>
+                </div>
+              </div>
+              <div className="divide-y divide-gray-200">
+                {deliveryChallans.map((form) => (
+                  <div
+                    key={form.id}
+                    className="px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
+                    onClick={() => handleViewForm(form)}
+                  >
+                    <div className="grid grid-cols-12 gap-4 items-center text-sm">
+                      <div className="col-span-1 flex items-center gap-2">
+                        <Truck className="w-4 h-4 text-green-600" />
+                        <span className="text-gray-800">DC</span>
+                      </div>
+                      <div className="col-span-2 text-gray-700 font-medium">{form.srNo || form.docNo || 'N/A'}</div>
+                      <div className="col-span-2 text-gray-600">{formatDate(form.date || form.createdAt)}</div>
+                      <div className="col-span-3 text-gray-600">{form.to || 'N/A'}</div>
+                      <div className="col-span-2 text-gray-600">{form.vehicleNo || 'N/A'}</div>
+                      <div className="col-span-2 text-right">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewForm(form);
+                          }}
+                          className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 flex items-center justify-center gap-2 text-sm inline-flex"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-1 text-sm text-gray-600">
-                    <div><span className="font-medium">Sr. No:</span> {form.srNo || form.docNo || 'N/A'}</div>
-                    <div><span className="font-medium">Date:</span> {formatDate(form.date || form.createdAt)}</div>
-                    <div><span className="font-medium">To:</span> {form.to || 'N/A'}</div>
-                    <div><span className="font-medium">Vehicle No:</span> {form.vehicleNo || 'N/A'}</div>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleViewForm(form);
-                    }}
-                    className="mt-3 w-full px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 flex items-center justify-center gap-2 text-sm"
-                  >
-                    <Eye className="w-4 h-4" />
-                    View
-                  </button>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500">

@@ -114,7 +114,7 @@ const DailyWeightReport: React.FC<DailyWeightReportProps> = ({ linesMaster, mold
       id: mold.mold_id,
       mold_name: mold.mold_name,
       cavities: mold.cavities,
-      std_weight: mold.std_wt || 100,
+      std_weight: mold.int_wt || 100,
       cycle_time: mold.cycle_time || 30,
       description: mold.item_name || ''
     }));
@@ -858,7 +858,7 @@ const DailyWeightReport: React.FC<DailyWeightReportProps> = ({ linesMaster, mold
                                     </option>
                                     {lineMolds.map((mold) => (
                                       <option key={mold.id} value={mold.id}>
-                                        {mold.mold_name} - {mold.cavities} cavities, {mold.std_weight}g std wt, {mold.cycle_time}s cycle
+                                        {mold.mold_name} - {mold.cavities} cavities, {mold.std_weight}g int wt, {mold.cycle_time}s cycle
                                       </option>
                                     ))}
                                   </select>
@@ -912,7 +912,7 @@ const DailyWeightReport: React.FC<DailyWeightReportProps> = ({ linesMaster, mold
                                             <span className="font-medium">{selectedMoldPerLine[line.id].cycle_time}s</span>
                                           </div>
                                           <div className="flex items-center space-x-1">
-                                            <span className="text-gray-600">Std Wt:</span>
+                                            <span className="text-gray-600">Int Wt:</span>
                                             <span className="font-medium">{selectedMoldPerLine[line.id].std_weight}g</span>
                                           </div>
                                           <div className="flex items-center space-x-1">

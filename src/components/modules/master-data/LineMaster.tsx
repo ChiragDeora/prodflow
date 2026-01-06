@@ -127,6 +127,9 @@ const LineMaster: React.FC<LineMasterProps> = ({
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Hoist
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Loader <span className="text-gray-400 text-xs font-normal">(Optional)</span>
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onClick={() => handleLineSortChange('status')}>
                   Status
                   {lineSortField === 'status' && (
@@ -152,6 +155,7 @@ const LineMaster: React.FC<LineMasterProps> = ({
                 const robotMachine = getMachineDetails(line.robot_machine_id);
                 const conveyorMachine = getMachineDetails(line.conveyor_machine_id);
                 const hoistMachine = getMachineDetails(line.hoist_machine_id);
+                const loaderMachine = getMachineDetails(line.loader_machine_id);
 
                 return (
                   <tr key={line.line_id} className="hover:bg-gray-50">
@@ -186,6 +190,13 @@ const LineMaster: React.FC<LineMasterProps> = ({
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {hoistMachine ? (
                         <span>{hoistMachine.machine_id}</span>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {loaderMachine ? (
+                        <span>{loaderMachine.machine_id}</span>
                       ) : (
                         <span className="text-gray-400">-</span>
                       )}

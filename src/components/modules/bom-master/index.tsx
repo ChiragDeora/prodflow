@@ -35,6 +35,7 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<'SFG' | 'FG' | 'LOCAL'>('SFG');
+  const [refreshKey, setRefreshKey] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'released' | 'archived'>('all');
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -52,6 +53,9 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
 
   // Load BOM masters on component mount and when category changes
   useEffect(() => {
+    // Clear previous data immediately when category changes to prevent stale data display
+    setBomMasters([]);
+    setLoading(true);
     loadBomMasters();
   }, [selectedCategory]);
 
@@ -59,7 +63,15 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`/api/bom?category=${selectedCategory}`);
+      // Add cache-busting timestamp to ensure fresh data
+      const timestamp = Date.now();
+      const response = await fetch(`/api/bom?category=${selectedCategory}&_t=${timestamp}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
       const result = await response.json();
 
       if (result.success) {
@@ -67,6 +79,7 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
         console.log(`${selectedCategory} BOM data received:`, data.length, 'records');
         console.log('First record:', data[0]);
         setBomMasters(data);
+        setRefreshKey(prev => prev + 1); // Force table re-render with fresh data
       } else {
         console.error(`Error loading ${selectedCategory} BOM masters:`, result.error);
         setError(`Failed to load ${selectedCategory} BOM masters`);
@@ -260,7 +273,10 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
             <h1 className="text-2xl font-bold text-gray-900">Bill of Materials Master</h1>
             <div className="flex space-x-1">
               <button
-                onClick={() => setSelectedCategory('SFG')}
+                onClick={() => {
+                  setBomMasters([]); // Clear data immediately
+                  setSelectedCategory('SFG');
+                }}
                 className={`px-3 py-1 rounded-md text-sm font-medium ${
                   selectedCategory === 'SFG'
                     ? 'bg-white border border-gray-300 text-gray-900'
@@ -270,7 +286,10 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
                 SFG
               </button>
               <button
-                onClick={() => setSelectedCategory('FG')}
+                onClick={() => {
+                  setBomMasters([]); // Clear data immediately
+                  setSelectedCategory('FG');
+                }}
                 className={`px-3 py-1 rounded-md text-sm font-medium ${
                   selectedCategory === 'FG'
                     ? 'bg-white border border-gray-300 text-gray-900'
@@ -280,7 +299,10 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
                 FG
               </button>
               <button
-                onClick={() => setSelectedCategory('LOCAL')}
+                onClick={() => {
+                  setBomMasters([]); // Clear data immediately
+                  setSelectedCategory('LOCAL');
+                }}
                 className={`px-3 py-1 rounded-md text-sm font-medium ${
                   selectedCategory === 'LOCAL'
                     ? 'bg-white border border-gray-300 text-gray-900'
@@ -293,10 +315,15 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
           </div>
           <div className="flex space-x-3">
             <button
-              onClick={loadBomMasters}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center"
+              onClick={async () => {
+                setBomMasters([]); // Clear data first
+                setRefreshKey(prev => prev + 1); // Increment refresh key
+                await loadBomMasters();
+              }}
+              disabled={loading}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <RotateCcw className="w-4 h-4 mr-2" />
+              <RotateCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
             <button
@@ -466,7 +493,7 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
         ) : (
           <div className="bg-white shadow overflow-hidden sm:rounded-md">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+              <table key={`${selectedCategory}-${refreshKey}`} className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">

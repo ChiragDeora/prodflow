@@ -13,6 +13,7 @@ import ProdPlanner from './prod-planner';
 import ProductionModule from './production';
 import StoreDispatchModule from './store-dispatch';
 import WelcomeDashboard from './welcome-dashboard';
+import StockLedgerModule from './stock-ledger';
 
 
 
@@ -28,6 +29,7 @@ import { moduleConfig as prodPlannerConfig } from './prod-planner/moduleConfig';
 import { moduleConfig as productionConfig } from './production/moduleConfig';
 import { moduleConfig as storeDispatchConfig } from './store-dispatch/moduleConfig';
 import { moduleConfig as welcomeDashboardConfig } from './welcome-dashboard/moduleConfig';
+import { moduleConfig as stockLedgerConfig } from './stock-ledger/moduleConfig';
 
 
 
@@ -61,6 +63,10 @@ export const moduleRegistry: Record<string, ModuleDefinition> = {
   'store-dispatch': {
     config: storeDispatchConfig,
     component: StoreDispatchModule
+  },
+  'stock-ledger': {
+    config: stockLedgerConfig,
+    component: StockLedgerModule
   },
   'prod-planner': {
     config: prodPlannerConfig,

@@ -88,19 +88,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (userError || !user) {
-      // Try to log failed login attempt (but don't fail if this fails)
-      try {
-        await supabase.from('auth_audit_logs').insert({
-          action: 'login_failed',
-          resource_type: 'auth_users',
-          details: { username, reason: 'user_not_found' },
-          outcome: 'failure',
-          ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
-          user_agent: request.headers.get('user-agent') || null
-        });
-      } catch (auditError) {
-        console.warn('Could not log failed login attempt:', auditError);
-      }
+      // Fire and forget - don't block response
+      supabase.from('auth_audit_logs').insert({
+        action: 'login_failed',
+        resource_type: 'auth_users',
+        details: { username, reason: 'user_not_found' },
+        outcome: 'failure',
+        ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
+        user_agent: request.headers.get('user-agent') || null
+      }).then(({ error }) => {
+        if (error) console.warn('Audit log failed:', error);
+      });
 
       return NextResponse.json(
         { error: 'Invalid username or password' },
@@ -152,21 +150,19 @@ export async function POST(request: NextRequest) {
         .update(updates)
         .eq('id', user.id);
 
-      // Log failed login attempt (but don't fail if this fails)
-      try {
-        await supabase.from('auth_audit_logs').insert({
-          user_id: user.id,
-          action: 'login_failed',
-          resource_type: 'auth_users',
-          resource_id: user.id,
-          details: { username, reason: 'invalid_password', failed_attempts: newFailedAttempts },
-          outcome: 'failure',
-          ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
-          user_agent: request.headers.get('user-agent') || null
-        });
-      } catch (auditError) {
-        console.warn('Could not log failed login attempt:', auditError);
-      }
+      // Fire and forget - don't block response
+      supabase.from('auth_audit_logs').insert({
+        user_id: user.id,
+        action: 'login_failed',
+        resource_type: 'auth_users',
+        resource_id: user.id,
+        details: { username, reason: 'invalid_password', failed_attempts: newFailedAttempts },
+        outcome: 'failure',
+        ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
+        user_agent: request.headers.get('user-agent') || null
+      }).then(({ error }) => {
+        if (error) console.warn('Audit log failed:', error);
+      });
 
       return NextResponse.json(
         { error: 'Invalid username or password' },
@@ -185,27 +181,25 @@ export async function POST(request: NextRequest) {
 
     if (!accessCheck.allowed) {
       console.log(`[Login] Network access denied for user ${username}: ${accessCheck.reason}`);
-      // Log restricted access attempt
-      try {
-        await supabase.from('auth_audit_logs').insert({
-          user_id: user.id,
-          action: 'login_restricted_network',
-          resource_type: 'auth_users',
-          resource_id: user.id,
-          details: { 
-            username, 
-            reason: 'network_restriction',
-            access_scope: user.access_scope,
-            client_ip: clientIP,
-            message: accessCheck.reason
-          },
-          outcome: 'failure',
-          ip_address: clientIP,
-          user_agent: request.headers.get('user-agent') || null
-        });
-      } catch (auditError) {
-        console.warn('Could not log network restriction:', auditError);
-      }
+      // Fire and forget - don't block response
+      supabase.from('auth_audit_logs').insert({
+        user_id: user.id,
+        action: 'login_restricted_network',
+        resource_type: 'auth_users',
+        resource_id: user.id,
+        details: { 
+          username, 
+          reason: 'network_restriction',
+          access_scope: user.access_scope,
+          client_ip: clientIP,
+          message: accessCheck.reason
+        },
+        outcome: 'failure',
+        ip_address: clientIP,
+        user_agent: request.headers.get('user-agent') || null
+      }).then(({ error }) => {
+        if (error) console.warn('Audit log failed:', error);
+      });
 
       return NextResponse.json(
         { error: accessCheck.reason || 'Network access restricted' },
@@ -216,64 +210,101 @@ export async function POST(request: NextRequest) {
     // Generate cryptographically secure session token
     const sessionToken = require('crypto').randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
+    const now = new Date().toISOString();
+    const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null;
+    const userAgent = request.headers.get('user-agent') || null;
 
-    // Create session
-    const { data: session, error: sessionError } = await supabase
-      .from('auth_sessions')
-      .insert({
-        user_id: user.id,
-        session_token: sessionToken,
-        expires_at: expiresAt.toISOString(),
-        ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
-        user_agent: request.headers.get('user-agent') || null,
-        created_at: new Date().toISOString(),
-        last_activity: new Date().toISOString()
-      })
-      .select()
-      .single();
+    // Run session creation and user update in parallel for speed
+    const [sessionResult, _] = await Promise.all([
+      // Create session
+      supabase
+        .from('auth_sessions')
+        .insert({
+          user_id: user.id,
+          session_token: sessionToken,
+          expires_at: expiresAt.toISOString(),
+          ip_address: ipAddress,
+          user_agent: userAgent,
+          created_at: now,
+          last_activity: now
+        })
+        .select()
+        .single(),
+      // Reset failed login attempts and update last login
+      supabase
+        .from('auth_users')
+        .update({
+          failed_login_attempts: 0,
+          account_locked_until: null,
+          last_login: now,
+          updated_at: now
+        })
+        .eq('id', user.id)
+    ]);
 
-    if (sessionError) {
-      console.error('Session creation error:', sessionError);
+    if (sessionResult.error) {
+      console.error('Session creation error:', sessionResult.error);
       return NextResponse.json(
         { error: 'Failed to create session' },
         { status: 500 }
       );
     }
 
-    // Reset failed login attempts and update last login
-    await supabase
-      .from('auth_users')
-      .update({
-        failed_login_attempts: 0,
-        account_locked_until: null,
-        last_login: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', user.id);
-
-    // Log successful login (but don't fail if this fails)
+    // Fetch permissions - root admin gets all, others get direct permissions
+    let permissions: Record<string, boolean> = {};
     try {
-      await supabase.from('auth_audit_logs').insert({
-        user_id: user.id,
-        action: 'login_success',
-        resource_type: 'auth_users',
-        resource_id: user.id,
-        details: { username },
-        outcome: 'success',
-        ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
-        user_agent: request.headers.get('user-agent') || null,
-        is_super_admin_override: user.is_root_admin || false
-      });
-    } catch (auditError) {
-      console.warn('Could not log successful login:', auditError);
-      // Don't fail login if audit logging fails
+      if (user.is_root_admin) {
+        // Root admin gets all permissions
+        const { data: allPerms } = await supabase
+          .from('auth_permissions')
+          .select('name');
+        allPerms?.forEach((p: { name: string }) => {
+          permissions[p.name] = true;
+        });
+      } else {
+        // Get user's direct permissions
+        const { data: userPerms } = await supabase
+          .from('auth_user_permissions')
+          .select('permission_id')
+          .eq('user_id', user.id)
+          .eq('is_active', true);
+        
+        if (userPerms && userPerms.length > 0) {
+          const permIds = userPerms.map(p => p.permission_id);
+          const { data: permNames } = await supabase
+            .from('auth_permissions')
+            .select('name')
+            .in('id', permIds);
+          permNames?.forEach((p: { name: string }) => {
+            permissions[p.name] = true;
+          });
+        }
+      }
+    } catch (permError) {
+      console.warn('Could not fetch permissions during login:', permError);
+      // Continue without permissions - client will fetch separately
     }
+
+    // Fire and forget audit log - don't block response
+    supabase.from('auth_audit_logs').insert({
+      user_id: user.id,
+      action: 'login_success',
+      resource_type: 'auth_users',
+      resource_id: user.id,
+      details: { username },
+      outcome: 'success',
+      ip_address: ipAddress,
+      user_agent: userAgent,
+      is_super_admin_override: user.is_root_admin || false
+    }).then(({ error }) => {
+      if (error) console.warn('Audit log failed:', error);
+    });
 
     // Check if password reset is required
     const requiresPasswordReset = user.password_reset_required || 
       (user.temporary_password && user.temporary_password.length > 0);
 
-    // Create response
+    // Create response with permissions included
     const response = NextResponse.json({
       message: 'Login successful',
       user: {
@@ -284,7 +315,8 @@ export async function POST(request: NextRequest) {
         phone: user.phone,
         status: user.status,
         isRootAdmin: user.is_root_admin,
-        requiresPasswordReset
+        requiresPasswordReset,
+        permissions // Include permissions in response to avoid extra fetch
       },
       session: {
         token: sessionToken,
@@ -292,13 +324,16 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Set session cookie
+    // Set session cookie with proper settings for persistence
+    // Use 'lax' instead of 'strict' for better compatibility while still being secure
+    // This allows the cookie to be sent on top-level navigations (like page refresh)
     response.cookies.set('session_token', sessionToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      expires: expiresAt,
-      path: '/'
+      httpOnly: true, // Prevents JavaScript access for security
+      secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+      sameSite: 'lax', // Allows cookie on top-level navigations (like refresh)
+      expires: expiresAt, // 30 days expiration
+      path: '/', // Available site-wide
+      maxAge: 30 * 24 * 60 * 60 // 30 days in seconds (backup to expires)
     });
 
     return response;

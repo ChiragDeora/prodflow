@@ -1,5 +1,5 @@
 -- Add comprehensive mold master fields including drawing images
--- Based on the Excel headers: Sr.no., Mold name, Type, Cavity, Cycle Time, Dwg Wt, Std. Wt., RP wt., Dimensions, Mold Wt., HRC Make, HRC Zone, Make, Start Date, Make Dwg, RP Dwg
+-- Based on the Excel headers: Sr.no., Mold name, Type, Cavity, Cycle Time, Dwg Wt, Int. Wt., RP Bill Wt., Dimensions, Mold Wt., HRC Make, HRC Zone, Make, Start Date, Make Dwg, RP Dwg
 
 -- Add new columns to molds table
 ALTER TABLE molds 
@@ -8,8 +8,8 @@ ADD COLUMN IF NOT EXISTS type VARCHAR(100),
 ADD COLUMN IF NOT EXISTS cavity INTEGER,
 ADD COLUMN IF NOT EXISTS cycle_time DECIMAL(10,2),
 ADD COLUMN IF NOT EXISTS dwg_wt DECIMAL(10,2), -- Drawing Weight
-ADD COLUMN IF NOT EXISTS std_wt DECIMAL(10,2), -- Standard Weight
-ADD COLUMN IF NOT EXISTS rp_wt DECIMAL(10,2), -- RP Weight
+ADD COLUMN IF NOT EXISTS std_wt DECIMAL(10,2), -- Standard Weight (Note: This column was later renamed to int_wt in migration 20260106000010)
+ADD COLUMN IF NOT EXISTS rp_wt DECIMAL(10,2), -- RP Weight (Note: This column was later renamed to rp_bill_wt in migration 20260106000010)
 ADD COLUMN IF NOT EXISTS dimensions VARCHAR(200),
 ADD COLUMN IF NOT EXISTS mold_wt DECIMAL(10,2), -- Mold Weight
 ADD COLUMN IF NOT EXISTS hrc_make VARCHAR(100),
@@ -92,8 +92,8 @@ COMMENT ON COLUMN molds.type IS 'Type of mold (e.g., Injection Mold)';
 COMMENT ON COLUMN molds.cavity IS 'Number of cavities in the mold';
 COMMENT ON COLUMN molds.cycle_time IS 'Cycle time in seconds';
 COMMENT ON COLUMN molds.dwg_wt IS 'Drawing weight';
-COMMENT ON COLUMN molds.std_wt IS 'Standard weight';
-COMMENT ON COLUMN molds.rp_wt IS 'RP weight';
+COMMENT ON COLUMN molds.std_wt IS 'Standard weight (Note: This column was later renamed to int_wt in migration 20260106000010)';
+COMMENT ON COLUMN molds.rp_wt IS 'RP weight (Note: This column was later renamed to rp_bill_wt in migration 20260106000010)';
 COMMENT ON COLUMN molds.dimensions IS 'Mold dimensions';
 COMMENT ON COLUMN molds.mold_wt IS 'Mold weight';
 COMMENT ON COLUMN molds.hrc_make IS 'HRC make information';
@@ -112,8 +112,8 @@ BEGIN
     RAISE NOTICE '- Cavity count';
     RAISE NOTICE '- Cycle time';
     RAISE NOTICE '- Drawing weight (dwg_wt)';
-    RAISE NOTICE '- Standard weight (std_wt)';
-    RAISE NOTICE '- RP weight (rp_wt)';
+    RAISE NOTICE '- Standard weight (std_wt) - Note: Later renamed to int_wt';
+    RAISE NOTICE '- RP weight (rp_wt) - Note: Later renamed to rp_bill_wt';
     RAISE NOTICE '- Dimensions';
     RAISE NOTICE '- Mold weight (mold_wt)';
     RAISE NOTICE '- HRC make (hrc_make)';

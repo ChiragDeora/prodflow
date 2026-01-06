@@ -1,13 +1,26 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { User, Edit, Save, X, LogOut, Plus, Trash2, Building, Settings, Shield, Users } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { User, Edit, Save, X, LogOut, Plus, Trash2, Building, Settings, Shield, Users, Package, RefreshCw, Search, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../auth/AuthProvider';
 import { unitAPI, unitManagementSettingsAPI, Unit } from '../../../lib/supabase';
 import AdminDashboard from '../../admin/AdminDashboard';
 
+// Stock item types
+interface StockItem {
+  id: number;
+  item_code: string;
+  item_name: string;
+  item_type: 'RM' | 'PM' | 'SFG' | 'FG';
+  category: string | null;
+  sub_category: string | null;
+  unit_of_measure: 'KG' | 'NOS' | 'METERS';
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
-type TabType = 'profile' | 'user-management' | 'unit-management' | 'account-actions';
+type TabType = 'profile' | 'user-management' | 'unit-management' | 'stock-management' | 'account-actions';
 
 const UserProfileModule: React.FC = () => {
   const { user, logout } = useAuth();
@@ -34,6 +47,29 @@ const UserProfileModule: React.FC = () => {
   // Unit management settings state
   const [unitManagementEnabled, setUnitManagementEnabled] = useState(false);
   const [defaultUnit, setDefaultUnit] = useState('Unit 1');
+
+  // Stock management state
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [stockItemsLoading, setStockItemsLoading] = useState(false);
+  const [showStockItemModal, setShowStockItemModal] = useState(false);
+  const [showOpeningStockModal, setShowOpeningStockModal] = useState(false);
+  const [stockItemSearch, setStockItemSearch] = useState('');
+  const [stockItemTypeFilter, setStockItemTypeFilter] = useState<string>('');
+  const [stockItemForm, setStockItemForm] = useState({
+    item_code: '',
+    item_name: '',
+    item_type: 'SFG' as 'RM' | 'PM' | 'SFG' | 'FG',
+    category: '',
+    sub_category: '',
+    unit_of_measure: 'NOS' as 'KG' | 'NOS' | 'METERS'
+  });
+  const [openingStockForm, setOpeningStockForm] = useState({
+    item_code: '',
+    location_code: 'FG_STORE' as 'STORE' | 'PRODUCTION' | 'FG_STORE',
+    quantity: 0,
+    remarks: ''
+  });
+  const [stockMessage, setStockMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Debug logging
   useEffect(() => {
@@ -141,6 +177,123 @@ const UserProfileModule: React.FC = () => {
     setShowUnitModal(true);
   };
 
+  // Stock management functions
+  const loadStockItems = useCallback(async () => {
+    setStockItemsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (stockItemTypeFilter) params.append('item_type', stockItemTypeFilter);
+      if (stockItemSearch) params.append('search', stockItemSearch);
+      params.append('include_inactive', 'true');
+      
+      const response = await fetch(`/api/admin/stock-items?${params.toString()}`);
+      const result = await response.json();
+      
+      if (result.success) {
+        setStockItems(result.data || []);
+      } else {
+        console.error('Error loading stock items:', result.error);
+      }
+    } catch (error) {
+      console.error('Error loading stock items:', error);
+    } finally {
+      setStockItemsLoading(false);
+    }
+  }, [stockItemTypeFilter, stockItemSearch]);
+
+  useEffect(() => {
+    if (user?.isRootAdmin && activeTab === 'stock-management') {
+      loadStockItems();
+    }
+  }, [user?.isRootAdmin, activeTab, loadStockItems]);
+
+  const handleStockItemSubmit = async () => {
+    try {
+      const response = await fetch('/api/admin/stock-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(stockItemForm)
+      });
+      const result = await response.json();
+      
+      if (result.success) {
+        setStockMessage({ type: 'success', text: result.message });
+        setShowStockItemModal(false);
+        setStockItemForm({
+          item_code: '',
+          item_name: '',
+          item_type: 'SFG',
+          category: '',
+          sub_category: '',
+          unit_of_measure: 'NOS'
+        });
+        loadStockItems();
+      } else {
+        setStockMessage({ type: 'error', text: result.error });
+      }
+    } catch (error) {
+      setStockMessage({ type: 'error', text: 'Failed to create stock item' });
+    }
+    
+    setTimeout(() => setStockMessage(null), 5000);
+  };
+
+  const handleOpeningStockSubmit = async () => {
+    try {
+      const response = await fetch('/api/admin/opening-stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...openingStockForm,
+          posted_by: user?.email || 'ADMIN'
+        })
+      });
+      const result = await response.json();
+      
+      if (result.success || result.partial) {
+        setStockMessage({ 
+          type: result.success ? 'success' : 'error', 
+          text: result.data?.successMessages?.join(', ') || result.message 
+        });
+        setShowOpeningStockModal(false);
+        setOpeningStockForm({
+          item_code: '',
+          location_code: 'FG_STORE',
+          quantity: 0,
+          remarks: ''
+        });
+      } else {
+        setStockMessage({ type: 'error', text: result.data?.errorMessages?.join(', ') || result.error });
+      }
+    } catch (error) {
+      setStockMessage({ type: 'error', text: 'Failed to add opening stock' });
+    }
+    
+    setTimeout(() => setStockMessage(null), 5000);
+  };
+
+  const handleDeleteStockItem = async (itemId: number) => {
+    if (!window.confirm('Are you sure you want to deactivate this stock item?')) return;
+    
+    try {
+      const response = await fetch(`/api/admin/stock-items/${itemId}`, {
+        method: 'DELETE'
+      });
+      const result = await response.json();
+      
+      if (result.success) {
+        setStockMessage({ type: 'success', text: 'Stock item deactivated' });
+        loadStockItems();
+      } else {
+        setStockMessage({ type: 'error', text: result.error });
+      }
+    } catch (error) {
+      setStockMessage({ type: 'error', text: 'Failed to delete stock item' });
+    }
+    
+    setTimeout(() => setStockMessage(null), 5000);
+  };
+
   const tabs = [
     {
       id: 'profile' as TabType,
@@ -160,6 +313,13 @@ const UserProfileModule: React.FC = () => {
       label: 'Unit Management',
       icon: Building,
       description: 'Configure units and unit management settings',
+      adminOnly: true
+    },
+    {
+      id: 'stock-management' as TabType,
+      label: 'Stock Management',
+      icon: Package,
+      description: 'Manage stock items and add opening stock',
       adminOnly: true
     },
     {
@@ -500,7 +660,341 @@ const UserProfileModule: React.FC = () => {
           </div>
         );
 
+      case 'stock-management':
+        return (
+          <div className="space-y-6">
+            {/* Message Banner */}
+            {stockMessage && (
+              <div className={`p-4 rounded-lg flex items-center ${
+                stockMessage.type === 'success' 
+                  ? 'bg-green-50 border border-green-200 text-green-800'
+                  : 'bg-red-50 border border-red-200 text-red-800'
+              }`}>
+                {stockMessage.type === 'success' ? (
+                  <CheckCircle className="w-5 h-5 mr-2" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 mr-2" />
+                )}
+                {stockMessage.text}
+              </div>
+            )}
 
+            {/* Quick Actions */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <Package className="w-5 h-5 mr-2" />
+                Stock Management
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  onClick={() => setShowStockItemModal(true)}
+                  className="flex items-center justify-center p-4 border-2 border-dashed border-blue-300 rounded-lg text-blue-600 hover:bg-blue-50 hover:border-blue-400 transition-colors"
+                >
+                  <Plus className="w-5 h-5 mr-2" />
+                  Add New Stock Item
+                </button>
+                <button
+                  onClick={() => setShowOpeningStockModal(true)}
+                  className="flex items-center justify-center p-4 border-2 border-dashed border-green-300 rounded-lg text-green-600 hover:bg-green-50 hover:border-green-400 transition-colors"
+                >
+                  <Plus className="w-5 h-5 mr-2" />
+                  Add Opening Stock
+                </button>
+              </div>
+            </div>
+
+            {/* Stock Items List */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Stock Items</h3>
+                <div className="flex flex-wrap gap-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search items..."
+                      value={stockItemSearch}
+                      onChange={(e) => setStockItemSearch(e.target.value)}
+                      className="pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm w-48"
+                    />
+                  </div>
+                  <select
+                    value={stockItemTypeFilter}
+                    onChange={(e) => setStockItemTypeFilter(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  >
+                    <option value="">All Types</option>
+                    <option value="RM">Raw Material (RM)</option>
+                    <option value="PM">Packing Material (PM)</option>
+                    <option value="SFG">Semi-Finished Goods (SFG)</option>
+                    <option value="FG">Finished Goods (FG)</option>
+                  </select>
+                  <button
+                    onClick={loadStockItems}
+                    disabled={stockItemsLoading}
+                    className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${stockItemsLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+              </div>
+
+              {stockItemsLoading ? (
+                <div className="text-center py-8">
+                  <RefreshCw className="w-8 h-8 mx-auto animate-spin text-blue-500" />
+                  <p className="mt-2 text-gray-500">Loading stock items...</p>
+                </div>
+              ) : stockItems.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                  <p>No stock items found</p>
+                  <p className="text-sm">Click "Add New Stock Item" to create one</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">UOM</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {stockItems.map((item) => (
+                        <tr key={item.id} className={!item.is_active ? 'bg-gray-50 opacity-60' : ''}>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{item.item_code}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{item.item_name}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 text-xs rounded-full ${
+                              item.item_type === 'RM' ? 'bg-blue-100 text-blue-800' :
+                              item.item_type === 'PM' ? 'bg-purple-100 text-purple-800' :
+                              item.item_type === 'SFG' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-green-100 text-green-800'
+                            }`}>
+                              {item.item_type}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{item.category || '-'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{item.unit_of_measure}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 text-xs rounded-full ${
+                              item.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {item.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              onClick={() => {
+                                setOpeningStockForm(prev => ({ ...prev, item_code: item.item_code }));
+                                setShowOpeningStockModal(true);
+                              }}
+                              className="text-green-600 hover:text-green-800 mr-2 text-sm"
+                              title="Add opening stock"
+                            >
+                              + Stock
+                            </button>
+                            {item.is_active && (
+                              <button
+                                onClick={() => handleDeleteStockItem(item.id)}
+                                className="text-red-600 hover:text-red-800"
+                                title="Deactivate"
+                              >
+                                <Trash2 className="w-4 h-4 inline" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Add Stock Item Modal */}
+            {showStockItemModal && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+                  <div className="p-6 border-b border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-800">Add New Stock Item</h3>
+                    <p className="text-sm text-gray-500 mt-1">Create a new item to track in stock</p>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Item Code *</label>
+                      <input
+                        type="text"
+                        value={stockItemForm.item_code}
+                        onChange={(e) => setStockItemForm({ ...stockItemForm, item_code: e.target.value })}
+                        placeholder="e.g., 110110001 or RM-HP"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Item Name *</label>
+                      <input
+                        type="text"
+                        value={stockItemForm.item_name}
+                        onChange={(e) => setStockItemForm({ ...stockItemForm, item_name: e.target.value })}
+                        placeholder="e.g., RPRo16T-C or Raw Material HP"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Item Type *</label>
+                        <select
+                          value={stockItemForm.item_type}
+                          onChange={(e) => setStockItemForm({ ...stockItemForm, item_type: e.target.value as 'RM' | 'PM' | 'SFG' | 'FG' })}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        >
+                          <option value="RM">Raw Material (RM)</option>
+                          <option value="PM">Packing Material (PM)</option>
+                          <option value="SFG">Semi-Finished Goods (SFG)</option>
+                          <option value="FG">Finished Goods (FG)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Unit of Measure *</label>
+                        <select
+                          value={stockItemForm.unit_of_measure}
+                          onChange={(e) => setStockItemForm({ ...stockItemForm, unit_of_measure: e.target.value as 'KG' | 'NOS' | 'METERS' })}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        >
+                          <option value="KG">Kilograms (KG)</option>
+                          <option value="NOS">Numbers (NOS)</option>
+                          <option value="METERS">Meters</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                        <input
+                          type="text"
+                          value={stockItemForm.category}
+                          onChange={(e) => setStockItemForm({ ...stockItemForm, category: e.target.value })}
+                          placeholder="e.g., PP, PACKING"
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Sub-Category</label>
+                        <input
+                          type="text"
+                          value={stockItemForm.sub_category}
+                          onChange={(e) => setStockItemForm({ ...stockItemForm, sub_category: e.target.value })}
+                          placeholder="e.g., HP, ICP"
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end space-x-3 p-6 border-t border-gray-200">
+                    <button
+                      onClick={() => setShowStockItemModal(false)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleStockItemSubmit}
+                      disabled={!stockItemForm.item_code.trim() || !stockItemForm.item_name.trim()}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      Add Stock Item
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Add Opening Stock Modal */}
+            {showOpeningStockModal && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+                  <div className="p-6 border-b border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-800">Add Opening Stock</h3>
+                    <p className="text-sm text-gray-500 mt-1">Add initial stock balance for an item</p>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Item Code *</label>
+                      <input
+                        type="text"
+                        value={openingStockForm.item_code}
+                        onChange={(e) => setOpeningStockForm({ ...openingStockForm, item_code: e.target.value })}
+                        placeholder="Enter item code or select from list"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        list="stock-item-codes"
+                      />
+                      <datalist id="stock-item-codes">
+                        {stockItems.filter(i => i.is_active).map(item => (
+                          <option key={item.id} value={item.item_code}>{item.item_name}</option>
+                        ))}
+                      </datalist>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Location *</label>
+                      <select
+                        value={openingStockForm.location_code}
+                        onChange={(e) => setOpeningStockForm({ ...openingStockForm, location_code: e.target.value as 'STORE' | 'PRODUCTION' | 'FG_STORE' })}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                      >
+                        <option value="STORE">Main Store</option>
+                        <option value="PRODUCTION">Production Floor</option>
+                        <option value="FG_STORE">FG Store (Finished Goods)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Quantity *</label>
+                      <input
+                        type="number"
+                        value={openingStockForm.quantity}
+                        onChange={(e) => setOpeningStockForm({ ...openingStockForm, quantity: parseFloat(e.target.value) || 0 })}
+                        placeholder="Enter quantity"
+                        min="0"
+                        step="0.01"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                      <textarea
+                        value={openingStockForm.remarks}
+                        onChange={(e) => setOpeningStockForm({ ...openingStockForm, remarks: e.target.value })}
+                        placeholder="Optional remarks"
+                        rows={2}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end space-x-3 p-6 border-t border-gray-200">
+                    <button
+                      onClick={() => setShowOpeningStockModal(false)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleOpeningStockSubmit}
+                      disabled={!openingStockForm.item_code.trim() || openingStockForm.quantity <= 0}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      Add Opening Stock
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
 
       case 'account-actions':
         return (

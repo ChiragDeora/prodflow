@@ -37,6 +37,16 @@ export default function LoginForm() {
         setUsername('');
         setLocalError('');
         
+        // Clear any URL parameters before redirecting (security)
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href);
+          url.search = ''; // Remove all query parameters
+          window.history.replaceState({}, '', url.pathname);
+        }
+        
+        // Wait for cookie to be fully set before redirecting
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         if (result.requiresPasswordReset) {
           router.push('/auth/change-password');
         } else {

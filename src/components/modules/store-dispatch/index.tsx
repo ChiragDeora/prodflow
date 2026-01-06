@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Warehouse, Truck, ShoppingCart, Search, Filter, FileText, History, User, Package, ArrowDownCircle, ArrowUpCircle, ArrowRightCircle, DollarSign, BookOpen } from 'lucide-react';
 import DispatchMemoForm from './DispatchMemoForm';
 import DeliveryChallanForm from './DeliveryChallanForm';
 import DispatchHistory from './DispatchHistory';
+import SalesHistory from './SalesHistory';
 import VendorRegistrationForm from './VendorRegistrationForm';
 import MaterialIndentSlipForm from './MaterialIndentSlipForm';
 import PurchaseOrderForm from './PurchaseOrderForm';
@@ -17,18 +18,26 @@ import JobWorkChallanForm from './JobWorkChallanForm';
 import OpenIndent from './OpenIndent';
 import StoreHistory from './StoreHistory';
 import OrderBookForm from './OrderBookForm';
+import { StoreDispatchProvider, useStoreDispatch } from './StoreDispatchContext';
 
 interface StoreDispatchModuleProps {
   // Callback to collapse sidebar when sub nav is clicked
   onSubNavClick?: () => void;
 }
 
-const StoreDispatchModule: React.FC<StoreDispatchModuleProps> = ({ onSubNavClick }) => {
-  const [activeTab, setActiveTab] = useState('purchase');
-  const [purchaseSubTab, setPurchaseSubTab] = useState<'vrf' | 'indent' | 'po' | 'open-indent' | 'history' | null>(null);
-  const [inwardSubTab, setInwardSubTab] = useState<'normal-grn' | 'jw-annexure-grn' | 'history' | null>(null);
-  const [outwardSubTab, setOutwardSubTab] = useState<'mis' | 'job-work-challan' | 'delivery-challan' | 'delivery-challan-dispatch' | 'history' | null>(null);
-  const [salesSubTab, setSalesSubTab] = useState<'dispatch-memo' | 'order-book' | 'history' | null>(null);
+const StoreDispatchContent: React.FC<StoreDispatchModuleProps> = ({ onSubNavClick }) => {
+  const {
+    activeTab,
+    setActiveTab,
+    purchaseSubTab,
+    setPurchaseSubTab,
+    inwardSubTab,
+    setInwardSubTab,
+    outwardSubTab,
+    setOutwardSubTab,
+    salesSubTab,
+    setSalesSubTab,
+  } = useStoreDispatch();
 
   return (
     <div className="h-full flex flex-col">
@@ -106,27 +115,6 @@ const StoreDispatchModule: React.FC<StoreDispatchModuleProps> = ({ onSubNavClick
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {/* VRF Card - Moved to Commercial Master in Master Data */}
-                  {/* 
-                  <div 
-                    className="bg-white rounded-lg border border-blue-200 p-6 hover:shadow-md transition-shadow cursor-pointer"
-                    onClick={() => setPurchaseSubTab('vrf')}
-                  >
-                    <div className="flex items-center mb-4">
-                      <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
-                        <User className="w-6 h-6 text-purple-600" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900">VRF</h3>
-                        <p className="text-sm text-gray-500">Vendor Registration</p>
-                      </div>
-                    </div>
-                    <button className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors">
-                      Create VRF
-                    </button>
-                  </div>
-                  */}
-
                   {/* Material Indent Card */}
                   <div 
                     className="bg-white rounded-lg border border-blue-200 p-6 hover:shadow-md transition-shadow cursor-pointer"
@@ -219,7 +207,6 @@ const StoreDispatchModule: React.FC<StoreDispatchModuleProps> = ({ onSubNavClick
                   </button>
                 </div>
                 <div className="flex-1 overflow-auto">
-                  {/* {purchaseSubTab === 'vrf' && <VendorRegistrationForm />} */}
                   {purchaseSubTab === 'indent' && <MaterialIndentSlipForm />}
                   {purchaseSubTab === 'po' && <PurchaseOrderForm />}
                   {purchaseSubTab === 'open-indent' && <OpenIndent />}
@@ -539,7 +526,7 @@ const StoreDispatchModule: React.FC<StoreDispatchModuleProps> = ({ onSubNavClick
                 <div className="flex-1 overflow-auto">
                   {salesSubTab === 'dispatch-memo' && <DispatchMemoForm />}
                   {salesSubTab === 'order-book' && <OrderBookForm />}
-                  {salesSubTab === 'history' && <DispatchHistory />}
+                  {salesSubTab === 'history' && <SalesHistory />}
                 </div>
               </>
             )}
@@ -552,6 +539,13 @@ const StoreDispatchModule: React.FC<StoreDispatchModuleProps> = ({ onSubNavClick
   );
 };
 
+// Main component wrapped with provider
+const StoreDispatchModule: React.FC<StoreDispatchModuleProps> = ({ onSubNavClick }) => {
+  return (
+    <StoreDispatchProvider>
+      <StoreDispatchContent onSubNavClick={onSubNavClick} />
+    </StoreDispatchProvider>
+  );
+};
+
 export default StoreDispatchModule;
-
-

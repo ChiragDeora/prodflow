@@ -42,6 +42,21 @@ const MoldMaster: React.FC<MoldMasterProps> = ({
   defaultUnit,
   units
 }) => {
+  // Debug: Log first mold to check data structure
+  React.useEffect(() => {
+    if (sortedMolds && sortedMolds.length > 0) {
+      const firstMold = sortedMolds[0];
+      console.log('🔍 MoldMaster - First mold data:', {
+        mold_name: firstMold.mold_name,
+        int_wt: firstMold.int_wt,
+        rp_bill_wt: firstMold.rp_bill_wt,
+        std_wt: (firstMold as any).std_wt, // Check if old field still exists
+        rp_wt: (firstMold as any).rp_wt, // Check if old field still exists
+        allKeys: Object.keys(firstMold)
+      });
+    }
+  }, [sortedMolds]);
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -154,11 +169,11 @@ const MoldMaster: React.FC<MoldMasterProps> = ({
               </th>
               <th 
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                onClick={() => handleMoldSortChange('std_wt')}
+                onClick={() => handleMoldSortChange('int_wt')}
               >
                 <div className="flex items-center">
-                  Std. Wt.
-                  {moldSortField === 'std_wt' && (
+                  Int. Wt.
+                  {moldSortField === 'int_wt' && (
                     moldSortDirection === 'asc' ? 
                     <ArrowUp className="w-3 h-3 ml-1" /> : 
                     <ArrowDown className="w-3 h-3 ml-1" />
@@ -167,11 +182,11 @@ const MoldMaster: React.FC<MoldMasterProps> = ({
               </th>
               <th 
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                onClick={() => handleMoldSortChange('rp_wt')}
+                onClick={() => handleMoldSortChange('rp_bill_wt')}
               >
                 <div className="flex items-center">
-                  RP Wt.
-                  {moldSortField === 'rp_wt' && (
+                  RP Bill Wt.
+                  {moldSortField === 'rp_bill_wt' && (
                     moldSortDirection === 'asc' ? 
                     <ArrowUp className="w-3 h-3 ml-1" /> : 
                     <ArrowDown className="w-3 h-3 ml-1" />
@@ -281,8 +296,8 @@ const MoldMaster: React.FC<MoldMasterProps> = ({
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{mold.cavity || mold.cavities || '-'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{mold.cycle_time ? `${mold.cycle_time}s` : '-'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{mold.dwg_wt ? `${mold.dwg_wt}g` : '-'}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{mold.std_wt ? `${mold.std_wt}g` : '-'}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{mold.rp_wt ? `${mold.rp_wt}g` : '-'}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{mold.int_wt != null ? `${mold.int_wt}g` : '-'}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{mold.rp_bill_wt != null ? `${mold.rp_bill_wt}g` : '-'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{mold.dimensions || '-'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{mold.mold_wt ? `${mold.mold_wt}g` : '-'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{mold.hrc_make || '-'}</td>

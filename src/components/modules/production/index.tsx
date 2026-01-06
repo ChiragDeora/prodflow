@@ -24,7 +24,11 @@ import {
   X,
   ChevronRight,
   ChevronLeft,
-  FileText
+  FileText,
+  ChevronDown,
+  Loader2,
+  MoreVertical,
+  Database
 } from 'lucide-react';
 import { useAuth } from '../../auth/AuthProvider';
 import ExcelFileReader from '../../ExcelFileReader';
@@ -358,6 +362,23 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
   const [showFullView, setShowFullView] = useState(false);
   const [hasFullViewAccess, setHasFullViewAccess] = useState<boolean>(false);
   const [showManualEntry, setShowManualEntry] = useState(false);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [isPostingToStock, setIsPostingToStock] = useState(false);
+  const [stockPostResult, setStockPostResult] = useState<{ success: boolean; message: string } | null>(null);
+  
+  // Close actions menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showActionsMenu) {
+        const target = event.target as HTMLElement;
+        if (!target.closest('.actions-dropdown')) {
+          setShowActionsMenu(false);
+        }
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showActionsMenu]);
   const [molds, setMolds] = useState<Mold[]>([]);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [lines, setLines] = useState<Line[]>([]);
@@ -392,6 +413,7 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
         if (!settings || Object.keys(settings).length === 0) return;
 
         // Check fullView access (default to false if not set)
+        // Root users (isYogeshDeora) always have full view access
         setHasFullViewAccess(settings['fullView'] === true);
 
         // Build SHIFT TOTAL metrics from settings (fallback to defaults)
@@ -469,6 +491,242 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
     };
     loadMasters();
   }, []);
+
+  // Load DPR data from API when component mounts or date/shift changes
+  useEffect(() => {
+    const loadDprData = async () => {
+      try {
+        console.log('🔄 Loading DPR data for:', { date: selectedDate, shift: selectedShift });
+        const response = await fetch(`/api/dpr?from_date=${selectedDate}&to_date=${selectedDate}&shift=${selectedShift}`);
+        const result = await response.json();
+        
+        if (result.success && result.data && result.data.length > 0) {
+          console.log('✅ Loaded DPR data from API:', result.data.length, 'entries');
+          
+          // Convert API response to DPRData format
+          const convertedData = result.data.map((apiDpr: any) => {
+            // Group machine entries by machine_no (combine current and changeover)
+            const machineMap = new Map<string, MachineData>();
+            
+            (apiDpr.dpr_machine_entries || []).forEach((me: any) => {
+              // For Excel/API data: machine_no is IMM (machine number like "IMM-01")
+              // For new manual entries: machine_no is line_id (line number)
+              // Keep as-is, do not convert between them
+              const machineNo = me.machine_no;
+              const isCurrent = me.section_type === 'current' && !me.is_changeover;
+              const isChangeover = me.section_type === 'changeover' || me.is_changeover;
+              
+              if (!machineMap.has(machineNo)) {
+                // Create new machine entry
+                machineMap.set(machineNo, {
+                  machineNo: machineNo,
+                  operatorName: me.operator_name || '',
+                  currentProduction: {
+                    product: '',
+                    cavity: 0,
+                    targetCycle: 0,
+                    targetRunTime: 0,
+                    partWeight: 0,
+                    actualPartWeight: 0,
+                    actualCycle: 0,
+                    shotsStart: 0,
+                    shotsEnd: 0,
+                    targetQty: 0,
+                    actualQty: 0,
+                    okProdQty: 0,
+                    okProdKgs: 0,
+                    okProdPercent: 0,
+                    rejKgs: 0,
+                    lumps: 0,
+                    runTime: 0,
+                    downTime: 0,
+                    stoppageReason: '',
+                    startTime: '',
+                    endTime: '',
+                    totalTime: 0,
+                    mouldChange: '',
+                    remark: '',
+                    partWeightCheck: '',
+                    cycleTimeCheck: ''
+                  },
+                  changeover: {
+                    product: '',
+                    cavity: 0,
+                    targetCycle: 0,
+                    targetRunTime: 0,
+                    partWeight: 0,
+                    actualPartWeight: 0,
+                    actualCycle: 0,
+                    shotsStart: 0,
+                    shotsEnd: 0,
+                    targetQty: 0,
+                    actualQty: 0,
+                    okProdQty: 0,
+                    okProdKgs: 0,
+                    okProdPercent: 0,
+                    rejKgs: 0,
+                    lumps: 0,
+                    runTime: 0,
+                    downTime: 0,
+                    stoppageReason: '',
+                    startTime: '',
+                    endTime: '',
+                    totalTime: 0,
+                    mouldChange: '',
+                    remark: '',
+                    partWeightCheck: '',
+                    cycleTimeCheck: ''
+                  }
+                });
+              }
+              
+              const machine = machineMap.get(machineNo)!;
+              
+              // Update operator name if present
+              if (me.operator_name) {
+                machine.operatorName = me.operator_name;
+              }
+              
+              // Populate current production or changeover based on section_type
+              // Load values directly from database - they should be saved correctly
+              console.log(`📥 [Load DPR] Loading data for ${machineNo} (${isCurrent ? 'current' : 'changeover'}):`, {
+                targetQty: me.target_qty_nos,
+                actualQty: me.actual_qty_nos,
+                targetRunTime: me.trg_run_time_min,
+                targetCycle: me.trg_cycle_sec,
+                cavity: me.cavity,
+                shotsStart: me.shots_start,
+                shotsEnd: me.shots_end
+              });
+              
+              const productionData = {
+                product: me.product || '',
+                cavity: me.cavity || 0,
+                targetCycle: me.trg_cycle_sec || 0,
+                targetRunTime: me.trg_run_time_min || 0,
+                partWeight: me.part_wt_gm || 0,
+                actualPartWeight: me.act_part_wt_gm || 0,
+                actualCycle: me.act_cycle_sec || 0,
+                shotsStart: me.shots_start || 0,
+                shotsEnd: me.shots_end || 0,
+                targetQty: me.target_qty_nos || 0,
+                actualQty: me.actual_qty_nos || 0,
+                okProdQty: me.ok_prod_qty_nos || 0,
+                okProdKgs: me.ok_prod_kgs || 0,
+                okProdPercent: me.ok_prod_percent || 0,
+                rejKgs: me.rej_kgs || 0,
+                lumps: me.lumps_kgs || 0,
+                runTime: me.run_time_mins || 0,
+                downTime: me.down_time_min || 0,
+                stoppageReason: me.stoppage_reason || '',
+                startTime: isChangeover ? (me.changeover_start_time || '') : (me.stoppage_start || ''),
+                endTime: isChangeover ? (me.changeover_end_time || '') : (me.stoppage_end || ''),
+                stoppageTotal: me.stoppage_total_min || 0,
+                totalTime: (me.run_time_mins || 0) + (me.down_time_min || 0),
+                mouldChange: me.mould_change || '',
+                remark: me.remark || '',
+                partWeightCheck: me.part_wt_check || '',
+                cycleTimeCheck: me.cycle_time_check || ''
+              };
+              
+              if (isCurrent) {
+                machine.currentProduction = productionData;
+              } else if (isChangeover) {
+                machine.changeover = productionData;
+              }
+            });
+
+            const finalMachines = Array.from(machineMap.values());
+
+            // Calculate summary
+            console.log('📊 [Load DPR] Calculating summary from', finalMachines.length, 'machines');
+            console.log('📊 [Load DPR] Machine data:', finalMachines.map(m => ({
+              machineNo: m.machineNo,
+              current: { targetQty: m.currentProduction.targetQty, okProdQty: m.currentProduction.okProdQty, okProdKgs: m.currentProduction.okProdKgs, partWeight: m.currentProduction.partWeight },
+              changeover: { targetQty: m.changeover.targetQty, okProdQty: m.changeover.okProdQty, okProdKgs: m.changeover.okProdKgs, partWeight: m.changeover.partWeight }
+            })));
+
+            const summary: SummaryData = {
+              targetQty: finalMachines.reduce((sum, m) => sum + (m.currentProduction.targetQty || 0) + (m.changeover.targetQty || 0), 0),
+              actualQty: finalMachines.reduce((sum, m) => sum + (m.currentProduction.actualQty || 0) + (m.changeover.actualQty || 0), 0),
+              okProdQty: finalMachines.reduce((sum, m) => sum + (m.currentProduction.okProdQty || 0) + (m.changeover.okProdQty || 0), 0),
+              okProdKgs: finalMachines.reduce((sum, m) => sum + (m.currentProduction.okProdKgs || 0) + (m.changeover.okProdKgs || 0), 0),
+              okProdPercent: 0,
+              rejKgs: finalMachines.reduce((sum, m) => sum + (m.currentProduction.rejKgs || 0) + (m.changeover.rejKgs || 0), 0),
+              runTime: finalMachines.reduce((sum, m) => sum + (m.currentProduction.runTime || 0) + (m.changeover.runTime || 0), 0),
+              downTime: finalMachines.reduce((sum, m) => sum + (m.currentProduction.downTime || 0) + (m.changeover.downTime || 0), 0)
+            };
+
+            console.log('📊 [Load DPR] Summary (before okProdPercent):', {
+              targetQty: summary.targetQty,
+              actualQty: summary.actualQty,
+              okProdQty: summary.okProdQty,
+              okProdKgs: summary.okProdKgs,
+              rejKgs: summary.rejKgs,
+              runTime: summary.runTime,
+              downTime: summary.downTime
+            });
+
+            const targetQtyKgs = finalMachines.reduce((sum, m) => {
+              const current = (m.currentProduction.targetQty || 0) * (m.currentProduction.partWeight || 0) / 1000;
+              const changeover = (m.changeover.targetQty || 0) * (m.changeover.partWeight || 0) / 1000;
+              return sum + current + changeover;
+            }, 0);
+
+            console.log('📊 [Load DPR] targetQtyKgs calculated:', targetQtyKgs);
+            summary.okProdPercent = targetQtyKgs > 0 ? (summary.okProdKgs / targetQtyKgs * 100) : 0;
+            console.log('📊 [Load DPR] okProdPercent calculated:', summary.okProdPercent, '% (okProdKgs:', summary.okProdKgs, '/ targetQtyKgs:', targetQtyKgs, ')');
+
+            const shiftTotal: ShiftTotalData = {
+              type: 'shift_total',
+              label: `${apiDpr.shift} Shift Total`,
+              targetQty: summary.targetQty,
+              actualQty: summary.actualQty,
+              okProdQty: summary.okProdQty,
+              okProdKgs: summary.okProdKgs,
+              okProdPercent: summary.okProdPercent,
+              rejKgs: summary.rejKgs,
+              lumps: finalMachines.reduce((sum, m) => sum + (m.currentProduction.lumps || 0) + (m.changeover.lumps || 0), 0),
+              runTime: summary.runTime,
+              downTime: summary.downTime,
+              totalTime: summary.runTime + summary.downTime
+            };
+
+            // Ensure date is in YYYY-MM-DD format for consistent comparison
+            const normalizedDate = typeof apiDpr.report_date === 'string' 
+              ? apiDpr.report_date.split('T')[0] 
+              : apiDpr.report_date;
+            
+            const dprDataItem = {
+              id: apiDpr.id,
+              date: normalizedDate,
+              shift: apiDpr.shift,
+              shiftIncharge: apiDpr.shift_incharge || '',
+              machines: finalMachines,
+              summary,
+              shiftTotal,
+              achievement: null
+            };
+            
+            console.log('📦 Converted DPR data item:', { id: dprDataItem.id, date: dprDataItem.date, shift: dprDataItem.shift });
+            
+            return dprDataItem;
+          });
+
+          setDprData(convertedData);
+          console.log('✅ Converted and set DPR data:', convertedData.length, 'entries');
+        } else {
+          console.log('ℹ️ No DPR data found for selected date/shift');
+          setDprData([]);
+        }
+      } catch (error) {
+        console.error('❌ Error loading DPR data:', error);
+        setDprData([]);
+      }
+    };
+
+    loadDprData();
+  }, [selectedDate, selectedShift]);
 
   // Excel Import Handler - Handles 63 sheets structure
   const handleExcelImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -589,14 +847,116 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
         console.warn('⚠️ No machines have any production data. This might indicate a parsing issue.');
       }
 
-      // Check if data for this date+shift already exists and replace it
+      // Convert to API format and send to backend as Excel upload (reference data)
+      const machineEntriesForApi = machines.map(m => ({
+        machine_no: m.machineNo,
+        operator_name: m.operatorName || '',
+        current_production: m.currentProduction.product ? {
+          product: m.currentProduction.product || '',
+          cavity: m.currentProduction.cavity || 0,
+          target_cycle: m.currentProduction.targetCycle || 0,
+          target_run_time: m.currentProduction.targetRunTime || 0,
+          part_weight: m.currentProduction.partWeight || 0,
+          actual_part_weight: m.currentProduction.actualPartWeight || 0,
+          actual_cycle: m.currentProduction.actualCycle || 0,
+          shots_start: m.currentProduction.shotsStart || 0,
+          shots_end: m.currentProduction.shotsEnd || 0,
+          target_qty: m.currentProduction.targetQty || 0,
+          actual_qty: m.currentProduction.actualQty || 0,
+          ok_prod_qty: m.currentProduction.okProdQty || 0,
+          ok_prod_kgs: m.currentProduction.okProdKgs || 0,
+          ok_prod_percent: m.currentProduction.okProdPercent || 0,
+          rej_kgs: m.currentProduction.rejKgs || 0,
+          lumps: m.currentProduction.lumps || 0,
+          run_time: m.currentProduction.runTime || 0,
+          down_time: m.currentProduction.downTime || 0,
+          stoppage_reason: m.currentProduction.stoppageReason || '',
+          start_time: m.currentProduction.startTime || '',
+          end_time: m.currentProduction.endTime || '',
+          mould_change: m.currentProduction.mouldChange || '',
+          remark: m.currentProduction.remark || '',
+          part_weight_check: m.currentProduction.partWeightCheck || '',
+          cycle_time_check: m.currentProduction.cycleTimeCheck || ''
+        } : null,
+        changeover: m.changeover.product ? {
+          product: m.changeover.product || '',
+          cavity: m.changeover.cavity || 0,
+          target_cycle: m.changeover.targetCycle || 0,
+          target_run_time: m.changeover.targetRunTime || 0,
+          part_weight: m.changeover.partWeight || 0,
+          actual_part_weight: m.changeover.actualPartWeight || 0,
+          actual_cycle: m.changeover.actualCycle || 0,
+          shots_start: m.changeover.shotsStart || 0,
+          shots_end: m.changeover.shotsEnd || 0,
+          target_qty: m.changeover.targetQty || 0,
+          actual_qty: m.changeover.actualQty || 0,
+          ok_prod_qty: m.changeover.okProdQty || 0,
+          ok_prod_kgs: m.changeover.okProdKgs || 0,
+          ok_prod_percent: m.changeover.okProdPercent || 0,
+          rej_kgs: m.changeover.rejKgs || 0,
+          lumps: m.changeover.lumps || 0,
+          run_time: m.changeover.runTime || 0,
+          down_time: m.changeover.downTime || 0,
+          stoppage_reason: m.changeover.stoppageReason || '',
+          start_time: m.changeover.startTime || '',
+          end_time: m.changeover.endTime || '',
+          changeover_reason: m.changeover.remark || '',
+          mould_change: m.changeover.mouldChange || '',
+          remark: m.changeover.remark || '',
+          part_weight_check: m.changeover.partWeightCheck || '',
+          cycle_time_check: m.changeover.cycleTimeCheck || ''
+        } : null
+      })).filter(entry => entry.current_production || entry.changeover);
+
+      // Send to API as Excel upload (reference data)
+      try {
+        const createResponse = await fetch('/api/dpr', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            report_date: finalDate,
+            shift: finalShift,
+            shift_incharge: shiftIncharge,
+            machine_entries: machineEntriesForApi,
+            created_by: 'user', // TODO: Get from auth context
+            entry_type: 'EXCEL_UPLOAD', // Mark as Excel upload (reference data)
+            excel_file_name: file.name
+          })
+        });
+
+        const createResult = await createResponse.json();
+
+        if (!createResult.success) {
+          // If API creation fails, still show local data
+          console.warn('Failed to save to backend, showing local data only:', createResult.error);
       setDprData(prev => {
         const filtered = prev.filter(dpr => !(dpr.date === finalDate && dpr.shift === finalShift));
         return [...filtered, importedData];
       });
+          alert(`Excel parsed successfully but failed to save to database: ${createResult.error}\n\nData is shown locally only.`);
+          return;
+        }
 
-      const successMessage = `Excel file imported successfully!\n\nImported:\n- ${machines.length} machines\n- ${machinesWithData.length} machines with data\n- Date: ${new Date(finalDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}\n- Shift: ${finalShift}\n- Summary calculated from machine data: Target=${targetQty.toLocaleString()}, Actual=${actualQty.toLocaleString()}, OK=${okProdQty.toLocaleString()}\n\nPlease check the browser console for detailed parsing logs.`;
+        // Update local state with API response
+        const apiDpr = createResult.data;
+        setDprData(prev => {
+          const filtered = prev.filter(dpr => !(dpr.date === finalDate && dpr.shift === finalShift));
+          return [...filtered, importedData];
+        });
+
+        const successMessage = `Excel file imported and saved successfully!\n\nImported:\n- ${machines.length} machines\n- ${machinesWithData.length} machines with data\n- Date: ${new Date(finalDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}\n- Shift: ${finalShift}\n- Saved as reference data (cannot be posted to stock)\n\nPlease check the browser console for detailed parsing logs.`;
       alert(successMessage);
+      } catch (apiError) {
+        console.error('Error saving Excel import to API:', apiError);
+        // Fallback: show local data
+        setDprData(prev => {
+          const filtered = prev.filter(dpr => !(dpr.date === finalDate && dpr.shift === finalShift));
+          return [...filtered, importedData];
+        });
+        alert(`Excel parsed successfully but failed to save to database.\n\nData is shown locally only.\n\nError: ${apiError instanceof Error ? apiError.message : 'Unknown error'}`);
+      }
     } catch (error) {
       console.error('❌ Error importing Excel file:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -1439,6 +1799,7 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
         return;
       }
       
+      // For Excel data: machine_no is IMM (machine number), keep as-is, do not convert to line_id
       const machineNo = machineNum < 10 ? `IMM-0${machineNum}` : `IMM-${machineNum}`;
       
       // Parse sheet "a" for current production
@@ -1666,7 +2027,20 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
 
   // Get current DPR data for selected date and shift
   const getCurrentDPRData = (): DPRData | null => {
-    return dprData.find(dpr => dpr.date === selectedDate && dpr.shift === selectedShift) || null;
+    const found = dprData.find(dpr => {
+      // Normalize dates for comparison (handle both YYYY-MM-DD and other formats)
+      const dprDate = typeof dpr.date === 'string' ? dpr.date.split('T')[0] : dpr.date;
+      const selDate = typeof selectedDate === 'string' ? selectedDate.split('T')[0] : selectedDate;
+      return dprDate === selDate && dpr.shift === selectedShift;
+    });
+    
+    if (found) {
+      console.log('✅ Found DPR data:', { id: found.id, date: found.date, shift: found.shift });
+    } else {
+      console.log('⚠️ No DPR data found for:', { date: selectedDate, shift: selectedShift, availableDates: dprData.map(d => ({ id: d.id, date: d.date, shift: d.shift })) });
+    }
+    
+    return found || null;
   };
 
   // Export to Excel
@@ -1871,7 +2245,16 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
                   {/* Add DPR Entry Button - Only show when there's existing data */}
                   {getCurrentDPRData() && (
                   <button
-                    onClick={() => setShowManualEntry(true)}
+                    onClick={() => {
+                      const currentData = getCurrentDPRData();
+                      if (currentData && currentData.id) {
+                        console.log('✏️ Opening edit form for DPR:', { id: currentData.id, date: currentData.date, shift: currentData.shift });
+                        setShowManualEntry(true);
+                      } else {
+                        console.error('❌ Cannot open edit form: DPR data missing or has no ID', currentData);
+                        alert('DPR data is not fully loaded. Please wait a moment and try again.');
+                      }
+                    }}
                     className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
                     title="Add/Edit DPR Entry"
                   >
@@ -1880,8 +2263,8 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
                   </button>
                   )}
                   
-                  {/* Full View Button - Only show if user has fullView access */}
-                  {getCurrentDPRData() && hasFullViewAccess && (
+                  {/* Full View Button - Show for root users OR users with fullView access */}
+                  {getCurrentDPRData() && (hasFullViewAccess || isSuperUser) && (
                     <button
                       onClick={() => setShowFullView(true)}
                       className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
@@ -1892,43 +2275,124 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
                     </button>
                   )}
                   
-                  {/* Settings Panel Toggle - Always visible, but only functional for authorized users */}
-                  <button
-                    onClick={() => {
-                      if (isSuperUser) {
-                        setShowSettingsPanel(!showSettingsPanel);
-                      } else {
-                        alert('Column settings are only available for authorized users. Please contact Yogesh Deora for access.');
-                      }
-                    }}
-                    className={`flex items-center px-4 py-2 rounded-md transition-colors ${
-                      isSuperUser 
-                        ? 'bg-gray-600 text-white hover:bg-gray-700' 
-                        : 'bg-gray-400 text-white cursor-not-allowed opacity-60'
-                    }`}
-                    title={isSuperUser ? "Column Settings" : "Column Settings (Authorized Users Only)"}
-                  >
-                    <Settings className="w-4 h-4 mr-2" />
-                    {showSettingsPanel ? 'Hide Settings' : 'Column Settings'}
-                  </button>
+                  {/* Post to Stock Button - Only show when there's existing DPR data */}
+                  {getCurrentDPRData() && getCurrentDPRData()?.id && (
+                    <button
+                      onClick={async () => {
+                        const currentData = getCurrentDPRData();
+                        if (!currentData || !currentData.id) {
+                          alert('No DPR data to post');
+                          return;
+                        }
+                        
+                        setIsPostingToStock(true);
+                        setStockPostResult(null);
+                        
+                        try {
+                          const response = await fetch(`/api/stock/post/dpr/${currentData.id}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ posted_by: user?.email || 'user' })
+                          });
+                          
+                          const result = await response.json();
+                          
+                          if (result.success) {
+                            let message = `✅ Stock posted successfully! (${result.entries_created || 0} entries created)`;
+                            if (result.warnings && result.warnings.length > 0) {
+                              message += `\n⚠️ Warnings: ${result.warnings.join(', ')}`;
+                            }
+                            setStockPostResult({ success: true, message });
+                            alert(message);
+                          } else {
+                            const errorMsg = result.error?.message || 'Unknown error';
+                            setStockPostResult({ success: false, message: errorMsg });
+                            alert(`❌ Stock posting failed: ${errorMsg}`);
+                          }
+                        } catch (error) {
+                          console.error('Error posting to stock:', error);
+                          setStockPostResult({ success: false, message: 'Network error' });
+                          alert('❌ Error posting to stock. Please try again.');
+                        } finally {
+                          setIsPostingToStock(false);
+                        }
+                      }}
+                      disabled={isPostingToStock}
+                      className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                        isPostingToStock 
+                          ? 'bg-orange-400 text-white cursor-not-allowed' 
+                          : 'bg-orange-600 text-white hover:bg-orange-700'
+                      }`}
+                      title="Post DPR to Stock Ledger"
+                    >
+                      {isPostingToStock ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Database className="w-4 h-4 mr-2" />
+                      )}
+                      {isPostingToStock ? 'Posting...' : 'Post to Stock'}
+                    </button>
+                  )}
                   
-                  {/* Import Excel */}
-                  <button
-                    onClick={() => setShowExcelReader(true)}
-                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 cursor-pointer transition-colors"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Import Excel
-                  </button>
-                  
-                  {/* Export Excel */}
-                  <button
-                    onClick={handleExcelExport}
-                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Export Excel
-                  </button>
+                  {/* Actions Dropdown Menu - Collapsible for cleaner UI */}
+                  <div className="relative actions-dropdown">
+                    <button
+                      onClick={() => setShowActionsMenu(!showActionsMenu)}
+                      className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+                      title="More Actions"
+                    >
+                      <MoreVertical className="w-4 h-4 mr-2" />
+                      Actions
+                      <ChevronDown className={`w-4 h-4 ml-2 transition-transform ${showActionsMenu ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {/* Dropdown Menu */}
+                    {showActionsMenu && (
+                      <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
+                        {/* Column Settings */}
+                        <button
+                          onClick={() => {
+                            if (isSuperUser) {
+                              setShowSettingsPanel(!showSettingsPanel);
+                              setShowActionsMenu(false);
+                            } else {
+                              alert('Column settings are only available for authorized users.');
+                            }
+                          }}
+                          className={`w-full flex items-center px-4 py-2 text-left text-sm hover:bg-gray-100 ${
+                            !isSuperUser ? 'text-gray-400 cursor-not-allowed' : 'text-gray-700'
+                          }`}
+                        >
+                          <Settings className="w-4 h-4 mr-2" />
+                          Column Settings
+                        </button>
+                        
+                        {/* Import Excel */}
+                        <button
+                          onClick={() => {
+                            setShowExcelReader(true);
+                            setShowActionsMenu(false);
+                          }}
+                          className="w-full flex items-center px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          <Upload className="w-4 h-4 mr-2" />
+                          Import Excel
+                        </button>
+                        
+                        {/* Export Excel */}
+                        <button
+                          onClick={() => {
+                            handleExcelExport();
+                            setShowActionsMenu(false);
+                          }}
+                          className="w-full flex items-center px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Export Excel
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -2032,7 +2496,7 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
                       const hasChangeover = hasDifferentProduct && hasChangeoverData;
                       
                       return (
-                        <React.Fragment key={machine.machineNo}>
+                        <React.Fragment key={`${machine.machineNo}-${machine.currentProduction.product || 'current'}`}>
                           {/* Row 1: Current Production */}
                           <tr>
                             {isColumnVisible('machineNo') && (
@@ -2354,7 +2818,11 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
                   </p>
                   <div className="flex gap-3 justify-center">
                     <button
-                      onClick={() => setShowManualEntry(true)}
+                      onClick={() => {
+                        // For new entries, ensure we're not passing existing data
+                        console.log('➕ Opening form to create NEW DPR entry');
+                        setShowManualEntry(true);
+                      }}
                       className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
                     >
                       <Plus className="w-4 h-4 mr-2" />
@@ -3012,7 +3480,7 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
                       const hasChangeover = hasDifferentProduct && hasChangeoverData;
                       
                       return (
-                        <React.Fragment key={machine.machineNo}>
+                        <React.Fragment key={`${machine.machineNo}-${machine.currentProduction.product || 'current'}`}>
                           <tr>
                             <td rowSpan={hasChangeover ? 2 : 1} className="border border-gray-300 p-2 text-center font-bold bg-blue-50">
                               {machine.machineNo}
@@ -3214,7 +3682,11 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
           lines={lines}
           columnVisibility={columnVisibility}
           isColumnVisible={isColumnVisible}
-          existingData={getCurrentDPRData() || undefined}
+          existingData={(() => {
+            const currentData = getCurrentDPRData();
+            console.log('📝 Form opening with existingData:', currentData ? { id: currentData.id, date: currentData.date, shift: currentData.shift } : 'null');
+            return currentData || undefined;
+          })()}
           onSave={(dprData) => {
             // Add the new DPR data
             setDprData(prev => {
@@ -3268,6 +3740,7 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
   }>>(() => {
     if (existingData && existingData.machines && existingData.machines.length > 0) {
       // Convert existing machines to entry format
+      // Note: targetQty and actualQty will be recalculated in useEffect after component mounts
       return existingData.machines.map((machine, index) => ({
         id: `existing-${index}-${Date.now()}`,
         machineNo: machine.machineNo,
@@ -3360,14 +3833,31 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
   const calculateField = (field: string, run: Partial<ProductionRun>, isChangeover: boolean = false): number => {
     const prod = run;
     
+    console.log(`🧮 calculateField: ${field}`, { 
+      isChangeover, 
+      product: prod.product,
+      targetRunTime: prod.targetRunTime,
+      targetCycle: prod.targetCycle,
+      cavity: prod.cavity,
+      okProdQty: prod.okProdQty,
+      partWeight: prod.partWeight,
+      shotsStart: prod.shotsStart,
+      shotsEnd: prod.shotsEnd,
+      actualQty: prod.actualQty,
+      actualCycle: prod.actualCycle
+    });
+    
     switch (field) {
       case 'targetQty':
         // Formula: Trg Run Time (min) * 60 / Trg Cycle (sec) * Cavity
         // Round to nearest whole number
         if (prod.targetRunTime !== undefined && prod.targetCycle !== undefined && prod.cavity !== undefined &&
             prod.targetRunTime > 0 && prod.targetCycle > 0 && prod.cavity > 0) {
-          return Math.round(prod.targetRunTime * 60 / prod.targetCycle * prod.cavity);
+          const result = Math.round(prod.targetRunTime * 60 / prod.targetCycle * prod.cavity);
+          console.log(`  ✅ targetQty calculated: ${prod.targetRunTime} * 60 / ${prod.targetCycle} * ${prod.cavity} = ${result}`);
+          return result;
         }
+        console.log(`  ⚠️ targetQty: Missing or invalid inputs, returning 0`);
         return 0;
       
       case 'actualQty':
@@ -3381,25 +3871,36 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
         return 0;
       
       case 'okProdKgs':
-        // Formula: Ok Prod Qty (Nos) * (Part Wt (gm) / 1000)
-        if (prod.okProdQty && prod.partWeight) {
-          return (prod.okProdQty * prod.partWeight / 1000) || 0;
+        // Formula: Ok Prod Qty (Nos) * (Act Part Wt (gm) / 1000)
+        if (prod.okProdQty && prod.actualPartWeight) {
+          const result = (prod.okProdQty * prod.actualPartWeight / 1000) || 0;
+          console.log(`  ✅ okProdKgs calculated: ${prod.okProdQty} * ${prod.actualPartWeight} / 1000 = ${result}`);
+          return result;
         }
+        console.log(`  ⚠️ okProdKgs: Missing okProdQty (${prod.okProdQty}) or actualPartWeight (${prod.actualPartWeight}), returning 0`);
         return 0;
       
       case 'okProdPercent':
         // Formula: Ok Prod Qty (Nos) / Target Qty (Nos)
         // Returns ratio as decimal (0-1), we'll multiply by 100 for display
-        if (prod.okProdQty && prod.targetQty) {
-          return prod.targetQty > 0 ? (prod.okProdQty / prod.targetQty) : 0;
+        if (prod.okProdQty !== undefined && prod.targetQty !== undefined) {
+          if (prod.targetQty > 0) {
+            const result = (prod.okProdQty / prod.targetQty);
+            console.log(`  ✅ okProdPercent calculated: ${prod.okProdQty} / ${prod.targetQty} = ${result} (${(result * 100).toFixed(2)}%)`);
+            return result;
+          } else {
+            console.log(`  ⚠️ okProdPercent: targetQty is 0, returning 0`);
+            return 0;
+          }
         }
+        console.log(`  ⚠️ okProdPercent: Missing okProdQty (${prod.okProdQty}) or targetQty (${prod.targetQty}), returning 0`);
         return 0;
       
       case 'rejKgs':
-        // Formula: (Actual Qty (Nos) - Ok Prod Qty (Nos)) * Part Wt (gm) / 1000
-        if (prod.actualQty !== undefined && prod.okProdQty !== undefined && prod.partWeight !== undefined && prod.partWeight > 0) {
+        // Formula: (Actual Qty (Nos) - Ok Prod Qty (Nos)) * Act Part Wt (gm) / 1000
+        if (prod.actualQty !== undefined && prod.okProdQty !== undefined && prod.actualPartWeight !== undefined && prod.actualPartWeight > 0) {
           const diff = (prod.actualQty || 0) - (prod.okProdQty || 0);
-          return (diff * prod.partWeight) / 1000;
+          return (diff * prod.actualPartWeight) / 1000;
         }
         return 0;
       
@@ -3496,7 +3997,7 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
         product: productName,
         cavity: mold.cavity || mold.cavities || 0,
         targetCycle: mold.cycle_time || 0,
-        partWeight: mold.std_wt || mold.dwg_wt || 0
+        partWeight: mold.int_wt || mold.dwg_wt || 0
       };
 
       // Recalculate dependent fields in correct order
@@ -3617,146 +4118,433 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
     }]);
   };
 
+  // Recalculate targetQty and actualQty when form loads with existing data
+  useEffect(() => {
+    if (existingData && machineEntries.length > 0) {
+      setMachineEntries(prev => prev.map(entry => {
+        const updatedEntry = { ...entry };
+        let needsUpdate = false;
+        
+        // Recalculate current production
+        const currentProd = { ...entry.currentProduction };
+        if (currentProd.targetRunTime && currentProd.targetCycle && currentProd.cavity) {
+          const recalculatedTargetQty = Math.round(currentProd.targetRunTime * 60 / currentProd.targetCycle * currentProd.cavity);
+          if (recalculatedTargetQty !== (currentProd.targetQty || 0)) {
+            currentProd.targetQty = recalculatedTargetQty;
+            needsUpdate = true;
+            console.log(`🔄 Recalculated current targetQty for ${entry.machineNo}: ${entry.currentProduction.targetQty} -> ${recalculatedTargetQty}`);
+          }
+        }
+        if (currentProd.shotsEnd !== undefined && currentProd.cavity) {
+          const shotsStart = currentProd.shotsStart || 0;
+          const recalculatedActualQty = (currentProd.shotsEnd - shotsStart) * currentProd.cavity;
+          if (recalculatedActualQty !== (currentProd.actualQty || 0)) {
+            currentProd.actualQty = recalculatedActualQty;
+            needsUpdate = true;
+            console.log(`🔄 Recalculated current actualQty for ${entry.machineNo}: ${entry.currentProduction.actualQty} -> ${recalculatedActualQty}`);
+          }
+        }
+        
+        // Recalculate changeover
+        const changeoverProd = { ...entry.changeover };
+        if (changeoverProd.targetRunTime && changeoverProd.targetCycle && changeoverProd.cavity) {
+          const recalculatedTargetQty = Math.round(changeoverProd.targetRunTime * 60 / changeoverProd.targetCycle * changeoverProd.cavity);
+          if (recalculatedTargetQty !== (changeoverProd.targetQty || 0)) {
+            changeoverProd.targetQty = recalculatedTargetQty;
+            needsUpdate = true;
+            console.log(`🔄 Recalculated changeover targetQty for ${entry.machineNo}: ${entry.changeover.targetQty} -> ${recalculatedTargetQty}`);
+          }
+        }
+        if (changeoverProd.shotsEnd !== undefined && changeoverProd.cavity) {
+          const shotsStart = changeoverProd.shotsStart || 0;
+          const recalculatedActualQty = (changeoverProd.shotsEnd - shotsStart) * changeoverProd.cavity;
+          if (recalculatedActualQty !== (changeoverProd.actualQty || 0)) {
+            changeoverProd.actualQty = recalculatedActualQty;
+            needsUpdate = true;
+            console.log(`🔄 Recalculated changeover actualQty for ${entry.machineNo}: ${entry.changeover.actualQty} -> ${recalculatedActualQty}`);
+          }
+        }
+        
+        if (needsUpdate) {
+          return {
+            ...updatedEntry,
+            currentProduction: currentProd,
+            changeover: changeoverProd
+          };
+        }
+        return entry;
+      }));
+    }
+  }, [existingData]); // Only run when existingData changes (on initial load)
+
   const removeMachineEntry = (entryId: string) => {
     if (machineEntries.length > 1) {
       setMachineEntries(prev => prev.filter(entry => entry.id !== entryId));
     }
   };
 
-  const handleSave = () => {
-    // Convert entries to MachineData format
-    // Note: machineNo field stores line_id for new manual entries
-    const machinesData: MachineData[] = machineEntries
-      .filter(entry => entry.machineNo) // Only include entries with line selected
-      .map(entry => ({
-        machineNo: entry.machineNo, // This is actually line_id for manual entries
-        operatorName: entry.operatorName || '',
-        currentProduction: {
+  const handleSave = async () => {
+    // Convert entries to API format
+    // Recalculate targetQty and actualQty before saving to ensure they're correct
+    const entriesWithRecalculatedValues = machineEntries.map(entry => {
+      const currentProd = { ...entry.currentProduction };
+      // Recalculate targetQty if we have the required inputs
+      if (currentProd.targetRunTime && currentProd.targetCycle && currentProd.cavity) {
+        const recalculatedTargetQty = Math.round(currentProd.targetRunTime * 60 / currentProd.targetCycle * currentProd.cavity);
+        if (recalculatedTargetQty !== currentProd.targetQty) {
+          console.log(`🔄 Recalculating targetQty for ${entry.machineNo}: ${currentProd.targetQty} -> ${recalculatedTargetQty}`);
+          currentProd.targetQty = recalculatedTargetQty;
+        }
+      }
+      // Recalculate actualQty if we have the required inputs
+      if (currentProd.shotsEnd !== undefined && currentProd.cavity) {
+        const shotsStart = currentProd.shotsStart || 0;
+        const recalculatedActualQty = (currentProd.shotsEnd - shotsStart) * currentProd.cavity;
+        if (recalculatedActualQty !== currentProd.actualQty) {
+          console.log(`🔄 Recalculating actualQty for ${entry.machineNo}: ${currentProd.actualQty} -> ${recalculatedActualQty}`);
+          currentProd.actualQty = recalculatedActualQty;
+        }
+      }
+      
+      const changeoverProd = { ...entry.changeover };
+      // Recalculate changeover targetQty if we have the required inputs
+      if (changeoverProd.targetRunTime && changeoverProd.targetCycle && changeoverProd.cavity) {
+        const recalculatedTargetQty = Math.round(changeoverProd.targetRunTime * 60 / changeoverProd.targetCycle * changeoverProd.cavity);
+        if (recalculatedTargetQty !== changeoverProd.targetQty) {
+          console.log(`🔄 Recalculating changeover targetQty for ${entry.machineNo}: ${changeoverProd.targetQty} -> ${recalculatedTargetQty}`);
+          changeoverProd.targetQty = recalculatedTargetQty;
+        }
+      }
+      // Recalculate changeover actualQty if we have the required inputs
+      if (changeoverProd.shotsEnd !== undefined && changeoverProd.cavity) {
+        const shotsStart = changeoverProd.shotsStart || 0;
+        const recalculatedActualQty = (changeoverProd.shotsEnd - shotsStart) * changeoverProd.cavity;
+        if (recalculatedActualQty !== changeoverProd.actualQty) {
+          console.log(`🔄 Recalculating changeover actualQty for ${entry.machineNo}: ${changeoverProd.actualQty} -> ${recalculatedActualQty}`);
+          changeoverProd.actualQty = recalculatedActualQty;
+        }
+      }
+      
+      return {
+        ...entry,
+        currentProduction: currentProd,
+        changeover: changeoverProd
+      };
+    });
+
+    const filteredEntries = entriesWithRecalculatedValues.filter(entry => entry.machineNo);
+    
+    const machineEntriesForApi = filteredEntries.map(entry => {
+      console.log(`💾 Preparing to save entry for ${entry.machineNo}:`, {
+        targetQty: entry.currentProduction.targetQty,
+        actualQty: entry.currentProduction.actualQty,
+        targetRunTime: entry.currentProduction.targetRunTime,
+        targetCycle: entry.currentProduction.targetCycle,
+        cavity: entry.currentProduction.cavity,
+        shotsStart: entry.currentProduction.shotsStart,
+        shotsEnd: entry.currentProduction.shotsEnd,
+        calculatedTargetQty: entry.currentProduction.targetRunTime && entry.currentProduction.targetCycle && entry.currentProduction.cavity 
+          ? Math.round(entry.currentProduction.targetRunTime * 60 / entry.currentProduction.targetCycle * entry.currentProduction.cavity)
+          : 'N/A',
+        calculatedActualQty: entry.currentProduction.shotsEnd !== undefined && entry.currentProduction.cavity
+          ? (entry.currentProduction.shotsEnd - (entry.currentProduction.shotsStart || 0)) * entry.currentProduction.cavity
+          : 'N/A'
+      });
+      
+      return {
+        // For new manual entries: machineNo is line_id (line number), not machine number
+        machine_no: entry.machineNo,
+        operator_name: entry.operatorName || '',
+        current_production: {
           product: entry.currentProduction.product || '',
           cavity: entry.currentProduction.cavity || 0,
-          targetCycle: entry.currentProduction.targetCycle || 0,
-          targetRunTime: entry.currentProduction.targetRunTime || 0,
-          partWeight: entry.currentProduction.partWeight || 0,
-          actualPartWeight: entry.currentProduction.actualPartWeight || 0,
-          actualCycle: entry.currentProduction.actualCycle || 0,
-          shotsStart: entry.currentProduction.shotsStart || 0,
-          shotsEnd: entry.currentProduction.shotsEnd || 0,
-          targetQty: entry.currentProduction.targetQty || 0,
-          actualQty: entry.currentProduction.actualQty || 0,
-          okProdQty: entry.currentProduction.okProdQty || 0,
-          okProdKgs: entry.currentProduction.okProdKgs || 0,
-          okProdPercent: entry.currentProduction.okProdPercent || 0, // Keep as ratio (0-1), display will multiply by 100
-          rejKgs: entry.currentProduction.rejKgs || 0,
+          target_cycle: entry.currentProduction.targetCycle || 0,
+          target_run_time: entry.currentProduction.targetRunTime || 0,
+          part_weight: entry.currentProduction.partWeight || 0,
+          actual_part_weight: entry.currentProduction.actualPartWeight || 0,
+          actual_cycle: entry.currentProduction.actualCycle || 0,
+          shots_start: entry.currentProduction.shotsStart || 0,
+          shots_end: entry.currentProduction.shotsEnd || 0,
+          target_qty: entry.currentProduction.targetQty || 0,
+          actual_qty: entry.currentProduction.actualQty || 0,
+          ok_prod_qty: entry.currentProduction.okProdQty || 0,
+          ok_prod_kgs: entry.currentProduction.okProdKgs || 0,
+          ok_prod_percent: entry.currentProduction.okProdPercent || 0,
+          rej_kgs: entry.currentProduction.rejKgs || 0,
           lumps: entry.currentProduction.lumps || 0,
-          runTime: entry.currentProduction.runTime || 0,
-          downTime: entry.currentProduction.downTime || 0,
-          stoppageReason: entry.currentProduction.stoppageReason || '',
-          startTime: entry.currentProduction.startTime || '',
-          endTime: entry.currentProduction.endTime || '',
-          totalTime: entry.currentProduction.totalTime || 0,
-          mouldChange: entry.currentProduction.mouldChange || '',
+          run_time: entry.currentProduction.runTime || 0,
+          down_time: entry.currentProduction.downTime || 0,
+          stoppage_reason: entry.currentProduction.stoppageReason || '',
+          start_time: entry.currentProduction.startTime || '',
+          end_time: entry.currentProduction.endTime || '',
+          mould_change: entry.currentProduction.mouldChange || '',
           remark: entry.currentProduction.remark || '',
-          partWeightCheck: entry.currentProduction.partWeightCheck || '',
-          cycleTimeCheck: entry.currentProduction.cycleTimeCheck || ''
-        } as ProductionRun,
-        changeover: {
+          part_weight_check: entry.currentProduction.partWeightCheck || '',
+          cycle_time_check: entry.currentProduction.cycleTimeCheck || ''
+        },
+        changeover: entry.changeover.product ? {
           product: entry.changeover.product || '',
           cavity: entry.changeover.cavity || 0,
-          targetCycle: entry.changeover.targetCycle || 0,
-          targetRunTime: entry.changeover.targetRunTime || 0,
-          partWeight: entry.changeover.partWeight || 0,
-          actualPartWeight: entry.changeover.actualPartWeight || 0,
-          actualCycle: entry.changeover.actualCycle || 0,
-          shotsStart: entry.changeover.shotsStart || 0,
-          shotsEnd: entry.changeover.shotsEnd || 0,
-          targetQty: entry.changeover.targetQty || 0,
-          actualQty: entry.changeover.actualQty || 0,
-          okProdQty: entry.changeover.okProdQty || 0,
-          okProdKgs: entry.changeover.okProdKgs || 0,
-          okProdPercent: entry.changeover.okProdPercent || 0, // Keep as ratio (0-1), display will multiply by 100
-          rejKgs: entry.changeover.rejKgs || 0,
+          target_cycle: entry.changeover.targetCycle || 0,
+          target_run_time: entry.changeover.targetRunTime || 0,
+          part_weight: entry.changeover.partWeight || 0,
+          actual_part_weight: entry.changeover.actualPartWeight || 0,
+          actual_cycle: entry.changeover.actualCycle || 0,
+          shots_start: entry.changeover.shotsStart || 0,
+          shots_end: entry.changeover.shotsEnd || 0,
+          target_qty: entry.changeover.targetQty || 0,
+          actual_qty: entry.changeover.actualQty || 0,
+          ok_prod_qty: entry.changeover.okProdQty || 0,
+          ok_prod_kgs: entry.changeover.okProdKgs || 0,
+          ok_prod_percent: entry.changeover.okProdPercent || 0,
+          rej_kgs: entry.changeover.rejKgs || 0,
           lumps: entry.changeover.lumps || 0,
-          runTime: entry.changeover.runTime || 0,
-          downTime: entry.changeover.downTime || 0,
-          stoppageReason: entry.changeover.stoppageReason || '',
-          startTime: entry.changeover.startTime || '',
-          endTime: entry.changeover.endTime || '',
-          totalTime: entry.changeover.totalTime || 0,
-          mouldChange: entry.changeover.mouldChange || '',
+          run_time: entry.changeover.runTime || 0,
+          down_time: entry.changeover.downTime || 0,
+          stoppage_reason: entry.changeover.stoppageReason || '',
+          start_time: entry.changeover.startTime || '',
+          end_time: entry.changeover.endTime || '',
+          changeover_reason: entry.changeover.remark || '',
+          mould_change: entry.changeover.mouldChange || '',
           remark: entry.changeover.remark || '',
-          partWeightCheck: entry.changeover.partWeightCheck || '',
-          cycleTimeCheck: entry.changeover.cycleTimeCheck || ''
-        } as ProductionRun
+          part_weight_check: entry.changeover.partWeightCheck || '',
+          cycle_time_check: entry.changeover.cycleTimeCheck || ''
+        } : null
+      };
+    }).filter((entry: any) => entry.current_production.product || entry.changeover?.product); // Only entries with at least one production
+
+    if (machineEntriesForApi.length === 0) {
+      alert('Please add at least one machine entry with production data');
+      return;
+    }
+
+    // Determine if we're editing an existing DPR or creating a new one
+    const isEditMode = !!existingData?.id;
+    const apiUrl = isEditMode ? `/api/dpr/${existingData!.id}` : '/api/dpr';
+    const method = isEditMode ? 'PUT' : 'POST';
+
+    try {
+
+      // Call API to create or update DPR
+      const response = await fetch(apiUrl, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          report_date: date,
+          shift: shift,
+          shift_incharge: shiftIncharge,
+          machine_entries: machineEntriesForApi,
+          ...(isEditMode ? { updated_by: 'user' } : { created_by: 'user' }) // TODO: Get from auth context
+        })
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        alert(`Error ${isEditMode ? 'updating' : 'creating'} DPR: ${result.error}`);
+        return;
+      }
+
+      // Convert API response to DPRData format for local state
+      const apiDpr = result.data;
+      const machinesData: MachineData[] = (apiDpr.dpr_machine_entries || []).map((me: any) => ({
+        machineNo: me.machine_no,
+        operatorName: me.operator_name || '',
+        currentProduction: me.section_type === 'current' ? {
+          product: me.product || '',
+          cavity: me.cavity || 0,
+          targetCycle: me.trg_cycle_sec || 0,
+          targetRunTime: me.trg_run_time_min || 0,
+          partWeight: me.part_wt_gm || 0,
+          actualPartWeight: me.act_part_wt_gm || 0,
+          actualCycle: me.act_cycle_sec || 0,
+          shotsStart: me.shots_start || 0,
+          shotsEnd: me.shots_end || 0,
+          targetQty: me.target_qty_nos || 0,
+          actualQty: me.actual_qty_nos || 0,
+          okProdQty: me.ok_prod_qty_nos || 0,
+          okProdKgs: me.ok_prod_kgs || 0,
+          okProdPercent: me.ok_prod_percent || 0,
+          rejKgs: me.rej_kgs || 0,
+          lumps: me.lumps_kgs || 0,
+          runTime: me.run_time_mins || 0,
+          downTime: me.down_time_min || 0,
+          stoppageReason: me.stoppage_reason || '',
+          startTime: me.stoppage_start || '',
+          endTime: me.stoppage_end || '',
+          totalTime: (me.run_time_mins || 0) + (me.down_time_min || 0),
+          mouldChange: me.mould_change || '',
+          remark: me.remark || '',
+          partWeightCheck: me.part_wt_check || '',
+          cycleTimeCheck: me.cycle_time_check || ''
+        } : {
+          product: '',
+          cavity: 0,
+          targetCycle: 0,
+          targetRunTime: 0,
+          partWeight: 0,
+          actualPartWeight: 0,
+          actualCycle: 0,
+          shotsStart: 0,
+          shotsEnd: 0,
+          targetQty: 0,
+          actualQty: 0,
+          okProdQty: 0,
+          okProdKgs: 0,
+          okProdPercent: 0,
+          rejKgs: 0,
+          lumps: 0,
+          runTime: 0,
+          downTime: 0,
+          stoppageReason: '',
+          startTime: '',
+          endTime: '',
+          totalTime: 0,
+          mouldChange: '',
+          remark: '',
+          partWeightCheck: '',
+          cycleTimeCheck: ''
+        },
+        changeover: me.section_type === 'changeover' ? {
+          product: me.product || '',
+          cavity: me.cavity || 0,
+          targetCycle: me.trg_cycle_sec || 0,
+          targetRunTime: me.trg_run_time_min || 0,
+          partWeight: me.part_wt_gm || 0,
+          actualPartWeight: me.act_part_wt_gm || 0,
+          actualCycle: me.act_cycle_sec || 0,
+          shotsStart: me.shots_start || 0,
+          shotsEnd: me.shots_end || 0,
+          targetQty: me.target_qty_nos || 0,
+          actualQty: me.actual_qty_nos || 0,
+          okProdQty: me.ok_prod_qty_nos || 0,
+          okProdKgs: me.ok_prod_kgs || 0,
+          okProdPercent: me.ok_prod_percent || 0,
+          rejKgs: me.rej_kgs || 0,
+          lumps: me.lumps_kgs || 0,
+          runTime: me.run_time_mins || 0,
+          downTime: me.down_time_min || 0,
+          stoppageReason: me.stoppage_reason || '',
+          startTime: me.changeover_start_time || '',
+          endTime: me.changeover_end_time || '',
+          totalTime: (me.run_time_mins || 0) + (me.down_time_min || 0),
+          mouldChange: me.mould_change || '',
+          remark: me.remark || '',
+          partWeightCheck: me.part_wt_check || '',
+          cycleTimeCheck: me.cycle_time_check || ''
+        } : {
+          product: '',
+          cavity: 0,
+          targetCycle: 0,
+          targetRunTime: 0,
+          partWeight: 0,
+          actualPartWeight: 0,
+          actualCycle: 0,
+          shotsStart: 0,
+          shotsEnd: 0,
+          targetQty: 0,
+          actualQty: 0,
+          okProdQty: 0,
+          okProdKgs: 0,
+          okProdPercent: 0,
+          rejKgs: 0,
+          lumps: 0,
+          runTime: 0,
+          downTime: 0,
+          stoppageReason: '',
+          startTime: '',
+          endTime: '',
+          totalTime: 0,
+          mouldChange: '',
+          remark: '',
+          partWeightCheck: '',
+          cycleTimeCheck: ''
+        }
       }));
 
-    // Calculate summary
-    const summary: SummaryData = {
-      targetQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.targetQty || 0) + (m.changeover.targetQty || 0), 0),
-      actualQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.actualQty || 0) + (m.changeover.actualQty || 0), 0),
-      okProdQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.okProdQty || 0) + (m.changeover.okProdQty || 0), 0),
-      okProdKgs: machinesData.reduce((sum, m) => sum + (m.currentProduction.okProdKgs || 0) + (m.changeover.okProdKgs || 0), 0),
-      okProdPercent: 0, // Will calculate below
-      rejKgs: machinesData.reduce((sum, m) => sum + (m.currentProduction.rejKgs || 0) + (m.changeover.rejKgs || 0), 0),
-      runTime: machinesData.reduce((sum, m) => sum + (m.currentProduction.runTime || 0) + (m.changeover.runTime || 0), 0),
-      downTime: machinesData.reduce((sum, m) => sum + (m.currentProduction.downTime || 0) + (m.changeover.downTime || 0), 0)
-    };
+      // Calculate summary
+      console.log('📊 Calculating summary from', machinesData.length, 'machines');
+      console.log('📊 Machine data:', machinesData.map(m => ({
+        machineNo: m.machineNo,
+        current: { targetQty: m.currentProduction.targetQty, okProdQty: m.currentProduction.okProdQty, okProdKgs: m.currentProduction.okProdKgs, partWeight: m.currentProduction.partWeight },
+        changeover: { targetQty: m.changeover.targetQty, okProdQty: m.changeover.okProdQty, okProdKgs: m.changeover.okProdKgs, partWeight: m.changeover.partWeight }
+      })));
 
-    // Calculate target qty in kgs for okProdPercent
-    const targetQtyKgs = machinesData.reduce((sum, m) => {
-      const current = (m.currentProduction.targetQty || 0) * (m.currentProduction.partWeight || 0) / 1000;
-      const changeover = (m.changeover.targetQty || 0) * (m.changeover.partWeight || 0) / 1000;
-      return sum + current + changeover;
-    }, 0);
+      const summary: SummaryData = {
+        targetQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.targetQty || 0) + (m.changeover.targetQty || 0), 0),
+        actualQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.actualQty || 0) + (m.changeover.actualQty || 0), 0),
+        okProdQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.okProdQty || 0) + (m.changeover.okProdQty || 0), 0),
+        okProdKgs: machinesData.reduce((sum, m) => sum + (m.currentProduction.okProdKgs || 0) + (m.changeover.okProdKgs || 0), 0),
+        okProdPercent: 0,
+        rejKgs: machinesData.reduce((sum, m) => sum + (m.currentProduction.rejKgs || 0) + (m.changeover.rejKgs || 0), 0),
+        runTime: machinesData.reduce((sum, m) => sum + (m.currentProduction.runTime || 0) + (m.changeover.runTime || 0), 0),
+        downTime: machinesData.reduce((sum, m) => sum + (m.currentProduction.downTime || 0) + (m.changeover.downTime || 0), 0)
+      };
 
-    summary.okProdPercent = targetQtyKgs > 0 ? (summary.okProdKgs / targetQtyKgs * 100) : 0;
+      console.log('📊 Summary (before okProdPercent):', {
+        targetQty: summary.targetQty,
+        actualQty: summary.actualQty,
+        okProdQty: summary.okProdQty,
+        okProdKgs: summary.okProdKgs,
+        rejKgs: summary.rejKgs,
+        runTime: summary.runTime,
+        downTime: summary.downTime
+      });
 
-    // Calculate Shift Total (sum of all columns as per formulas)
-    const shiftTotal: ShiftTotalData = {
-      type: 'shift_total',
-      label: `${shift} Shift Total`,
-      // Total Target Qty (Nos) = Sum of Target Qty (Nos) column
-      targetQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.targetQty || 0) + (m.changeover.targetQty || 0), 0),
-      // Total Actual Qty (Nos) = Sum of Actual Qty (Nos) column
-      actualQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.actualQty || 0) + (m.changeover.actualQty || 0), 0),
-      // Total Ok Prod Qty (Nos) = Sum of Ok Prod Qty (Nos) column
-      okProdQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.okProdQty || 0) + (m.changeover.okProdQty || 0), 0),
-      // Total Ok Prod (Kgs) = Sum of Ok Prod (Kgs) column
-      okProdKgs: machinesData.reduce((sum, m) => sum + (m.currentProduction.okProdKgs || 0) + (m.changeover.okProdKgs || 0), 0),
-      // Ok Prod (%) calculated from totals
-      okProdPercent: 0, // Will calculate below
-      // Total Rej (Kgs) = Sum of Rej (Kgs) column
-      rejKgs: machinesData.reduce((sum, m) => sum + (m.currentProduction.rejKgs || 0) + (m.changeover.rejKgs || 0), 0),
-      // Total lumps (KG) = Sum of lumps (KG) column
-      lumps: machinesData.reduce((sum, m) => sum + (m.currentProduction.lumps || 0) + (m.changeover.lumps || 0), 0),
-      // Total Run Time (mins) = Sum of Run Time (mins) column
-      runTime: machinesData.reduce((sum, m) => sum + (m.currentProduction.runTime || 0) + (m.changeover.runTime || 0), 0),
-      // Total Down time (min) = Sum of Down time (min) column
-      downTime: machinesData.reduce((sum, m) => sum + (m.currentProduction.downTime || 0) + (m.changeover.downTime || 0), 0),
-      // Total Stoppage Time = Sum of Stoppage Time column (totalTime)
-      totalTime: machinesData.reduce((sum, m) => sum + (m.currentProduction.totalTime || 0) + (m.changeover.totalTime || 0), 0)
-    };
-    // Calculate Ok Prod (%) for shift total
-    shiftTotal.okProdPercent = shiftTotal.targetQty > 0 ? (shiftTotal.okProdQty / shiftTotal.targetQty * 100) : 0;
+      const targetQtyKgs = machinesData.reduce((sum, m) => {
+        const current = (m.currentProduction.targetQty || 0) * (m.currentProduction.partWeight || 0) / 1000;
+        const changeover = (m.changeover.targetQty || 0) * (m.changeover.partWeight || 0) / 1000;
+        return sum + current + changeover;
+      }, 0);
 
-    const dprData: DPRData = {
-      id: `${date}-${shift}-${Date.now()}`,
-      date,
-      shift,
-      shiftIncharge,
-      machines: machinesData,
-      summary,
-      shiftTotal,
-      achievement: null
-    };
+      console.log('📊 targetQtyKgs calculated:', targetQtyKgs);
+      summary.okProdPercent = targetQtyKgs > 0 ? (summary.okProdKgs / targetQtyKgs * 100) : 0;
+      console.log('📊 okProdPercent calculated:', summary.okProdPercent, '% (okProdKgs:', summary.okProdKgs, '/ targetQtyKgs:', targetQtyKgs, ')');
 
-    onSave(dprData);
+      const shiftTotal: ShiftTotalData = {
+        type: 'shift_total',
+        label: `${shift} Shift Total`,
+        targetQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.targetQty || 0) + (m.changeover.targetQty || 0), 0),
+        actualQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.actualQty || 0) + (m.changeover.actualQty || 0), 0),
+        okProdQty: machinesData.reduce((sum, m) => sum + (m.currentProduction.okProdQty || 0) + (m.changeover.okProdQty || 0), 0),
+        okProdKgs: machinesData.reduce((sum, m) => sum + (m.currentProduction.okProdKgs || 0) + (m.changeover.okProdKgs || 0), 0),
+        okProdPercent: 0,
+        rejKgs: machinesData.reduce((sum, m) => sum + (m.currentProduction.rejKgs || 0) + (m.changeover.rejKgs || 0), 0),
+        lumps: machinesData.reduce((sum, m) => sum + (m.currentProduction.lumps || 0) + (m.changeover.lumps || 0), 0),
+        runTime: machinesData.reduce((sum, m) => sum + (m.currentProduction.runTime || 0) + (m.changeover.runTime || 0), 0),
+        downTime: machinesData.reduce((sum, m) => sum + (m.currentProduction.downTime || 0) + (m.changeover.downTime || 0), 0),
+        totalTime: machinesData.reduce((sum, m) => sum + (m.currentProduction.totalTime || 0) + (m.changeover.totalTime || 0), 0)
+      };
+      shiftTotal.okProdPercent = shiftTotal.targetQty > 0 ? (shiftTotal.okProdQty / shiftTotal.targetQty * 100) : 0;
+
+      const dprData: DPRData = {
+        id: apiDpr.id,
+        date: apiDpr.report_date,
+        shift: apiDpr.shift,
+        shiftIncharge: apiDpr.shift_incharge || '',
+        machines: machinesData,
+        summary,
+        shiftTotal,
+        achievement: null
+      };
+
+      onSave(dprData);
+      alert(`DPR ${isEditMode ? 'updated' : 'created'} successfully for ${new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} - ${shift} shift`);
+    } catch (error) {
+      console.error('Error saving DPR:', error);
+      alert(`Error ${isEditMode ? 'updating' : 'creating'} DPR: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Create New DPR Entry</h2>
+          <h2 className="text-xl font-semibold text-gray-900">
+            {existingData?.id ? 'Edit DPR Entry' : 'Create New DPR Entry'}
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -3823,9 +4611,9 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
                 </div>
 
                 {/* Basic Information */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="grid grid-cols-2 gap-3 mb-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       Line *
                     </label>
                     <select
@@ -3835,11 +4623,12 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
                           en.id === entry.id ? { ...en, machineNo: e.target.value } : en
                         ));
                       }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
                       required
                     >
                       <option value="">Select Line</option>
                       {lines.filter(line => line.status === 'Active').map(line => (
+                        // For new manual entries: store line_id (line number) in machineNo, not machine number
                         <option key={line.line_id} value={line.line_id}>
                           {line.description || line.line_id}
                         </option>
@@ -3848,7 +4637,7 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       Operator Name
                     </label>
                     <input
@@ -3859,21 +4648,21 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
                           en.id === entry.id ? { ...en, operatorName: e.target.value } : en
                         ));
                       }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
                       placeholder="Enter operator name"
                     />
                   </div>
                 </div>
 
                 {/* Product Selection */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
                     Product (Mold) * <span className="text-xs text-gray-500">(Unavailable molds shown in red)</span>
                   </label>
                   <select
                     value={entry.currentProduction.product || ''}
                     onChange={(e) => handleProductSelect(entry.id, e.target.value, false)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
                   >
                     <option value="">Select Mold</option>
                     {molds.map(mold => {
@@ -3895,70 +4684,70 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
                 </div>
 
                 {/* Auto-filled fields from Mold */}
-                <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="grid grid-cols-3 gap-3 mb-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Cavity</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Cavity</label>
                     <input
                       type="number"
                       value={entry.currentProduction.cavity || ''}
                       readOnly
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Trg Cycle (sec)</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Trg Cycle (sec)</label>
                     <input
                       type="number"
                       value={entry.currentProduction.targetCycle || ''}
                       readOnly
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Part Wt (gm)</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Part Wt (gm)</label>
                     <input
                       type="number"
                       value={entry.currentProduction.partWeight || ''}
                       readOnly
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
                     />
                   </div>
                 </div>
 
                 {/* Employee Input Fields */}
-                <div className="mb-6">
-                  <h4 className="text-md font-semibold text-gray-800 mb-4">Production Input Fields</h4>
-                  <div className="grid grid-cols-3 gap-4">
+                <div className="mb-4">
+                  <h4 className="text-sm font-semibold text-gray-800 mb-3">Production Input Fields</h4>
+                  <div className="grid grid-cols-4 gap-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Trg Run Time (min) *</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Trg Run Time (min) *</label>
                       <input
                         type="number"
                         step="0.01"
                         value={entry.currentProduction.targetRunTime || ''}
                         onChange={(e) => handleFieldChange(entry.id, 'targetRunTime', parseFloat(e.target.value) || 0, false)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
                         required
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Act part wt (gm) *</label>
-                      <div className="flex gap-2 items-center">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Act part wt (gm) *</label>
+                      <div className="flex gap-1.5 items-center">
                         <input
                           type="number"
                           step="0.01"
                           value={entry.currentProduction.actualPartWeight || ''}
                           onChange={(e) => handleFieldChange(entry.id, 'actualPartWeight', parseFloat(e.target.value) || 0, false)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm"
                           required
                         />
                         {entry.currentProduction.partWeightCheck === 'OK' && (
-                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
                             OK
                           </span>
                         )}
                         {entry.currentProduction.partWeightCheck === 'NOT OK' && (
-                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
                             NOT OK
                           </span>
                         )}
@@ -3966,23 +4755,23 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Act Cycle (sec) *</label>
-                      <div className="flex gap-2 items-center">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Act Cycle (sec) *</label>
+                      <div className="flex gap-1.5 items-center">
                         <input
                           type="number"
                           step="0.01"
                           value={entry.currentProduction.actualCycle || ''}
                           onChange={(e) => handleFieldChange(entry.id, 'actualCycle', parseFloat(e.target.value) || 0, false)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm"
                           required
                         />
                         {entry.currentProduction.cycleTimeCheck === 'OK' && (
-                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
                             OK
                           </span>
                         )}
                         {entry.currentProduction.cycleTimeCheck === 'NOT OK' && (
-                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
                             NOT OK
                           </span>
                         )}
@@ -3990,7 +4779,7 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Shots Start *</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Shots Start *</label>
                       <input
                         type="number"
                         value={entry.currentProduction.shotsStart !== undefined ? entry.currentProduction.shotsStart : 0}
@@ -3998,13 +4787,13 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
                           const numVal = e.target.value === '' ? 0 : parseFloat(e.target.value);
                           handleFieldChange(entry.id, 'shotsStart', isNaN(numVal) ? 0 : numVal, false);
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
                         required
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Shots End *</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Shots End *</label>
                       <input
                         type="number"
                         value={entry.currentProduction.shotsEnd !== undefined ? entry.currentProduction.shotsEnd : 0}
@@ -4012,30 +4801,30 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
                           const numVal = e.target.value === '' ? 0 : parseFloat(e.target.value);
                           handleFieldChange(entry.id, 'shotsEnd', isNaN(numVal) ? 0 : numVal, false);
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
                         required
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Ok Prod Qty (Nos) *</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Ok Prod Qty (Nos) *</label>
                       <input
                         type="number"
                         value={entry.currentProduction.okProdQty || ''}
                         onChange={(e) => handleFieldChange(entry.id, 'okProdQty', parseFloat(e.target.value) || 0, false)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
                         required
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">lumps (KG)</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">lumps (KG)</label>
                       <input
                         type="number"
                         step="0.01"
                         value={entry.currentProduction.lumps || ''}
                         onChange={(e) => handleFieldChange(entry.id, 'lumps', parseFloat(e.target.value) || 0, false)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
                         placeholder="0.00"
                       />
                     </div>
@@ -4043,133 +4832,133 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
                 </div>
 
                 {/* Calculated Fields Display */}
-                <div className="mb-6">
-                  <h4 className="text-md font-semibold text-gray-800 mb-4">Calculated Fields</h4>
-                  <div className="grid grid-cols-3 gap-4">
+                <div className="mb-4">
+                  <h4 className="text-sm font-semibold text-gray-800 mb-3">Calculated Fields</h4>
+                  <div className="grid grid-cols-4 gap-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Target Qty (Nos)</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Target Qty (Nos)</label>
                       <input
                         type="number"
                         value={entry.currentProduction.targetQty?.toFixed(0) || '0'}
                         readOnly
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Actual Qty (Nos)</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Actual Qty (Nos)</label>
                       <input
                         type="number"
                         value={entry.currentProduction.actualQty?.toFixed(0) || '0'}
                         readOnly
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Ok Prod (Kgs)</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Ok Prod (Kgs)</label>
                       <input
                         type="number"
                         value={entry.currentProduction.okProdKgs?.toFixed(2) || '0.00'}
                         readOnly
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Ok Prod (%)</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Ok Prod (%)</label>
                       <input
                         type="number"
                         value={entry.currentProduction.okProdPercent ? (entry.currentProduction.okProdPercent * 100).toFixed(2) : '0.00'}
                         readOnly
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Rej (Kgs)</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Rej (Kgs)</label>
                       <input
                         type="number"
                         value={entry.currentProduction.rejKgs?.toFixed(2) || '0.00'}
                         readOnly
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Run Time (mins)</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Run Time (mins)</label>
                       <input
                         type="number"
                         value={entry.currentProduction.runTime?.toFixed(2) || '0.00'}
                         readOnly
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Down time (min)</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Down time (min)</label>
                       <input
                         type="number"
                         value={entry.currentProduction.downTime?.toFixed(2) || '0.00'}
                         readOnly
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
                       />
                     </div>
                   </div>
                 </div>
 
                 {/* Stoppage Time and Remarks */}
-                <div className="mb-6">
-                  <h4 className="text-md font-semibold text-gray-800 mb-4">Stoppage Time and Remarks</h4>
-                  <div className="grid grid-cols-3 gap-4">
+                <div className="mb-4">
+                  <h4 className="text-sm font-semibold text-gray-800 mb-3">Stoppage Time and Remarks</h4>
+                  <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Reason</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Reason</label>
                       <input
                         type="text"
                         value={entry.currentProduction.stoppageReason || ''}
                         onChange={(e) => handleFieldChange(entry.id, 'stoppageReason', e.target.value, false)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
                         placeholder="Enter stoppage reason"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Start Time</label>
                       <input
                         type="time"
                         value={entry.currentProduction.startTime || ''}
                         onChange={(e) => handleFieldChange(entry.id, 'startTime', e.target.value, false)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">End Time</label>
                       <input
                         type="time"
                         value={entry.currentProduction.endTime || ''}
                         onChange={(e) => handleFieldChange(entry.id, 'endTime', e.target.value, false)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Total Time (min)</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Total Time (min)</label>
                       <input
                         type="number"
                         value={entry.currentProduction.totalTime?.toFixed(2) || '0.00'}
                         readOnly
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Mould change</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Mould change</label>
                       <input
                         type="text"
                         value={entry.currentProduction.mouldChange || ''}
                         onChange={(e) => handleFieldChange(entry.id, 'mouldChange', e.target.value, false)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
                         placeholder="Enter mould change details"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">REMARK</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">REMARK</label>
                       <input
                         type="text"
                         value={entry.currentProduction.remark || ''}
                         onChange={(e) => handleFieldChange(entry.id, 'remark', e.target.value, false)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
                         placeholder="Enter remarks"
                       />
                     </div>
@@ -4177,24 +4966,24 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
                 </div>
 
                 {/* Changeover Section */}
-                <div className="mt-6 border-t-2 border-orange-200 pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-md font-semibold text-orange-800 flex items-center">
-                      <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded mr-2 text-xs">CHANGEOVER</span>
+                <div className="mt-4 border-t-2 border-orange-200 pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-semibold text-orange-800 flex items-center">
+                      <span className="bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded mr-2 text-xs">CHANGEOVER</span>
                       Mold Change (Optional)
                     </h4>
                     <span className="text-xs text-gray-500">Select a different mold if there was a changeover during the shift</span>
                   </div>
                   
                   {/* Changeover Product Selection */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <div className="mb-3">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       Changeover Product (Mold) <span className="text-xs text-gray-500">(Selecting releases current mold for other lines)</span>
                     </label>
                     <select
                       value={entry.changeover.product || ''}
                       onChange={(e) => handleProductSelect(entry.id, e.target.value, true)}
-                      className="w-full px-3 py-2 border border-orange-300 rounded-md text-sm bg-orange-50"
+                      className="w-full px-2 py-1.5 border border-orange-300 rounded text-sm bg-orange-50"
                     >
                       <option value="">No Changeover</option>
                       {molds.map(mold => {

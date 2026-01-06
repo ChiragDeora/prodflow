@@ -1,0 +1,1032 @@
+// ============================================================================
+// STOCK LEDGER SYSTEM - Helper Functions
+// ============================================================================
+
+import { getSupabase, handleSupabaseError } from '../supabase/utils';
+import type {
+  StockItem,
+  StockBalance,
+  StockLedgerEntry,
+  CreateStockLedgerEntry,
+  LocationCode,
+  DocumentType,
+  MovementType,
+  UnitOfMeasure,
+  ItemType,
+  StockPostingError,
+  SfgBom,
+  FgBom,
+  StockItemMapping,
+} from '../supabase/types/stock';
+
+// ============================================================================
+// BALANCE OPERATIONS
+// ============================================================================
+
+/**
+ * Get current balance for an item at a location
+ * Returns 0 if no balance record exists
+ */
+export async function getBalance(
+  itemCode: string,
+  locationCode: LocationCode
+): Promise<number> {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('stock_balances')
+    .select('current_balance')
+    .eq('item_code', itemCode)
+    .eq('location_code', locationCode)
+    .single();
+  
+  if (error) {
+    // PGRST116 means no rows returned - that's fine, return 0
+    if (error.code === 'PGRST116') {
+      return 0;
+    }
+    handleSupabaseError(error, 'getting stock balance');
+    throw error;
+  }
+  
+  return data?.current_balance || 0;
+}
+
+/**
+ * Update balance (upsert) - creates if not exists, updates if exists
+ */
+export async function updateBalance(
+  itemId: number,
+  itemCode: string,
+  locationCode: LocationCode,
+  newBalance: number,
+  unitOfMeasure: UnitOfMeasure
+): Promise<void> {
+  const supabase = getSupabase();
+  
+  const { error } = await supabase
+    .from('stock_balances')
+    .upsert(
+      {
+        item_id: itemId,
+        item_code: itemCode,
+        location_code: locationCode,
+        current_balance: newBalance,
+        unit_of_measure: unitOfMeasure,
+        last_updated: new Date().toISOString(),
+      },
+      {
+        onConflict: 'item_code,location_code',
+      }
+    );
+  
+  if (error) {
+    handleSupabaseError(error, 'updating stock balance');
+    throw error;
+  }
+}
+
+// ============================================================================
+// LEDGER OPERATIONS
+// ============================================================================
+
+/**
+ * Create a ledger entry
+ */
+export async function createLedgerEntry(
+  entry: CreateStockLedgerEntry
+): Promise<StockLedgerEntry> {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('stock_ledger')
+    .insert({
+      item_id: entry.item_id,
+      item_code: entry.item_code,
+      location_code: entry.location_code,
+      quantity: entry.quantity,
+      unit_of_measure: entry.unit_of_measure,
+      balance_after: entry.balance_after,
+      transaction_date: entry.transaction_date,
+      document_type: entry.document_type,
+      document_id: entry.document_id,
+      document_number: entry.document_number,
+      movement_type: entry.movement_type,
+      counterpart_location: entry.counterpart_location,
+      posted_by: entry.posted_by,
+      remarks: entry.remarks,
+    })
+    .select()
+    .single();
+  
+  if (error) {
+    // Check for duplicate key error (already posted)
+    if (error.code === '23505') {
+      const duplicateError = new Error(
+        `This document has already been posted to stock. ` +
+        `To re-post, you must first cancel the existing stock entries. ` +
+        `Item: ${entry.item_code}, Location: ${entry.location_code}`
+      );
+      (duplicateError as any).code = 'ALREADY_POSTED';
+      (duplicateError as any).details = error.details;
+      throw duplicateError;
+    }
+    handleSupabaseError(error, 'creating ledger entry');
+    throw error;
+  }
+  
+  return data;
+}
+
+/**
+ * Upsert a ledger entry - update if exists, create if not
+ * Used for DPR multi-line posting where same SFG might be produced by multiple lines
+ */
+export async function upsertLedgerEntry(
+  entry: CreateStockLedgerEntry
+): Promise<StockLedgerEntry> {
+  const supabase = getSupabase();
+  
+  // Check if entry already exists
+  const { data: existing } = await supabase
+    .from('stock_ledger')
+    .select('*')
+    .eq('document_type', entry.document_type)
+    .eq('document_id', entry.document_id)
+    .eq('item_code', entry.item_code)
+    .eq('location_code', entry.location_code)
+    .eq('movement_type', entry.movement_type)
+    .single();
+  
+  if (existing) {
+    // Update existing entry - add quantities together
+    const newQuantity = roundQuantity((existing.quantity || 0) + entry.quantity);
+    // Use the new balance from current entry (already calculated correctly)
+    const newBalance = entry.balance_after;
+    
+    // Update remarks to include new line info
+    const updatedRemarks = existing.remarks 
+      ? `${existing.remarks}; ${entry.remarks}`
+      : entry.remarks;
+    
+    const { data, error } = await supabase
+      .from('stock_ledger')
+      .update({
+        quantity: newQuantity,
+        balance_after: newBalance,
+        remarks: updatedRemarks,
+        document_number: entry.document_number, // Update to latest
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existing.id)
+      .select()
+      .single();
+    
+    if (error) {
+      handleSupabaseError(error, 'updating ledger entry');
+      throw error;
+    }
+    
+    // Also update the balance cache (already done in post-dpr, but ensure it's updated)
+    await updateBalance(
+      entry.item_id,
+      entry.item_code,
+      entry.location_code,
+      newBalance,
+      entry.unit_of_measure
+    );
+    
+    return data;
+  } else {
+    // Create new entry
+    return createLedgerEntry(entry);
+  }
+}
+
+/**
+ * Check if a document is already posted to stock
+ */
+export async function isDocumentPosted(
+  documentType: DocumentType,
+  documentId: string
+): Promise<boolean> {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('stock_ledger')
+    .select('id')
+    .eq('document_type', documentType)
+    .eq('document_id', documentId)
+    .limit(1);
+  
+  if (error) {
+    handleSupabaseError(error, 'checking document posted status');
+    throw error;
+  }
+  
+  return data && data.length > 0;
+}
+
+/**
+ * Get all ledger entries for a document
+ */
+export async function getLedgerEntriesForDocument(
+  documentType: DocumentType,
+  documentId: string
+): Promise<StockLedgerEntry[]> {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('stock_ledger')
+    .select('*')
+    .eq('document_type', documentType)
+    .eq('document_id', documentId);
+  
+  if (error) {
+    handleSupabaseError(error, 'getting ledger entries');
+    throw error;
+  }
+  
+  return data || [];
+}
+
+// ============================================================================
+// STOCK ITEM OPERATIONS
+// ============================================================================
+
+/**
+ * Get stock item by item code
+ */
+export async function getStockItemByCode(
+  itemCode: string
+): Promise<StockItem | null> {
+  const supabase = getSupabase();
+  
+  console.log(`[getStockItemByCode] Looking for item_code: "${itemCode}"`);
+  
+  const { data, error } = await supabase
+    .from('stock_items')
+    .select('*')
+    .eq('item_code', itemCode)
+    .eq('is_active', true)
+    .single();
+  
+  if (error) {
+    if (error.code === 'PGRST116') {
+      console.log(`[getStockItemByCode] Item "${itemCode}" not found`);
+      return null;
+    }
+    handleSupabaseError(error, 'getting stock item');
+    throw error;
+  }
+  
+  console.log(`[getStockItemByCode] Found item: ${data?.item_code}`);
+  return data;
+}
+
+/**
+ * Get stock item by ID
+ */
+export async function getStockItemById(
+  itemId: number
+): Promise<StockItem | null> {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('stock_items')
+    .select('*')
+    .eq('id', itemId)
+    .single();
+  
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return null;
+    }
+    handleSupabaseError(error, 'getting stock item by ID');
+    throw error;
+  }
+  
+  return data;
+}
+
+/**
+ * Create a new stock item
+ */
+export async function createStockItem(
+  itemCode: string,
+  itemName: string,
+  itemType: ItemType,
+  unitOfMeasure: UnitOfMeasure,
+  category?: string,
+  subCategory?: string,
+  forMachine?: string,
+  forMold?: string,
+  minStockLevel?: number,
+  reorderQty?: number
+): Promise<StockItem> {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('stock_items')
+    .insert({
+      item_code: itemCode,
+      item_name: itemName,
+      item_type: itemType,
+      category: category,
+      sub_category: subCategory,
+      for_machine: forMachine,
+      for_mold: forMold,
+      min_stock_level: minStockLevel || 0,
+      reorder_qty: reorderQty || 0,
+      unit_of_measure: unitOfMeasure,
+      is_active: true,
+    })
+    .select()
+    .single();
+  
+  if (error) {
+    handleSupabaseError(error, 'creating stock item');
+    throw error;
+  }
+  
+  return data;
+}
+
+/**
+ * Get or create the REGRIND stock item
+ */
+export async function getOrCreateRegrindItem(): Promise<StockItem> {
+  const regrindCode = 'REGRIND';
+  
+  let item = await getStockItemByCode(regrindCode);
+  
+  if (!item) {
+    item = await createStockItem(
+      regrindCode,
+      'Regrind Material',
+      'RM',
+      'KG',
+      'REGRIND'
+    );
+  }
+  
+  return item;
+}
+
+/**
+ * Get or create an SFG stock item
+ * Auto-creates the item if it doesn't exist (from sfg_bom data)
+ */
+export async function getOrCreateSfgItem(
+  sfgCode: string,
+  itemName: string
+): Promise<StockItem> {
+  let item = await getStockItemByCode(sfgCode);
+  
+  if (!item) {
+    console.log(`📦 Auto-creating SFG item: ${sfgCode} (${itemName})`);
+    item = await createStockItem(
+      sfgCode,
+      itemName,
+      'SFG',
+      'NOS',
+      'SFG'
+    );
+    console.log(`✅ Created SFG item: ${sfgCode}`);
+  }
+  
+  return item;
+}
+
+// ============================================================================
+// ITEM MAPPING OPERATIONS
+// ============================================================================
+
+/**
+ * Map document description to stock item code
+ * Handles:
+ * 1. Explicit mappings
+ * 2. Direct item_code match
+ * 3. Direct item_name match
+ * 4. RM Type match (e.g., "HP" -> find RM with sub_category = "HP")
+ * 5. PM Category match (e.g., "Boxes" -> find PM with category = "Boxes")
+ */
+export async function mapItemToStockItem(
+  sourceTable: string,
+  description: string
+): Promise<StockItem | null> {
+  const supabase = getSupabase();
+  
+  if (!description || description.trim() === '') {
+    console.log(`[mapItemToStockItem] Empty description, returning null`);
+    return null;
+  }
+  
+  console.log(`[mapItemToStockItem] Trying to map: "${description}" from ${sourceTable}`);
+  
+  // First check explicit mappings
+  const { data: mapping, error: mappingError } = await supabase
+    .from('stock_item_mappings')
+    .select('stock_item_code')
+    .eq('source_table', sourceTable)
+    .eq('source_description', description)
+    .eq('is_active', true)
+    .single();
+  
+  if (!mappingError && mapping) {
+    return getStockItemByCode(mapping.stock_item_code);
+  }
+  
+  // Try direct match by item_code
+  let item = await getStockItemByCode(description);
+  if (item) return item;
+  
+  // Try match by item_name
+  const { data: itemByName, error: nameError } = await supabase
+    .from('stock_items')
+    .select('*')
+    .eq('item_name', description)
+    .eq('is_active', true)
+    .single();
+  
+  if (!nameError && itemByName) {
+    return itemByName;
+  }
+  
+  // Try RM Type match: If description is an RM Type (HP, ICP, RCP, etc.), find RM with that sub_category
+  // Common RM Types: HP, ICP, RCP, LDPE, GPPS, MB
+  const rmTypes = ['HP', 'ICP', 'RCP', 'LDPE', 'GPPS', 'MB'];
+  const upperDescription = description.toUpperCase().trim();
+  if (rmTypes.includes(upperDescription)) {
+    console.log(`[mapItemToStockItem] "${description}" is an RM type, trying RM-${upperDescription}`);
+    // First try to find the standard RM item (e.g., "RM-HP")
+    const standardRmCode = `RM-${upperDescription}`;
+    let standardItem = await getStockItemByCode(standardRmCode);
+    
+    // If standard RM item doesn't exist, create it automatically
+    if (!standardItem) {
+      console.log(`[mapItemToStockItem] Standard RM not found, creating RM-${upperDescription}`);
+      const { data: newItem, error: createError } = await supabase
+        .from('stock_items')
+        .insert({
+          item_code: standardRmCode,
+          item_name: `Raw Material - ${upperDescription}`,
+          item_type: 'RM',
+          category: 'PP',
+          sub_category: upperDescription,
+          unit_of_measure: 'KG',
+          is_active: true,
+        })
+        .select()
+        .single();
+      
+      if (!createError && newItem) {
+        console.log(`[mapItemToStockItem] Created new stock item: ${newItem.item_code}`);
+        return newItem;
+      } else {
+        console.error(`[mapItemToStockItem] Failed to create stock item:`, createError?.message);
+      }
+    } else {
+      console.log(`[mapItemToStockItem] Found standard RM item: ${standardItem.item_code}`);
+      return standardItem;
+    }
+    
+    console.log(`[mapItemToStockItem] Trying sub_category match`);
+    // If not found, find any RM with this sub_category
+    const { data: rmItems, error: rmItemsError } = await supabase
+      .from('stock_items')
+      .select('*')
+      .eq('item_type', 'RM')
+      .eq('sub_category', upperDescription)
+      .eq('is_active', true)
+      .limit(1);
+    
+    console.log(`[mapItemToStockItem] Sub-category query result: found=${rmItems?.length || 0}, error=${rmItemsError?.message || 'none'}`);
+    
+    if (!rmItemsError && rmItems && rmItems.length > 0) {
+      console.log(`[mapItemToStockItem] Found RM by sub_category: ${rmItems[0].item_code}`);
+      return rmItems[0];
+    }
+  }
+  
+  // Try to find RM items where the description might be a grade code
+  // Check if description matches a grade pattern (e.g., "HJ333MO" might be in item_code like "PP-HP-HJ333MO")
+  const { data: gradeItems, error: gradeError } = await supabase
+    .from('stock_items')
+    .select('*')
+    .eq('item_type', 'RM')
+    .eq('is_active', true)
+    .or(`item_code.ilike.%${description}%,item_code.eq.${description}`);
+  
+  if (!gradeError && gradeItems && gradeItems.length > 0) {
+    // Prefer exact match first
+    const exactMatch = gradeItems.find(item => item.item_code === description);
+    if (exactMatch) return exactMatch;
+    
+    // Then try items ending with the grade (e.g., "PP-HP-HJ333MO")
+    const endingMatch = gradeItems.find(item => item.item_code.endsWith(`-${description}`));
+    if (endingMatch) return endingMatch;
+    
+    // Otherwise return first match
+    return gradeItems[0];
+  }
+  
+  // Try PM Category match: If description is a PM category, find PM items in that category
+  const { data: pmItem, error: pmError } = await supabase
+    .from('stock_items')
+    .select('*')
+    .eq('item_type', 'PM')
+    .eq('category', description)
+    .eq('is_active', true)
+    .limit(1)
+    .single();
+  
+  if (!pmError && pmItem) {
+    return pmItem;
+  }
+  
+  // If no exact PM category match, try to find any PM with this category
+  const { data: pmItems, error: pmItemsError } = await supabase
+    .from('stock_items')
+    .select('*')
+    .eq('item_type', 'PM')
+    .eq('category', description)
+    .eq('is_active', true)
+    .limit(1);
+  
+  if (!pmItemsError && pmItems && pmItems.length > 0) {
+    return pmItems[0];
+  }
+  
+  return null;
+}
+
+/**
+ * Create an item mapping
+ */
+export async function createItemMapping(
+  sourceTable: string,
+  sourceDescription: string,
+  stockItemCode: string
+): Promise<StockItemMapping> {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('stock_item_mappings')
+    .insert({
+      source_table: sourceTable,
+      source_description: sourceDescription,
+      stock_item_code: stockItemCode,
+      is_active: true,
+    })
+    .select()
+    .single();
+  
+  if (error) {
+    handleSupabaseError(error, 'creating item mapping');
+    throw error;
+  }
+  
+  return data;
+}
+
+// ============================================================================
+// BOM OPERATIONS
+// ============================================================================
+
+/**
+ * Get SFG BOM by mold name (item_name)
+ * This is the critical mapping for DPR posting
+ */
+export async function getSfgBomByMoldName(
+  moldName: string
+): Promise<SfgBom | null> {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('sfg_bom')
+    .select('*')
+    .eq('item_name', moldName)
+    .single();
+  
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return null;
+    }
+    handleSupabaseError(error, 'getting SFG BOM by mold name');
+    throw error;
+  }
+  
+  return data;
+}
+
+/**
+ * Get FG BOM by item code
+ */
+export async function getFgBomByItemCode(
+  itemCode: string
+): Promise<FgBom | null> {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('fg_bom')
+    .select('*')
+    .eq('item_code', itemCode)
+    .single();
+  
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return null;
+    }
+    handleSupabaseError(error, 'getting FG BOM');
+    throw error;
+  }
+  
+  return data;
+}
+
+// ============================================================================
+// RAW MATERIAL CONSUMPTION (FIFO)
+// ============================================================================
+
+/**
+ * Get RM items of a specific type at a location
+ * Used for FIFO consumption
+ */
+export async function getRmItemsByType(
+  rmType: string,
+  locationCode: LocationCode
+): Promise<{ item: StockItem; balance: number }[]> {
+  const supabase = getSupabase();
+  
+  // Get stock items matching the RM type
+  const { data: items, error: itemsError } = await supabase
+    .from('stock_items')
+    .select('*')
+    .eq('item_type', 'RM')
+    .eq('sub_category', rmType)
+    .eq('is_active', true);
+  
+  if (itemsError) {
+    handleSupabaseError(itemsError, 'getting RM items by type');
+    throw itemsError;
+  }
+  
+  if (!items || items.length === 0) {
+    return [];
+  }
+  
+  // Get balances for these items at the location
+  const result: { item: StockItem; balance: number }[] = [];
+  
+  for (const item of items) {
+    const balance = await getBalance(item.item_code, locationCode);
+    if (balance > 0) {
+      result.push({ item, balance });
+    }
+  }
+  
+  // Sort by earliest created (FIFO)
+  result.sort((a, b) => {
+    const dateA = new Date(a.item.created_at || 0);
+    const dateB = new Date(b.item.created_at || 0);
+    return dateA.getTime() - dateB.getTime();
+  });
+  
+  return result;
+}
+
+/**
+ * Consume raw material using FIFO
+ * Returns ledger entries created and warnings
+ */
+export async function consumeRmFifo(
+  rmType: string,
+  requiredQty: number,
+  locationCode: LocationCode,
+  transactionDate: string,
+  documentType: DocumentType,
+  documentId: string,
+  documentNumber: string | undefined,
+  postedBy: string
+): Promise<{ entries: StockLedgerEntry[]; warnings: string[] }> {
+  const entries: StockLedgerEntry[] = [];
+  const warnings: string[] = [];
+  
+  let remainingQty = requiredQty;
+  
+  // Get available RM items of this type (sorted by FIFO)
+  const rmItems = await getRmItemsByType(rmType, locationCode);
+  
+  if (rmItems.length === 0) {
+    warnings.push(`No ${rmType} raw material found at ${locationCode}. Stock will go negative.`);
+  }
+  
+  // Try to consume from available items
+  for (const { item, balance } of rmItems) {
+    if (remainingQty <= 0) break;
+    
+    const qtyToDeduct = Math.min(balance, remainingQty);
+    const currentBalance = await getBalance(item.item_code, locationCode);
+    const newBalance = currentBalance - qtyToDeduct;
+    
+    // Create OUT ledger entry
+    const entry = await createLedgerEntry({
+      item_id: item.id,
+      item_code: item.item_code,
+      location_code: locationCode,
+      quantity: -qtyToDeduct,
+      unit_of_measure: item.unit_of_measure,
+      balance_after: newBalance,
+      transaction_date: transactionDate,
+      document_type: documentType,
+      document_id: documentId,
+      document_number: documentNumber,
+      movement_type: 'OUT',
+      posted_by: postedBy,
+      remarks: `RM consumption: ${rmType}`,
+    });
+    
+    entries.push(entry);
+    
+    // Update balance
+    await updateBalance(
+      item.id,
+      item.item_code,
+      locationCode,
+      newBalance,
+      item.unit_of_measure
+    );
+    
+    remainingQty -= qtyToDeduct;
+  }
+  
+  // If still remaining, make the first available item go negative
+  if (remainingQty > 0) {
+    warnings.push(`Insufficient ${rmType} at ${locationCode}. Required: ${requiredQty}, Creating negative balance.`);
+    
+    // Find or create an RM item of this type to go negative
+    let targetItem: StockItem | null = null;
+    
+    if (rmItems.length > 0) {
+      targetItem = rmItems[0].item;
+    } else {
+      // Try to find any RM of this type
+      const supabase = getSupabase();
+      const { data } = await supabase
+        .from('stock_items')
+        .select('*')
+        .eq('item_type', 'RM')
+        .eq('sub_category', rmType)
+        .eq('is_active', true)
+        .limit(1)
+        .single();
+      
+      targetItem = data;
+    }
+    
+    if (targetItem) {
+      const currentBalance = await getBalance(targetItem.item_code, locationCode);
+      const newBalance = currentBalance - remainingQty;
+      
+      const entry = await createLedgerEntry({
+        item_id: targetItem.id,
+        item_code: targetItem.item_code,
+        location_code: locationCode,
+        quantity: -remainingQty,
+        unit_of_measure: targetItem.unit_of_measure,
+        balance_after: newBalance,
+        transaction_date: transactionDate,
+        document_type: documentType,
+        document_id: documentId,
+        document_number: documentNumber,
+        movement_type: 'OUT',
+        posted_by: postedBy,
+        remarks: `RM consumption: ${rmType} (negative balance)`,
+      });
+      
+      entries.push(entry);
+      
+      await updateBalance(
+        targetItem.id,
+        targetItem.item_code,
+        locationCode,
+        newBalance,
+        targetItem.unit_of_measure
+      );
+    } else {
+      warnings.push(`Could not find any ${rmType} item to deduct from.`);
+    }
+  }
+  
+  return { entries, warnings };
+}
+
+// ============================================================================
+// DOCUMENT STATUS OPERATIONS
+// ============================================================================
+
+/**
+ * Update document stock status
+ */
+export async function updateDocumentStockStatus(
+  tableName: string,
+  documentId: string,
+  status: 'DRAFT' | 'POSTED' | 'CANCELLED',
+  postedBy?: string
+): Promise<void> {
+  const supabase = getSupabase();
+  
+  const updateData: Record<string, unknown> = {
+    stock_status: status,
+  };
+  
+  if (status === 'POSTED' && postedBy) {
+    updateData.posted_to_stock_at = new Date().toISOString();
+    updateData.posted_to_stock_by = postedBy;
+  }
+  
+  const { error } = await supabase
+    .from(tableName)
+    .update(updateData)
+    .eq('id', documentId);
+  
+  if (error) {
+    handleSupabaseError(error, `updating ${tableName} stock status`);
+    throw error;
+  }
+}
+
+// ============================================================================
+// VALIDATION HELPERS
+// ============================================================================
+
+/**
+ * Validate that all required components are available for FG Transfer
+ */
+export async function validateFgTransferComponents(
+  fgCode: string,
+  boxes: number
+): Promise<{
+  isValid: boolean;
+  components: {
+    itemCode: string;
+    itemName: string;
+    location: LocationCode;
+    required: number;
+    available: number;
+    unit: UnitOfMeasure;
+  }[];
+  missingComponents: string[];
+}> {
+  const components: {
+    itemCode: string;
+    itemName: string;
+    location: LocationCode;
+    required: number;
+    available: number;
+    unit: UnitOfMeasure;
+  }[] = [];
+  const missingComponents: string[] = [];
+  
+  // Get FG BOM
+  const fgBom = await getFgBomByItemCode(fgCode);
+  if (!fgBom) {
+    return {
+      isValid: false,
+      components: [],
+      missingComponents: [`FG BOM not found for ${fgCode}`],
+    };
+  }
+  
+  // Check SFG 1 (usually container)
+  if (fgBom.sfg_1 && fgBom.sfg_1_qty) {
+    const required = boxes * fgBom.sfg_1_qty;
+    const available = await getBalance(fgBom.sfg_1, 'FG_STORE');
+    components.push({
+      itemCode: fgBom.sfg_1,
+      itemName: `SFG 1: ${fgBom.sfg_1}`,
+      location: 'FG_STORE',
+      required,
+      available,
+      unit: 'NOS',
+    });
+    if (available < required) {
+      missingComponents.push(`${fgBom.sfg_1}: Required ${required}, Available ${available}`);
+    }
+  }
+  
+  // Check SFG 2 (usually lid)
+  if (fgBom.sfg_2 && fgBom.sfg_2_qty) {
+    const required = boxes * fgBom.sfg_2_qty;
+    const available = await getBalance(fgBom.sfg_2, 'FG_STORE');
+    components.push({
+      itemCode: fgBom.sfg_2,
+      itemName: `SFG 2: ${fgBom.sfg_2}`,
+      location: 'FG_STORE',
+      required,
+      available,
+      unit: 'NOS',
+    });
+    if (available < required) {
+      missingComponents.push(`${fgBom.sfg_2}: Required ${required}, Available ${available}`);
+    }
+  }
+  
+  // Check carton
+  if (fgBom.cnt_code && fgBom.cnt_qty) {
+    const required = boxes * fgBom.cnt_qty;
+    const available = await getBalance(fgBom.cnt_code, 'STORE');
+    components.push({
+      itemCode: fgBom.cnt_code,
+      itemName: `Carton: ${fgBom.cnt_code}`,
+      location: 'STORE',
+      required,
+      available,
+      unit: 'NOS',
+    });
+    if (available < required) {
+      missingComponents.push(`${fgBom.cnt_code}: Required ${required}, Available ${available}`);
+    }
+  }
+  
+  // Check polybag
+  if (fgBom.polybag_code && fgBom.poly_qty) {
+    const required = boxes * fgBom.poly_qty;
+    const available = await getBalance(fgBom.polybag_code, 'STORE');
+    components.push({
+      itemCode: fgBom.polybag_code,
+      itemName: `Polybag: ${fgBom.polybag_code}`,
+      location: 'STORE',
+      required,
+      available,
+      unit: 'NOS',
+    });
+    if (available < required) {
+      missingComponents.push(`${fgBom.polybag_code}: Required ${required}, Available ${available}`);
+    }
+  }
+  
+  // Check BOPP 1
+  if (fgBom.bopp_1 && fgBom.qty_meter) {
+    const required = boxes * fgBom.qty_meter;
+    const available = await getBalance(fgBom.bopp_1, 'STORE');
+    components.push({
+      itemCode: fgBom.bopp_1,
+      itemName: `BOPP 1: ${fgBom.bopp_1}`,
+      location: 'STORE',
+      required,
+      available,
+      unit: 'METERS',
+    });
+    if (available < required) {
+      missingComponents.push(`${fgBom.bopp_1}: Required ${required}m, Available ${available}m`);
+    }
+  }
+  
+  // Check BOPP 2
+  if (fgBom.bopp_2 && fgBom.qty_meter_2) {
+    const required = boxes * fgBom.qty_meter_2;
+    const available = await getBalance(fgBom.bopp_2, 'STORE');
+    components.push({
+      itemCode: fgBom.bopp_2,
+      itemName: `BOPP 2: ${fgBom.bopp_2}`,
+      location: 'STORE',
+      required,
+      available,
+      unit: 'METERS',
+    });
+    if (available < required) {
+      missingComponents.push(`${fgBom.bopp_2}: Required ${required}m, Available ${available}m`);
+    }
+  }
+  
+  return {
+    isValid: missingComponents.length === 0,
+    components,
+    missingComponents,
+  };
+}
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Round to 4 decimal places
+ */
+export function roundQuantity(value: number): number {
+  return Math.round(value * 10000) / 10000;
+}
+
+/**
+ * Format error message with code
+ */
+export function formatStockError(
+  code: string,
+  message: string,
+  details?: Record<string, unknown>
+): { code: string; message: string; details?: Record<string, unknown> } {
+  return { code, message, details };
+}
+

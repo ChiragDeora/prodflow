@@ -73,6 +73,7 @@ export const purchaseOrderAPI = {
         const itemsToInsert = items.map((item, index) => ({
           purchase_order_id: newOrder.id,
           sr_no: index + 1,
+          item_code: item.item_code || null,
           description: item.description,
           qty: item.qty ? parseFloat(item.qty.toString()) : null,
           unit: item.unit || null,
@@ -123,6 +124,7 @@ export const purchaseOrderAPI = {
           const itemsToInsert = items.map((item, index) => ({
             purchase_order_id: id,
             sr_no: index + 1,
+            item_code: item.item_code || null,
             description: item.description,
             qty: item.qty ? parseFloat(item.qty.toString()) : null,
             unit: item.unit || null,

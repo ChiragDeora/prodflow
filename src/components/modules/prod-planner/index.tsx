@@ -3941,8 +3941,8 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                                         className="w-32 border border-gray-300 rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                       >
                                         <option value="">Select party...</option>
-                                        {partyNames.map(party => (
-                                          <option key={party.id} value={party.name}>
+                                        {partyNames.map((party, idx) => (
+                                          <option key={party.id || `party-${idx}-${party.name}`} value={party.name}>
                                             {party.name}
                                           </option>
                                         ))}
@@ -3963,8 +3963,8 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                                       className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     >
                                       <option value="">Select color...</option>
-                                      {availableColors.map(color => (
-                                        <option key={color} value={color}>{color}</option>
+                                      {availableColors.filter(color => color && color.trim() !== '').map((color, idx) => (
+                                        <option key={`color-${idx}-${color}`} value={color}>{color}</option>
                                       ))}
                                     </select>
                                     
@@ -4119,8 +4119,8 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                                       className="w-32 border border-gray-300 rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     >
                                       <option value="">Select Party...</option>
-                                      {partyNames.map(party => (
-                                        <option key={party.id} value={party.name}>
+                                      {partyNames.map((party, idx) => (
+                                        <option key={party.id || `party-${idx}-${party.name}`} value={party.name}>
                                           {party.name}
                                         </option>
                                       ))}
@@ -4144,8 +4144,8 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                                     title={!selectedParty ? 'Please select a party first' : ''}
                                   >
                                     <option value="">{selectedParty ? 'Select color...' : 'Select party first...'}</option>
-                                    {allAvailableColors.map(color => (
-                                      <option key={color} value={color}>{color}</option>
+                                    {allAvailableColors.filter(color => color && color.trim() !== '').map((color, idx) => (
+                                      <option key={`color-without-party-${idx}-${color}`} value={color}>{color}</option>
                                     ))}
                                   </select>
                                   
@@ -4241,8 +4241,8 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                                 className="w-32 border border-gray-300 rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                               >
                                 <option value="">Select Party...</option>
-                                {partyNames.map(party => (
-                                  <option key={party.id} value={party.name}>
+                                {partyNames.map((party, idx) => (
+                                  <option key={party.id || `party-${idx}-${party.name}`} value={party.name}>
                                     {party.name}
                                   </option>
                                 ))}
@@ -4458,8 +4458,8 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                                         className="w-32 border border-gray-300 rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                       >
                                         <option value="">Select party...</option>
-                                        {partyNames.map(party => (
-                                          <option key={party.id} value={party.name}>
+                                        {partyNames.map((party, idx) => (
+                                          <option key={party.id || `party-${idx}-${party.name}`} value={party.name}>
                                             {party.name}
                                           </option>
                                         ))}
@@ -4480,8 +4480,8 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                                       className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     >
                                       <option value="">Select color...</option>
-                                      {availableColors.map(color => (
-                                        <option key={color} value={color}>{color}</option>
+                                      {availableColors.filter(color => color && color.trim() !== '').map((color, idx) => (
+                                        <option key={`changeover-color-${idx}-${color}`} value={color}>{color}</option>
                                       ))}
                                     </select>
                                     
@@ -4636,8 +4636,8 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                                       className="w-32 border border-gray-300 rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     >
                                       <option value="">Select Party...</option>
-                                      {partyNames.map(party => (
-                                        <option key={party.id} value={party.name}>
+                                      {partyNames.map((party, idx) => (
+                                        <option key={party.id || `party-${idx}-${party.name}`} value={party.name}>
                                           {party.name}
                                         </option>
                                       ))}
@@ -4661,8 +4661,8 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                                     title={!selectedParty ? 'Please select a party first' : ''}
                                   >
                                     <option value="">{selectedParty ? 'Select color...' : 'Select party first...'}</option>
-                                    {allAvailableColors.map(color => (
-                                      <option key={color} value={color}>{color}</option>
+                                    {allAvailableColors.filter(color => color && color.trim() !== '').map((color, idx) => (
+                                      <option key={`changeover-color-without-party-${idx}-${color}`} value={color}>{color}</option>
                                     ))}
                                   </select>
                                   
@@ -4758,8 +4758,8 @@ const ProdPlanner: React.FC<ProdPlannerProps> = () => {
                                 className="w-32 border border-gray-300 rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                               >
                                 <option value="">Select Party...</option>
-                                {partyNames.map(party => (
-                                  <option key={party.id} value={party.name}>
+                                {partyNames.map((party, idx) => (
+                                  <option key={party.id || `party-${idx}-${party.name}`} value={party.name}>
                                     {party.name}
                                   </option>
                                 ))}

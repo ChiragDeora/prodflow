@@ -212,6 +212,7 @@ const PurchaseHistory: React.FC = () => {
       if (order.po_no) documentInfo.push({ label: 'PO Number', value: order.po_no });
       if (order.party_name) documentInfo.push({ label: 'Party Name', value: order.party_name });
       if (order.gst_no) documentInfo.push({ label: 'GST Number', value: order.gst_no });
+      if (order.po_type) documentInfo.push({ label: 'Type', value: order.po_type === 'CAPITAL' ? 'Capital' : order.po_type === 'OPERATIONAL' ? 'Operational' : order.po_type });
       if (order.final_amt) documentInfo.push({ label: 'Final Amount', value: `₹${order.final_amt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` });
     }
 
@@ -227,6 +228,7 @@ const PurchaseHistory: React.FC = () => {
         ]
       : [
           { key: 'sr_no', label: 'Sr. No.' },
+          { key: 'item_code', label: 'Item Code' },
           { key: 'description', label: 'Description' },
           { key: 'qty', label: 'Quantity' },
           { key: 'unit', label: 'Unit' },
@@ -326,37 +328,49 @@ const PurchaseHistory: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-800">Material Indent Slips ({materialIndents.length})</h3>
           </div>
           {materialIndents.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {materialIndents.map((form) => (
-                <div
-                  key={form.id}
-                  className="border border-gray-300 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => handleViewForm(form)}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-5 h-5 text-orange-600" />
-                      <span className="font-semibold text-gray-800">Material Indent Slip</span>
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="bg-gray-50 border-b border-gray-200 px-4 py-3">
+                <div className="grid grid-cols-12 gap-4 text-sm font-semibold text-gray-700">
+                  <div className="col-span-1">Type</div>
+                  <div className="col-span-2">Doc No</div>
+                  <div className="col-span-2">Date</div>
+                  <div className="col-span-3">Department</div>
+                  <div className="col-span-2">Person</div>
+                  <div className="col-span-2 text-right">Action</div>
+                </div>
+              </div>
+              <div className="divide-y divide-gray-200">
+                {materialIndents.map((form) => (
+                  <div
+                    key={form.id}
+                    className="px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
+                    onClick={() => handleViewForm(form)}
+                  >
+                    <div className="grid grid-cols-12 gap-4 items-center text-sm">
+                      <div className="col-span-1 flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-orange-600" />
+                        <span className="text-gray-800">Indent</span>
+                      </div>
+                      <div className="col-span-2 text-gray-700 font-medium">{form.docNo || 'N/A'}</div>
+                      <div className="col-span-2 text-gray-600">{formatDate(form.date || form.createdAt)}</div>
+                      <div className="col-span-3 text-gray-600">{form.departmentName || 'N/A'}</div>
+                      <div className="col-span-2 text-gray-600">{form.personName || 'N/A'}</div>
+                      <div className="col-span-2 text-right">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewForm(form);
+                          }}
+                          className="px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 flex items-center justify-center gap-2 text-sm inline-flex"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-1 text-sm text-gray-600">
-                    <div><span className="font-medium">Doc No:</span> {form.docNo || 'N/A'}</div>
-                    <div><span className="font-medium">Date:</span> {formatDate(form.date || form.createdAt)}</div>
-                    <div><span className="font-medium">Department:</span> {form.departmentName || 'N/A'}</div>
-                    <div><span className="font-medium">Person:</span> {form.personName || 'N/A'}</div>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleViewForm(form);
-                    }}
-                    className="mt-3 w-full px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 flex items-center justify-center gap-2 text-sm"
-                  >
-                    <Eye className="w-4 h-4" />
-                    View
-                  </button>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500">
@@ -374,36 +388,49 @@ const PurchaseHistory: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-800">Purchase Orders ({purchaseOrders.length})</h3>
           </div>
           {purchaseOrders.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {purchaseOrders.map((form) => (
-                <div
-                  key={form.id}
-                  className="border border-gray-300 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => handleViewForm(form)}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <ShoppingCart className="w-5 h-5 text-blue-600" />
-                      <span className="font-semibold text-gray-800">Purchase Order</span>
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="bg-gray-50 border-b border-gray-200 px-4 py-3">
+                <div className="grid grid-cols-12 gap-4 text-sm font-semibold text-gray-700">
+                  <div className="col-span-1">Type</div>
+                  <div className="col-span-2">PO No</div>
+                  <div className="col-span-2">Date</div>
+                  <div className="col-span-3">Final Amount</div>
+                  <div className="col-span-2"></div>
+                  <div className="col-span-2 text-right">Action</div>
+                </div>
+              </div>
+              <div className="divide-y divide-gray-200">
+                {purchaseOrders.map((form) => (
+                  <div
+                    key={form.id}
+                    className="px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
+                    onClick={() => handleViewForm(form)}
+                  >
+                    <div className="grid grid-cols-12 gap-4 items-center text-sm">
+                      <div className="col-span-1 flex items-center gap-2">
+                        <ShoppingCart className="w-4 h-4 text-blue-600" />
+                        <span className="text-gray-800">PO</span>
+                      </div>
+                      <div className="col-span-2 text-gray-700 font-medium">{form.poNo || form.docNo || 'N/A'}</div>
+                      <div className="col-span-2 text-gray-600">{formatDate(form.date || form.createdAt)}</div>
+                      <div className="col-span-3 text-gray-600">{form.finalAmt ? `₹${form.finalAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : 'N/A'}</div>
+                      <div className="col-span-2"></div>
+                      <div className="col-span-2 text-right">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewForm(form);
+                          }}
+                          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center justify-center gap-2 text-sm inline-flex"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-1 text-sm text-gray-600">
-                    <div><span className="font-medium">PO No:</span> {form.poNo || form.docNo || 'N/A'}</div>
-                    <div><span className="font-medium">Date:</span> {formatDate(form.date || form.createdAt)}</div>
-                    <div><span className="font-medium">Final Amount:</span> {form.finalAmt ? `₹${form.finalAmt}` : 'N/A'}</div>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleViewForm(form);
-                    }}
-                    className="mt-3 w-full px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center justify-center gap-2 text-sm"
-                  >
-                    <Eye className="w-4 h-4" />
-                    View
-                  </button>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500">

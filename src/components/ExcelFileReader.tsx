@@ -113,7 +113,7 @@ const CANONICAL_HEADERS: Record<DataType, string[]> = {
     'Grinding Available', 'Status', 'Zone', 'Purchase Date', 'Remarks', 'Unit'
   ],
   molds: [
-    'Sr.no.', 'Mold name', 'Type', 'Cavities', 'Cycle Time', 'Dwg Wt', 'Std. Wt.', 'RP wt.',
+    'Sr.no.', 'Mold name', 'Type', 'Cavities', 'Cycle Time', 'Dwg Wt', 'Int. Wt.', 'RP Bill Wt.',
     'Dimensions', 'Mold Wt.', 'HRC Make', 'HRC Zone', 'Make', 'Start Date', 'Unit'
   ],
   schedules: [
@@ -197,9 +197,13 @@ const TEMPLATE_MAPPINGS = {
     'Cycle Time': 'cycle_time',
     'Dwg Wt': 'dwg_wt',
     'Dwg Wt.': 'dwg_wt',
-    'Std. Wt.': 'std_wt',
-    'RP wt.': 'rp_wt',
-    'RP Wt.': 'rp_wt',
+    'Int. Wt.': 'int_wt',
+    'Int Wt.': 'int_wt',
+    'Int Wt': 'int_wt',
+    'RP Bill Wt.': 'rp_bill_wt',
+    'RP Bill Wt': 'rp_bill_wt',
+    'RP wt.': 'rp_bill_wt',
+    'RP Wt.': 'rp_bill_wt',
     'Dimensions': 'dimensions',
     'Mold Wt.': 'mold_wt',
     'Mold Wt': 'mold_wt',
@@ -284,6 +288,9 @@ const TEMPLATE_MAPPINGS = {
     'Hoist Machine ID': 'hoist_machine_id',
     'Hoist': 'hoist_machine_id',
     'Hoist Machine': 'hoist_machine_id',
+    'Loader Machine ID': 'loader_machine_id',
+    'Loader': 'loader_machine_id',
+    'Loader Machine': 'loader_machine_id',
     'Status': 'status',
     'Unit': 'unit'
   },
@@ -2880,7 +2887,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
 
         // Molds
         if (type === 'molds') {
-          if (['cycle_time', 'dwg_wt', 'std_wt', 'rp_wt', 'mold_wt', 'st_wt'].includes(dbCol)) {
+          if (['cycle_time', 'dwg_wt', 'int_wt', 'rp_bill_wt', 'mold_wt', 'st_wt'].includes(dbCol)) {
             value = value === '' || value === null || value === undefined ? null : (parseFloat(value) || null);
           }
           if (dbCol === 'sr_no') value = (value ?? '').toString() || null;
@@ -3452,7 +3459,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             }
             
             // Validate machine assignments - accept any valid machine ID
-            const machineFields = ['im_machine_id', 'robot_machine_id', 'conveyor_machine_id', 'hoist_machine_id'];
+            const machineFields = ['im_machine_id', 'robot_machine_id', 'conveyor_machine_id', 'hoist_machine_id', 'loader_machine_id'];
             
             machineFields.forEach(field => {
               const machineId = (validatedLine as any)[field];
@@ -3528,7 +3535,8 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
                 'im_machine_id',
                 'robot_machine_id', 
                 'conveyor_machine_id',
-                'hoist_machine_id'
+                'hoist_machine_id',
+                'loader_machine_id'
               ];
               
               machineFields.forEach(field => {
@@ -3992,8 +4000,8 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
             item.cavities ?? '',
             item.cycle_time ?? '',
             item.dwg_wt ?? '',
-            item.std_wt ?? '',
-            item.rp_wt ?? '',
+            item.int_wt ?? '',
+            item.rp_bill_wt ?? '',
             item.dimensions ?? '',
             item.mold_wt ?? '',
             item.hrc_make ?? '',

@@ -62,7 +62,7 @@ const RawMaterialsMaster: React.FC<RawMaterialsMasterProps> = ({
     <div>
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center space-x-2">
-          <h2 className="text-2xl font-bold text-gray-800">Raw Materials Master</h2>
+          <h2 className="text-2xl font-bold text-gray-800">RM Master</h2>
           <InfoButton type="raw_materials" />
         </div>
         <div className="flex space-x-3">

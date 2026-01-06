@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useRef } from 'react';
-import { X, Printer, Download, FileText, Package } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { X, Printer, Download, FileText, Package, Upload, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 interface HistoryDetailViewProps {
   title: string;
@@ -11,6 +11,11 @@ interface HistoryDetailViewProps {
   items: Array<Record<string, any>>;
   itemColumns: Array<{ key: string; label: string; format?: (value: any) => string }>;
   loading?: boolean;
+  // Stock posting props
+  documentId?: string;
+  documentType?: 'grn' | 'jw-grn' | 'job-work-challan';
+  stockStatus?: string;
+  onStockPost?: () => void;
 }
 
 const HistoryDetailView: React.FC<HistoryDetailViewProps> = ({
@@ -20,9 +25,60 @@ const HistoryDetailView: React.FC<HistoryDetailViewProps> = ({
   documentInfo,
   items,
   itemColumns,
-  loading = false
+  loading = false,
+  documentId,
+  documentType,
+  stockStatus,
+  onStockPost
 }) => {
   const printRef = useRef<HTMLDivElement>(null);
+  const [isPosting, setIsPosting] = useState(false);
+  const [postResult, setPostResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handlePostToStock = async () => {
+    if (!documentId || !documentType) return;
+    
+    setIsPosting(true);
+    setPostResult(null);
+    
+    try {
+      let endpoint = '';
+      if (documentType === 'jw-grn') {
+        endpoint = `/api/stock/post/jw-grn/${documentId}`;
+      } else if (documentType === 'job-work-challan') {
+        endpoint = `/api/stock/post/job-work-challan/${documentId}`;
+      } else {
+        endpoint = `/api/stock/post/grn/${documentId}`;
+      }
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ posted_by: 'user' })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        let message = `Stock posted successfully! (${result.entries_created || 0} entries created)`;
+        if (result.warnings && result.warnings.length > 0) {
+          message += `\nWarnings: ${result.warnings.join(', ')}`;
+        }
+        setPostResult({ success: true, message });
+        onStockPost?.();
+      } else {
+        setPostResult({ 
+          success: false, 
+          message: result.error?.message || 'Failed to post to stock. Items must exist in Stock Items master.' 
+        });
+      }
+    } catch (error) {
+      console.error('Error posting to stock:', error);
+      setPostResult({ success: false, message: 'Error posting to stock. Please try again.' });
+    } finally {
+      setIsPosting(false);
+    }
+  };
 
   const handlePrint = () => {
     if (!printRef.current) return;
@@ -152,6 +208,28 @@ const HistoryDetailView: React.FC<HistoryDetailViewProps> = ({
             <p className="text-slate-200 mt-1">{formatDate(date)}</p>
           </div>
           <div className="flex gap-2">
+            {/* Post to Stock button - only show if not already posted */}
+            {documentId && documentType && stockStatus !== 'POSTED' && (
+              <button 
+                onClick={handlePostToStock}
+                disabled={isPosting}
+                className="px-3 py-2 bg-green-600 hover:bg-green-500 disabled:bg-green-400 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+                title="Post to Stock"
+              >
+                {isPosting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Upload className="w-4 h-4" />
+                )}
+                {isPosting ? 'Posting...' : 'Post to Stock'}
+              </button>
+            )}
+            {stockStatus === 'POSTED' && (
+              <span className="px-3 py-2 bg-emerald-600 rounded-lg flex items-center gap-2 text-sm font-medium">
+                <CheckCircle className="w-4 h-4" />
+                Posted
+              </span>
+            )}
             <button 
               onClick={handlePrint}
               className="p-2 bg-slate-500 hover:bg-slate-400 rounded-lg transition-colors"
@@ -176,6 +254,22 @@ const HistoryDetailView: React.FC<HistoryDetailViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Post Result Message */}
+      {postResult && (
+        <div className={`mx-6 mt-4 p-4 rounded-lg flex items-start gap-3 ${
+          postResult.success 
+            ? 'bg-green-50 border border-green-200 text-green-800' 
+            : 'bg-red-50 border border-red-200 text-red-800'
+        }`}>
+          {postResult.success ? (
+            <CheckCircle className="w-5 h-5 shrink-0 mt-0.5" />
+          ) : (
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+          )}
+          <div className="whitespace-pre-wrap text-sm">{postResult.message}</div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="p-6" ref={printRef}>

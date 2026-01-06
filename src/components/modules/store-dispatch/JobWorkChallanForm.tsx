@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, Printer, FileText } from 'lucide-react';
+import { Plus, Trash2, Save, Printer, FileText, Upload, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import { jobWorkChallanAPI } from '../../../lib/supabase';
+import { generateDocumentNumber, FORM_CODES } from '../../../utils/formCodeUtils';
 
 interface JobWorkChallanItem {
   id: string;
@@ -55,15 +56,22 @@ const JobWorkChallanForm: React.FC = () => {
 
   const [docNo, setDocNo] = useState('');
 
+  // Stock posting state
+  const [savedDocumentId, setSavedDocumentId] = useState<string | null>(null);
+  const [stockStatus, setStockStatus] = useState<'NOT_SAVED' | 'SAVED' | 'POSTING' | 'POSTED' | 'ERROR'>('NOT_SAVED');
+  const [stockMessage, setStockMessage] = useState<string>('');
+
   // Generate document number
   useEffect(() => {
-    const generateDocNo = () => {
-      const year = new Date(formData.date || new Date()).getFullYear();
-      const month = String(new Date(formData.date || new Date()).getMonth() + 1).padStart(2, '0');
-      const random = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
-      return `DPPL-JWC-${year}${month}-${random}/R00`;
+    const generateDocNo = async () => {
+      try {
+        const docNo = await generateDocumentNumber(FORM_CODES.JOB_WORK_CHALLAN, formData.date);
+        setDocNo(docNo);
+      } catch (error) {
+        console.error('Error generating document number:', error);
+      }
     };
-    setDocNo(generateDocNo());
+    generateDocNo();
   }, [formData.date]);
 
   // Auto-calculate total quantity
@@ -144,32 +152,82 @@ const JobWorkChallanForm: React.FC = () => {
           remarks: item.remarks || undefined
         }));
 
-      await jobWorkChallanAPI.create(challanData, itemsData);
-      alert('Job Work Challan saved successfully!');
+      const newChallan = await jobWorkChallanAPI.create(challanData, itemsData);
       
-      // Reset form
-      setFormData({
-        srNo: '',
-        date: new Date().toISOString().split('T')[0],
-        jobworkAnnexureNo: '',
-        jobworkAnnexureDate: '',
-        partyName: '',
-        partyAddress: '',
-        gstNo: '',
-        vehicleNo: '',
-        lrNo: '',
-        challanNo: '',
-        challanDate: '',
-        totalQty: '',
-        preparedBy: '',
-        checkedBy: '',
-        authorizedSignatory: '',
-        items: [{ id: '1', materialDescription: '', qty: '', uom: '', remarks: '' }]
-      });
+      if (newChallan) {
+        setSavedDocumentId(newChallan.id);
+        setStockStatus('SAVED');
+        setStockMessage('');
+        alert('Job Work Challan saved successfully! Click "Post to Stock" to update inventory.');
+      }
     } catch (error) {
       console.error('Error saving job work challan:', error);
       alert('Error saving job work challan. Please try again.');
     }
+  };
+
+  const handlePostToStock = async () => {
+    if (!savedDocumentId) {
+      alert('Please save the document first before posting to stock.');
+      return;
+    }
+    
+    setStockStatus('POSTING');
+    setStockMessage('');
+    
+    try {
+      const stockResponse = await fetch(`/api/stock/post/job-work-challan/${savedDocumentId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ posted_by: 'user' })
+      });
+      
+      const stockResult = await stockResponse.json();
+      
+      if (stockResult.success) {
+        setStockStatus('POSTED');
+        let message = `Stock posted successfully! (${stockResult.entries_created || 0} entries created)`;
+        if (stockResult.warnings && stockResult.warnings.length > 0) {
+          message += `\nWarnings: ${stockResult.warnings.join(', ')}`;
+        }
+        setStockMessage(message);
+        alert(message);
+      } else {
+        setStockStatus('ERROR');
+        const errorMsg = stockResult.error?.message || 'Unknown error';
+        setStockMessage(`Failed: ${errorMsg}. Items must exist in Stock Items master.`);
+        alert(`Stock posting failed: ${errorMsg}\n\nNote: Items must exist in Stock Items master for posting to work.`);
+      }
+    } catch (error) {
+      console.error('Error posting to stock:', error);
+      setStockStatus('ERROR');
+      setStockMessage('Error posting to stock. Please try again.');
+      alert('Error posting to stock. Please try again.');
+    }
+  };
+
+  const handleNewForm = () => {
+    setFormData({
+      srNo: '',
+      date: new Date().toISOString().split('T')[0],
+      jobworkAnnexureNo: '',
+      jobworkAnnexureDate: '',
+      partyName: '',
+      partyAddress: '',
+      gstNo: '',
+      vehicleNo: '',
+      lrNo: '',
+      challanNo: '',
+      challanDate: '',
+      totalQty: '',
+      preparedBy: '',
+      checkedBy: '',
+      authorizedSignatory: '',
+      items: [{ id: '1', materialDescription: '', qty: '', uom: '', remarks: '' }]
+    });
+    setSavedDocumentId(null);
+    setStockStatus('NOT_SAVED');
+    setStockMessage('');
   };
 
   const handlePrint = () => {
@@ -482,6 +540,26 @@ const JobWorkChallanForm: React.FC = () => {
           </div>
         </div>
 
+        {/* Stock Status Message */}
+        {stockMessage && (
+          <div className={`mt-4 p-4 rounded-lg flex items-start gap-3 print:hidden ${
+            stockStatus === 'POSTED' 
+              ? 'bg-green-50 border border-green-200 text-green-800' 
+              : stockStatus === 'ERROR'
+              ? 'bg-red-50 border border-red-200 text-red-800'
+              : 'bg-blue-50 border border-blue-200 text-blue-800'
+          }`}>
+            {stockStatus === 'POSTED' ? (
+              <CheckCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            ) : stockStatus === 'ERROR' ? (
+              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            ) : (
+              <Loader2 className="w-5 h-5 shrink-0 mt-0.5 animate-spin" />
+            )}
+            <div className="whitespace-pre-wrap text-sm">{stockMessage}</div>
+          </div>
+        )}
+
         {/* Action Buttons */}
         <div className="flex justify-end gap-4 mt-6 print:hidden">
           <button
@@ -492,13 +570,43 @@ const JobWorkChallanForm: React.FC = () => {
             <Printer className="w-4 h-4" />
             Print
           </button>
+          {savedDocumentId && stockStatus !== 'POSTED' && (
+            <button
+              type="button"
+              onClick={handlePostToStock}
+              disabled={stockStatus === 'POSTING'}
+              className="px-6 py-2 bg-green-600 hover:bg-green-500 disabled:bg-green-400 text-white rounded-lg flex items-center gap-2"
+            >
+              {stockStatus === 'POSTING' ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Upload className="w-4 h-4" />
+              )}
+              {stockStatus === 'POSTING' ? 'Posting...' : 'Post to Stock'}
+            </button>
+          )}
+          {stockStatus === 'POSTED' && (
+            <span className="px-6 py-2 bg-emerald-600 text-white rounded-lg flex items-center gap-2">
+              <CheckCircle className="w-4 h-4" />
+              Posted to Stock
+            </span>
+          )}
           <button
             type="submit"
             className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 flex items-center gap-2"
           >
             <Save className="w-4 h-4" />
-            Save Job Work Challan
+            {savedDocumentId ? 'Update Job Work Challan' : 'Save Job Work Challan'}
           </button>
+          {savedDocumentId && (
+            <button
+              type="button"
+              onClick={handleNewForm}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            >
+              New Form
+            </button>
+          )}
         </div>
       </form>
     </div>

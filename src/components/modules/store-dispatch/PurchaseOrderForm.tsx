@@ -4,64 +4,17 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, Printer, Search, Link } from 'lucide-react';
 import { purchaseOrderAPI, materialIndentSlipAPI, MaterialIndentSlip, MaterialIndentSlipItem } from '../../../lib/supabase';
 import PrintHeader from '../../shared/PrintHeader';
-
-interface PurchaseOrderItem {
-  id: string;
-  description: string;
-  qty: string;
-  unit: string;
-  rate: string;
-  totalPrice: string;
-}
-
-interface PurchaseOrderFormData {
-  poNo: string;
-  poDate: string;
-  refNo: string;
-  refDate: string;
-  partyName: string;
-  address: string;
-  state: string;
-  gstNo: string;
-  totalAmt: string;
-  gstPercentage: string;
-  finalAmt: string;
-  amountInWords: string;
-  deliveryAddress: string;
-  deliveryTerms: string;
-  paymentTerms: string;
-  packingCharges: string;
-  inspection: string;
-  warranty: string;
-  otherTerms: string;
-  items: PurchaseOrderItem[];
-}
+import PartyNameSelect from './PartyNameSelect';
+import { useStoreDispatch, PurchaseOrderItem } from './StoreDispatchContext';
+import { generateDocumentNumber, FORM_CODES } from '../../../utils/formCodeUtils';
 
 const PurchaseOrderForm: React.FC = () => {
-  const [formData, setFormData] = useState<PurchaseOrderFormData>({
-    poNo: '',
-    poDate: new Date().toISOString().split('T')[0],
-    refNo: '',
-    refDate: '',
-    partyName: '',
-    address: '',
-    state: '',
-    gstNo: '',
-    totalAmt: '',
-    gstPercentage: '18',
-    finalAmt: '',
-    amountInWords: '',
-    deliveryAddress: 'Plot 32&33, Silver Industrial Estate, Village Bhimpore, Nani Daman - 396 210',
-    deliveryTerms: '',
-    paymentTerms: '',
-    packingCharges: '',
-    inspection: '',
-    warranty: '',
-    otherTerms: '',
-    items: [
-      { id: '1', description: '', qty: '', unit: '', rate: '', totalPrice: '' }
-    ]
-  });
+  const {
+    purchaseOrderFormData: formData,
+    setPurchaseOrderFormData: setFormData,
+    updatePurchaseOrderField,
+    resetPurchaseOrderForm,
+  } = useStoreDispatch();
 
   const [docNo, setDocNo] = useState('');
   const [calculatedTotal, setCalculatedTotal] = useState(0);
@@ -75,13 +28,15 @@ const PurchaseOrderForm: React.FC = () => {
 
   // Generate document number
   useEffect(() => {
-    const generateDocNo = () => {
-      const year = new Date(formData.poDate || new Date()).getFullYear();
-      const month = String(new Date(formData.poDate || new Date()).getMonth() + 1).padStart(2, '0');
-      const random = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
-      return `DPPL-PO-${year}${month}-${random}/R00`;
+    const generateDocNo = async () => {
+      try {
+        const docNo = await generateDocumentNumber(FORM_CODES.PURCHASE_ORDER, formData.poDate);
+        setDocNo(docNo);
+      } catch (error) {
+        console.error('Error generating document number:', error);
+      }
     };
-    setDocNo(generateDocNo());
+    generateDocNo();
   }, [formData.poDate]);
 
   // Fetch indent slips
@@ -108,21 +63,22 @@ const PurchaseOrderForm: React.FC = () => {
         setIndentItems(indentDetails.items);
         
         // Auto-fill form data from indent slip
-        setFormData(prev => ({
-          ...prev,
-          partyName: indentSlip.party_name || prev.partyName,
-          address: indentSlip.address || prev.address,
-          state: indentSlip.state || prev.state,
-          gstNo: indentSlip.gst_no || prev.gstNo,
+        setFormData({
+          ...formData,
+          partyName: indentSlip.party_name || formData.partyName,
+          address: indentSlip.address || formData.address,
+          state: indentSlip.state || formData.state,
+          gstNo: indentSlip.gst_no || formData.gstNo,
           items: indentDetails.items.map((item, index) => ({
             id: (index + 1).toString(),
+            itemCode: item.item_code || '',
             description: item.item_name || item.description_specification || '',
             qty: item.qty?.toString() || '',
             unit: item.uom || '',
             rate: '',
             totalPrice: ''
           }))
-        }));
+        });
       }
       
       setShowIndentSearch(false);
@@ -146,60 +102,59 @@ const PurchaseOrderForm: React.FC = () => {
     setCalculatedGst(gst);
     setCalculatedFinal(total + gst);
     
-    setFormData(prev => ({
-      ...prev,
+    setFormData({
+      ...formData,
       totalAmt: total.toFixed(2),
       finalAmt: (total + gst).toFixed(2)
-    }));
+    });
   }, [formData.items, formData.gstPercentage]);
 
-  const handleInputChange = (field: keyof Omit<PurchaseOrderFormData, 'items'>, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  const handleInputChange = (field: keyof Omit<typeof formData, 'items'>, value: string) => {
+    updatePurchaseOrderField(field as any, value);
+  };
+
+  const handlePartySelect = (party: { id: string; name: string }) => {
+    setFormData({
+      ...formData,
+      partyId: party.id,
+      partyName: party.name,
+    });
   };
 
   const handleItemChange = (id: string, field: keyof PurchaseOrderItem, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      items: prev.items.map(item => {
-        if (item.id === id) {
-          const updatedItem = { ...item, [field]: value };
-          // Auto-calculate total price
-          if (field === 'qty' || field === 'rate') {
-            const qty = parseFloat(updatedItem.qty) || 0;
-            const rate = parseFloat(updatedItem.rate) || 0;
-            updatedItem.totalPrice = (qty * rate).toFixed(2);
-          }
-          return updatedItem;
+    const newItems = formData.items.map(item => {
+      if (item.id === id) {
+        const updatedItem = { ...item, [field]: value };
+        // Auto-calculate total price
+        if (field === 'qty' || field === 'rate') {
+          const qty = parseFloat(updatedItem.qty) || 0;
+          const rate = parseFloat(updatedItem.rate) || 0;
+          updatedItem.totalPrice = (qty * rate).toFixed(2);
         }
-        return item;
-      })
-    }));
+        return updatedItem;
+      }
+      return item;
+    });
+    updatePurchaseOrderField('items', newItems);
   };
 
   const addItemRow = () => {
     const newItem: PurchaseOrderItem = {
       id: Date.now().toString(),
+      itemCode: '',
       description: '',
       qty: '',
       unit: '',
       rate: '',
       totalPrice: ''
     };
-    setFormData(prev => ({
-      ...prev,
-      items: [...prev.items, newItem]
-    }));
+    updatePurchaseOrderField('items', [...formData.items, newItem]);
   };
 
   const removeItemRow = (id: string) => {
     if (formData.items.length > 1) {
-      setFormData(prev => ({
-        ...prev,
-        items: prev.items.filter(item => item.id !== id)
-      }));
+      const newItems = formData.items.filter(item => item.id !== id);
+      updatePurchaseOrderField('items', newItems);
     }
   };
 
@@ -216,6 +171,7 @@ const PurchaseOrderForm: React.FC = () => {
         state: formData.state || undefined,
         gst_no: formData.gstNo || undefined,
         reference: formData.refNo || undefined,
+        po_type: formData.capitalOperational ? (formData.capitalOperational.toUpperCase() as 'CAPITAL' | 'OPERATIONAL') : undefined,
         total_amt: calculatedTotal,
         gst_percentage: parseFloat(formData.gstPercentage) || 18,
         gst_amount: calculatedGst,
@@ -235,6 +191,7 @@ const PurchaseOrderForm: React.FC = () => {
       const itemsData = formData.items
         .filter(item => item.description.trim() !== '')
         .map(item => ({
+          item_code: formData.capitalOperational === 'Operational' ? (item.itemCode || undefined) : undefined,
           description: item.description,
           qty: item.qty ? parseFloat(item.qty) : undefined,
           unit: item.unit || undefined,
@@ -246,28 +203,7 @@ const PurchaseOrderForm: React.FC = () => {
       alert('Purchase Order saved successfully!');
       
       // Reset form
-      setFormData({
-        poNo: '',
-        poDate: new Date().toISOString().split('T')[0],
-        refNo: '',
-        refDate: '',
-        partyName: '',
-        address: '',
-        state: '',
-        gstNo: '',
-        totalAmt: '',
-        gstPercentage: '18',
-        finalAmt: '',
-        amountInWords: '',
-        deliveryAddress: 'Plot 32&33, Silver Industrial Estate, Village Bhimpore, Nani Daman - 396 210',
-        deliveryTerms: '',
-        paymentTerms: '',
-        packingCharges: '',
-        inspection: '',
-        warranty: '',
-        otherTerms: '',
-        items: [{ id: '1', description: '', qty: '', unit: '', rate: '', totalPrice: '' }]
-      });
+      resetPurchaseOrderForm();
       setCalculatedTotal(0);
       setCalculatedGst(0);
       setCalculatedFinal(0);
@@ -375,11 +311,11 @@ const PurchaseOrderForm: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Party Name:
               </label>
-              <input
-                type="text"
+              <PartyNameSelect
                 value={formData.partyName}
-                onChange={(e) => handleInputChange('partyName', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                partyId={formData.partyId}
+                onChange={handlePartySelect}
+                placeholder="Select or search party..."
               />
             </div>
             <div>
@@ -422,6 +358,17 @@ const PurchaseOrderForm: React.FC = () => {
           {/* Right: PO Details */}
           <div className="space-y-4">
             <h3 className="font-semibold text-gray-900 mb-3">Purchase Order Details</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Doc. No:
+              </label>
+              <input
+                type="text"
+                value={docNo}
+                readOnly
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-semibold text-gray-700"
+              />
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 PO No:
@@ -468,6 +415,32 @@ const PurchaseOrderForm: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Capital/Operational:
+              </label>
+              <select
+                value={formData.capitalOperational}
+                onChange={(e) => {
+                  const newType = e.target.value;
+                  handleInputChange('capitalOperational', newType);
+                  
+                  // Clear itemCode from all items when switching to Capital
+                  if (newType === 'Capital') {
+                    const updatedItems = formData.items.map(item => ({
+                      ...item,
+                      itemCode: ''
+                    }));
+                    updatePurchaseOrderField('items', updatedItems);
+                  }
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">Select Type</option>
+                <option value="Capital">Capital</option>
+                <option value="Operational">Operational</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -477,6 +450,9 @@ const PurchaseOrderForm: React.FC = () => {
             <thead>
               <tr className="bg-green-600 text-white">
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-12">Sl.</th>
+                {formData.capitalOperational === 'Operational' && (
+                  <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Item Code</th>
+                )}
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Description</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-24">Qty.</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-24">Unit</th>
@@ -489,6 +465,16 @@ const PurchaseOrderForm: React.FC = () => {
               {formData.items.map((item, index) => (
                 <tr key={item.id}>
                   <td className="border border-gray-300 px-2 py-2 text-center">{index + 1}</td>
+                  {formData.capitalOperational === 'Operational' && (
+                    <td className="border border-gray-300 px-2 py-2">
+                      <input
+                        type="text"
+                        value={item.itemCode}
+                        onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
+                        className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                      />
+                    </td>
+                  )}
                   <td className="border border-gray-300 px-2 py-2">
                     <input
                       type="text"

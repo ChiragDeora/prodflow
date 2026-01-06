@@ -78,8 +78,8 @@ CREATE TABLE IF NOT EXISTS dpr_machine_entries (
     mould_change VARCHAR(255), -- Mould change
     remark TEXT, -- REMARK
     
-    -- Foreign key to machines table
-    CONSTRAINT fk_dpr_machine_entries_machine FOREIGN KEY (machine_no) REFERENCES machines(machine_id) ON DELETE SET NULL,
+    -- Foreign key to lines table (DPR entries are organized by production line)
+    CONSTRAINT fk_dpr_machine_entries_line FOREIGN KEY (machine_no) REFERENCES lines(line_id) ON DELETE SET NULL,
     
     -- Audit fields
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -352,23 +352,17 @@ CREATE TRIGGER trigger_dpr_stoppage_entries_updated_at
     EXECUTE FUNCTION update_dpr_updated_at();
 
 -- =====================================================
--- 9. RLS POLICIES
+-- 9. ROW LEVEL SECURITY - DISABLED FOR API ACCESS
 -- =====================================================
+-- RLS is DISABLED on DPR tables to allow API access without authentication issues
+-- This follows the pattern used in other master tables in this codebase
 
--- Enable RLS
-ALTER TABLE dpr_data ENABLE ROW LEVEL SECURITY;
-ALTER TABLE dpr_machine_entries ENABLE ROW LEVEL SECURITY;
-ALTER TABLE dpr_stoppage_entries ENABLE ROW LEVEL SECURITY;
+-- Disable RLS on DPR tables (not enable)
+ALTER TABLE dpr_data DISABLE ROW LEVEL SECURITY;
+ALTER TABLE dpr_machine_entries DISABLE ROW LEVEL SECURITY;
+ALTER TABLE dpr_stoppage_entries DISABLE ROW LEVEL SECURITY;
 
--- Allow all operations for authenticated users
-CREATE POLICY "Allow all for authenticated users" ON dpr_data
-    FOR ALL USING (auth.role() = 'authenticated');
-
-CREATE POLICY "Allow all for authenticated users" ON dpr_machine_entries
-    FOR ALL USING (auth.role() = 'authenticated');
-
-CREATE POLICY "Allow all for authenticated users" ON dpr_stoppage_entries
-    FOR ALL USING (auth.role() = 'authenticated');
+-- No RLS policies needed since RLS is disabled
 
 -- =====================================================
 -- 10. COMMENTS FOR DOCUMENTATION

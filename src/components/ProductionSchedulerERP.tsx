@@ -94,7 +94,7 @@ const ProductionSchedulerERP: React.FC = () => {
   // Separate sorting states for Machine Master and Mold Master tabs
   const [machineSortField, setMachineSortField] = useState<string>('machine_id');
   const [machineSortDirection, setMachineSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [machineCategoryFilter, setMachineCategoryFilter] = useState<string>('all');
+  const [machineCategoryFilter, setMachineCategoryFilter] = useState<string>('IM');
   const [moldSortField, setMoldSortField] = useState<string>('mold_id');
   const [moldSortDirection, setMoldSortDirection] = useState<'asc' | 'desc'>('asc');
 
@@ -448,7 +448,7 @@ const ProductionSchedulerERP: React.FC = () => {
             { column: 'Type', description: 'Mold type (e.g., Injection Mold, Container, Lid). Classification of the mold based on its purpose.' },
             { column: 'Cavity', description: 'Number of cavities in the mold (e.g., 1, 2, 4, 8). How many parts can be produced in one cycle.' },
             { column: 'Cycle Time', description: 'Production cycle time in seconds (e.g., 30s, 45s). Time required to complete one production cycle.' },
-            { column: 'St. Wt.', description: 'Standard weight in grams (e.g., 100g, 150g). Weight of the finished product from this mold.' },
+            { column: 'Int. Wt.', description: 'Internal weight in grams (e.g., 100g, 150g). Internal weight of the finished product from this mold.' },
             { column: 'HRC Zone', description: 'Hot Runner Control Zone (e.g., Zone A, Zone B). Zone designation for hot runner temperature control.' },
             { column: 'Make', description: 'Mold manufacturer (e.g., Wittmaan, Switek). Company that manufactured the mold.' },
             { column: 'Status', description: 'Mold operational status. Active = In production, Maintenance = Under maintenance/repair, Idle = Available but not in use.' },
@@ -486,8 +486,8 @@ const ProductionSchedulerERP: React.FC = () => {
       switch (infoModalType) {
         case 'machines': return 'Machine Master Columns';
         case 'molds': return 'Mold Master Columns';
-        case 'raw_materials': return 'Raw Materials Master Columns';
-        case 'packing_materials': return 'Packing Materials Master Columns';
+        case 'raw_materials': return 'RM Master Columns';
+        case 'packing_materials': return 'PM Master Columns';
         default: return 'Table Columns';
       }
     };
@@ -496,8 +496,8 @@ const ProductionSchedulerERP: React.FC = () => {
       switch (infoModalType) {
         case 'machines': return 'Understanding the machine master table columns and their meanings.';
         case 'molds': return 'Understanding the mold master table columns and their meanings.';
-        case 'raw_materials': return 'Understanding the raw materials master table columns and their meanings.';
-        case 'packing_materials': return 'Understanding the packing materials master table columns and their meanings.';
+        case 'raw_materials': return 'Understanding the RM master table columns and their meanings.';
+        case 'packing_materials': return 'Understanding the PM master table columns and their meanings.';
         default: return 'Information about table columns.';
       }
     };
@@ -2447,16 +2447,19 @@ const ProductionSchedulerERP: React.FC = () => {
             <form onSubmit={async (e) => {
               e.preventDefault();
               const formData = new FormData(e.currentTarget);
+              const itemName = formData.get('item_name') as string;
+              const itemCode = formData.get('item_code') as string;
               const moldData = {
                 mold_id: formData.get('mold_id') as string,
-                mold_name: formData.get('mold_name') as string,
+                // Use item_name as mold_name if provided, otherwise use the hidden mold_name field
+                mold_name: itemName || (formData.get('mold_name') as string) || '',
                 cavities: parseInt(formData.get('cavities') as string) || 0,
                 compatible_machines: [],
                 purchase_date: new Date().toISOString().split('T')[0],
                 maker: 'Unknown',
                 // New fields
-                item_code: formData.get('item_code') as string,
-                item_name: formData.get('item_name') as string,
+                item_code: itemCode,
+                item_name: itemName,
                 type: formData.get('type') as string,
                 cycle_time: parseFloat(formData.get('cycle_time') as string) || 0,
                 st_wt: parseFloat(formData.get('st_wt') as string) || 0,
@@ -2467,11 +2470,13 @@ const ProductionSchedulerERP: React.FC = () => {
               
               try {
                 if (editingItem && 'mold_id' in editingItem && editingItem.mold_id) {
-                  // Update existing mold
-                  await moldAPI.update(editingItem.mold_id, moldData);
-                  setMoldsMaster(prev => prev.map(m => 
-                    m.mold_id === editingItem.mold_id ? { ...m, ...moldData } : m
-                  ));
+                  // Update existing mold - use the returned value from API to ensure UI reflects all database fields
+                  const updatedMold = await moldAPI.update(editingItem.mold_id, moldData);
+                  if (updatedMold) {
+                    setMoldsMaster(prev => prev.map(m => 
+                      m.mold_id === editingItem.mold_id ? updatedMold : m
+                    ));
+                  }
                 } else {
                   // Create new mold
                   const newMold = await moldAPI.create(moldData);
@@ -4060,18 +4065,22 @@ const ProductionSchedulerERP: React.FC = () => {
                               <div className="text-sm font-medium text-gray-600 mb-1">Hoist</div>
                               <div className="text-lg font-semibold text-gray-900">{currentLine.hoist_machine_id || 'Not assigned'}</div>
                             </div>
+                            <div className="bg-gray-50 rounded-lg p-4">
+                              <div className="text-sm font-medium text-gray-600 mb-1">Loader <span className="text-gray-400 text-xs font-normal">(Optional)</span></div>
+                              <div className="text-lg font-semibold text-gray-900">{currentLine.loader_machine_id || 'Not assigned'}</div>
+                            </div>
                           </div>
                         </div>
                       </>
                     );
                   })()}
 
-                  {modalType === 'edit_line' && 'line_id' in editingItem && editingItem && (
+                  {modalType === 'edit_line' && (
                     <>
                       <div className="p-6">
                         <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
                           <div className="w-1 h-5 bg-purple-600 rounded-full mr-3"></div>
-                          Edit Line Information
+                          {editingItem && 'line_id' in editingItem && editingItem.line_id ? 'Edit Line Information' : 'Add New Line'}
                         </h3>
                         
                         <form onSubmit={async (e) => {
@@ -4083,23 +4092,43 @@ const ProductionSchedulerERP: React.FC = () => {
                             robot_machine_id: formData.get('robot_machine_id') as string || undefined,
                             conveyor_machine_id: formData.get('conveyor_machine_id') as string || undefined,
                             hoist_machine_id: formData.get('hoist_machine_id') as string || undefined,
+                            loader_machine_id: formData.get('loader_machine_id') as string || undefined,
                             status: formData.get('status') as 'Active' | 'Inactive' | 'Maintenance',
                             unit: formData.get('unit') as string || 'Unit 1',
                             grinding: formData.get('grinding') === 'true'
                           };
                           
                           try {
-                            await lineAPI.update((editingItem as Line).line_id, updates);
-                            setLinesMaster(prev => prev.map(line => 
-                              line.line_id === (editingItem as Line).line_id 
-                                ? { ...line, ...updates }
-                                : line
-                            ));
+                            if (editingItem && 'line_id' in editingItem && editingItem.line_id) {
+                              // Update existing line - use the returned value from API to ensure UI reflects all database fields
+                              const updatedLine = await lineAPI.update((editingItem as Line).line_id, updates);
+                              if (updatedLine) {
+                                setLinesMaster(prev => prev.map(line => 
+                                  line.line_id === (editingItem as Line).line_id 
+                                    ? updatedLine
+                                    : line
+                                ));
+                              }
+                            } else {
+                              // Create new line
+                              const lineId = formData.get('line_id') as string;
+                              if (!lineId) {
+                                alert('Line ID is required');
+                                return;
+                              }
+                              const newLine = await lineAPI.create({
+                                ...updates,
+                                line_id: lineId
+                              } as Omit<Line, 'created_at' | 'updated_at'>);
+                              if (newLine) {
+                                setLinesMaster(prev => [...prev, newLine]);
+                              }
+                            }
                             setShowModal(false);
                             setEditingItem(null);
                           } catch (error) {
-                            console.error('Error updating line:', error);
-                            alert('Failed to update line. Please try again.');
+                            console.error('Error saving line:', error);
+                            alert('Failed to save line. Please try again.');
                           }
                         }}>
                           
@@ -4112,14 +4141,16 @@ const ProductionSchedulerERP: React.FC = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                  Line ID
+                                  Line ID <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                   type="text"
                                   name="line_id"
-                                  value={(editingItem as Line).line_id}
-                                  disabled
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                                  defaultValue={editingItem && 'line_id' in editingItem ? (editingItem as Line).line_id : ''}
+                                  required
+                                  disabled={editingItem && 'line_id' in editingItem && !!editingItem.line_id}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500 disabled:bg-gray-100"
+                                  placeholder="e.g., LINE-001"
                                 />
                               </div>
                               
@@ -4266,6 +4297,37 @@ const ProductionSchedulerERP: React.FC = () => {
                                     }
                                     
                                     return availableHoistMachines.map(machine => (
+                                      <option key={machine.machine_id} value={machine.machine_id}>
+                                        {machine.machine_id} - {machine.make} {machine.model}
+                                      </option>
+                                    ));
+                                  })()}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Loader <span className="text-gray-400 text-xs">(Optional)</span>
+                                </label>
+                                <select
+                                  name="loader_machine_id"
+                                  defaultValue={(editingItem as Line).loader_machine_id || ''}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 text-gray-900 focus:ring-purple-500 focus:border-purple-500"
+                                >
+                                  <option value="">Select Loader (Optional)</option>
+                                  {(() => {
+                                    const availableLoaderMachines = machinesMaster.filter(machine => 
+                                      (machine.machine_id === (editingItem as Line).loader_machine_id || 
+                                       !linesMaster.some(line => 
+                                         line.line_id !== (editingItem as Line).line_id && 
+                                         line.loader_machine_id === machine.machine_id
+                                       ))
+                                    );
+                                    
+                                    if (availableLoaderMachines.length === 0) {
+                                      return <option value="" disabled>No available loaders</option>;
+                                    }
+                                    
+                                    return availableLoaderMachines.map(machine => (
                                       <option key={machine.machine_id} value={machine.machine_id}>
                                         {machine.machine_id} - {machine.make} {machine.model}
                                       </option>

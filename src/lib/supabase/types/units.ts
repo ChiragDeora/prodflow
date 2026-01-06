@@ -25,6 +25,7 @@ export interface Line {
   robot_machine_id?: string;
   conveyor_machine_id?: string;
   hoist_machine_id?: string;
+  loader_machine_id?: string;
   status: 'Active' | 'Inactive' | 'Maintenance';
   unit?: string;
   grinding?: boolean;

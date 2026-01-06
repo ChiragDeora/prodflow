@@ -10,4 +10,5 @@ export * from './purchase';
 export * from './store';
 export * from './masters';
 export * from './production';
+export * from './stock';
 

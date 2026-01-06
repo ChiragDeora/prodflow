@@ -112,4 +112,130 @@ body {
     /* Adjust this scale if you want the grid larger/smaller on paper */
     transform: scale(0.55);
   }
+
+  /* Make form inputs look like plain text in print */
+  input[type="text"],
+  input[type="date"],
+  textarea,
+  select {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    padding: 0 !important;
+    appearance: none !important;
+    -webkit-appearance: none !important;
+  }
+
+  /* Hide dropdown arrows and icons in print */
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    display: none !important;
+  }
+
+  /* Hide placeholder text in print */
+  input::placeholder,
+  textarea::placeholder {
+    color: transparent !important;
+    opacity: 0 !important;
+  }
+
+  /* Material Indent Slip Print Layout */
+  .material-indent-print {
+    page-break-inside: avoid;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0.5cm !important;
+  }
+
+  /* Table print styling - ensure no cutoff */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+    font-size: 11px !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  th, td {
+    padding: 4px 6px !important;
+    border: 1px solid #000 !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    hyphens: auto !important;
+  }
+
+  th {
+    background-color: #f0f0f0 !important;
+    font-weight: bold !important;
+    font-size: 10px !important;
+  }
+
+  /* Ensure table fits on page */
+  .print-table-container {
+    width: 100% !important;
+    overflow: visible !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Better spacing for print */
+  .print-section {
+    margin-bottom: 12px !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Professional print layout */
+  @page {
+    size: A4;
+    margin: 1cm;
+  }
+
+  /* Ensure all content is visible */
+  * {
+    overflow: visible !important;
+  }
+
+  /* Hide empty placeholders in print */
+  .print-hide-empty::placeholder {
+    display: none !important;
+  }
+
+  /* Better form field styling in print */
+  input[type="text"]:empty::before,
+  textarea:empty::before {
+    content: "" !important;
+  }
+
+  /* Ensure table cells don't break awkwardly */
+  td {
+    vertical-align: top !important;
+  }
+
+  /* Better spacing for labels in print */
+  label {
+    font-size: 11px !important;
+    margin-bottom: 2px !important;
+  }
+
+  /* Ensure proper page breaks */
+  .print-section {
+    page-break-inside: avoid !important;
+  }
+
+  /* Prevent orphaned rows */
+  tr {
+    page-break-inside: avoid !important;
+  }
 }

@@ -4,78 +4,51 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, Printer } from 'lucide-react';
 import { deliveryChallanAPI } from '../../../lib/supabase';
 import PrintHeader from '../../shared/PrintHeader';
-
-interface DeliveryChallanItem {
-  id: string;
-  itemCode: string;
-  itemDescription: string;
-  hsnCode: string;
-  uom: string;
-  packSize: string;
-  boxNo: string;
-  noOfPcs: string;
-  value: string;
-}
-
-interface DeliveryChallanFormData {
-  dcNo: string;
-  dcDate: string;
-  poNo: string;
-  vehicleNo: string;
-  lrNo: string;
-  returnable: boolean;
-  partyName: string;
-  address: string;
-  state: string;
-  gstNo: string;
-  items: DeliveryChallanItem[];
-}
+import PartyNameSelect from './PartyNameSelect';
+import { useStoreDispatch, DeliveryChallanItem } from './StoreDispatchContext';
+import { generateDocumentNumber, FORM_CODES } from '../../../utils/formCodeUtils';
 
 const DeliveryChallanForm: React.FC = () => {
-  const [formData, setFormData] = useState<DeliveryChallanFormData>({
-    dcNo: '',
-    dcDate: new Date().toISOString().split('T')[0],
-    poNo: '',
-    vehicleNo: '',
-    lrNo: '',
-    returnable: false,
-    partyName: '',
-    address: '',
-    state: '',
-    gstNo: '',
-    items: [
-      { id: '1', itemCode: '', itemDescription: '', hsnCode: '', uom: '', packSize: '', boxNo: '', noOfPcs: '', value: '' }
-    ]
-  });
+  const {
+    deliveryChallanFormData: formData,
+    setDeliveryChallanFormData: setFormData,
+    updateDeliveryChallanField,
+    resetDeliveryChallanForm,
+  } = useStoreDispatch();
 
   const [docNo, setDocNo] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
   // Generate document number
   useEffect(() => {
-    const generateDocNo = () => {
-      const year = new Date(date || new Date()).getFullYear();
-      const month = String(new Date(date || new Date()).getMonth() + 1).padStart(2, '0');
-      const random = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
-      return `DPPL-DC-${year}${month}-${random}/R00`;
+    const generateDocNo = async () => {
+      try {
+        const docNo = await generateDocumentNumber(FORM_CODES.DELIVERY_CHALLAN, date);
+        setDocNo(docNo);
+      } catch (error) {
+        console.error('Error generating document number:', error);
+      }
     };
-    setDocNo(generateDocNo());
+    generateDocNo();
   }, [date]);
 
-  const handleInputChange = (field: keyof Omit<DeliveryChallanFormData, 'items'>, value: string | boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  const handleInputChange = (field: keyof Omit<typeof formData, 'items'>, value: string | boolean) => {
+    updateDeliveryChallanField(field as any, value as any);
+  };
+
+  const handlePartySelect = (party: { id: string; name: string }) => {
+    setFormData({
+      ...formData,
+      partyId: party.id,
+      partyName: party.name,
+    });
   };
 
   const handleItemChange = (id: string, field: keyof DeliveryChallanItem, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      items: prev.items.map(item =>
-        item.id === id ? { ...item, [field]: value } : item
-      )
-    }));
+    const newItems = formData.items.map(item =>
+      item.id === id ? { ...item, [field]: value } : item
+    );
+    updateDeliveryChallanField('items', newItems);
   };
 
   const addItemRow = () => {
@@ -90,18 +63,13 @@ const DeliveryChallanForm: React.FC = () => {
       noOfPcs: '',
       value: ''
     };
-    setFormData(prev => ({
-      ...prev,
-      items: [...prev.items, newItem]
-    }));
+    updateDeliveryChallanField('items', [...formData.items, newItem]);
   };
 
   const removeItemRow = (id: string) => {
     if (formData.items.length > 1) {
-      setFormData(prev => ({
-        ...prev,
-        items: prev.items.filter(item => item.id !== id)
-      }));
+      const newItems = formData.items.filter(item => item.id !== id);
+      updateDeliveryChallanField('items', newItems);
     }
   };
 
@@ -140,19 +108,7 @@ const DeliveryChallanForm: React.FC = () => {
       alert('Delivery Challan saved successfully!');
       
       // Reset form
-      setFormData({
-        dcNo: '',
-        dcDate: new Date().toISOString().split('T')[0],
-        poNo: '',
-        vehicleNo: '',
-        lrNo: '',
-        returnable: false,
-        partyName: '',
-        address: '',
-        state: '',
-        gstNo: '',
-        items: [{ id: '1', itemCode: '', itemDescription: '', hsnCode: '', uom: '', packSize: '', boxNo: '', noOfPcs: '', value: '' }]
-      });
+      resetDeliveryChallanForm();
       setDate(new Date().toISOString().split('T')[0]);
     } catch (error) {
       console.error('Error saving delivery challan:', error);
@@ -183,11 +139,11 @@ const DeliveryChallanForm: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Party Name:
               </label>
-              <input
-                type="text"
+              <PartyNameSelect
                 value={formData.partyName}
-                onChange={(e) => handleInputChange('partyName', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                partyId={formData.partyId}
+                onChange={handlePartySelect}
+                placeholder="Select or search party..."
               />
             </div>
             <div>

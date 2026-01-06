@@ -111,6 +111,9 @@ export interface JobWorkChallan {
   created_by?: string;
   created_at?: string;
   updated_at?: string;
+  stock_status?: string;
+  posted_to_stock_at?: string;
+  posted_to_stock_by?: string;
 }
 
 export interface JobWorkChallanItem {

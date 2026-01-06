@@ -25,7 +25,18 @@ export async function GET(request: NextRequest) {
       data = await bomMasterAPI.getAll();
     }
 
-    return NextResponse.json({ success: true, data });
+    // Prevent caching - always return fresh data
+    return NextResponse.json(
+      { success: true, data },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'Surrogate-Control': 'no-store'
+        }
+      }
+    );
   } catch (error) {
     console.error('Error fetching BOM masters:', error);
     return NextResponse.json(

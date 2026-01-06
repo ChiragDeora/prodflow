@@ -1,0 +1,510 @@
+// ============================================================================
+// STOCK QUERY FUNCTIONS
+// ============================================================================
+// Functions for querying stock balances and ledger entries
+// ============================================================================
+
+import { getSupabase, handleSupabaseError } from '../supabase/utils';
+import type {
+  StockBalanceQuery,
+  StockLedgerQuery,
+  StockBalanceResult,
+  StockLedgerEntry,
+  LocationCode,
+  ItemType,
+  DocumentType,
+} from '../supabase/types/stock';
+
+// ============================================================================
+// BALANCE QUERIES
+// ============================================================================
+
+/**
+ * Get stock balances with optional filters
+ * 
+ * @param query - Query parameters for filtering
+ * @returns Array of stock balance results
+ */
+export async function getStockBalances(
+  query: StockBalanceQuery = {}
+): Promise<StockBalanceResult[]> {
+  const supabase = getSupabase();
+  
+  console.log('🔍 [getStockBalances] Query params:', query);
+  
+  // Use the stock_items_with_balances view for efficient querying
+  let queryBuilder = supabase
+    .from('stock_items_with_balances')
+    .select('*');
+  
+  // Apply filters
+  if (query.item_code) {
+    queryBuilder = queryBuilder.eq('item_code', query.item_code);
+  }
+  
+  if (query.item_type) {
+    queryBuilder = queryBuilder.eq('item_type', query.item_type);
+  }
+  
+  const { data, error } = await queryBuilder.order('item_code', { ascending: true });
+  
+  if (error) {
+    console.error('❌ [getStockBalances] Database error:', error);
+    handleSupabaseError(error, 'fetching stock balances');
+    throw error;
+  }
+  
+  console.log('📊 [getStockBalances] Raw data from view:', { count: data?.length, sample: data?.slice(0, 3) });
+  
+  if (!data || data.length === 0) {
+    console.warn('⚠️ [getStockBalances] No items found in stock_items_with_balances view. This could mean:');
+    console.warn('   1. No stock_items exist in the database');
+    console.warn('   2. All stock_items have is_active = FALSE');
+    console.warn('   3. The view query failed');
+    return [];
+  }
+  
+  // If location_code filter is specified, transform to show only that location
+  if (query.location_code) {
+    const filtered = data.map(item => ({
+      id: `${item.id}-${query.location_code}`,
+      item_code: item.item_code,
+      item_name: item.item_name,
+      item_type: item.item_type as ItemType,
+      sub_category: item.sub_category,
+      location_code: query.location_code as LocationCode,
+      current_balance: getBalanceForLocation(item, query.location_code as LocationCode),
+      unit_of_measure: item.unit_of_measure,
+    })).filter(item => item.current_balance !== 0);
+    
+    console.log(`📊 [getStockBalances] After filtering by location ${query.location_code}:`, {
+      totalItems: data.length,
+      itemsWithBalance: filtered.length,
+      sample: filtered.slice(0, 3)
+    });
+    
+    return filtered;
+  }
+  
+  // Return all locations with balances
+  const results: StockBalanceResult[] = [];
+  
+  for (const item of data) {
+    const baseId = item.id as string;
+    
+    // Add STORE balance if not zero
+    if (item.store_balance && item.store_balance !== 0) {
+      results.push({
+        id: `${baseId}-STORE`,
+        item_code: item.item_code,
+        item_name: item.item_name,
+        item_type: item.item_type as ItemType,
+        sub_category: item.sub_category,
+        location_code: 'STORE',
+        current_balance: item.store_balance,
+        unit_of_measure: item.unit_of_measure,
+      });
+    }
+    
+    // Add PRODUCTION balance if not zero
+    if (item.production_balance && item.production_balance !== 0) {
+      results.push({
+        id: `${baseId}-PRODUCTION`,
+        item_code: item.item_code,
+        item_name: item.item_name,
+        item_type: item.item_type as ItemType,
+        sub_category: item.sub_category,
+        location_code: 'PRODUCTION',
+        current_balance: item.production_balance,
+        unit_of_measure: item.unit_of_measure,
+      });
+    }
+    
+    // Add FG_STORE balance if not zero
+    if (item.fg_store_balance && item.fg_store_balance !== 0) {
+      results.push({
+        id: `${baseId}-FG_STORE`,
+        item_code: item.item_code,
+        item_name: item.item_name,
+        item_type: item.item_type as ItemType,
+        sub_category: item.sub_category,
+        location_code: 'FG_STORE',
+        current_balance: item.fg_store_balance,
+        unit_of_measure: item.unit_of_measure,
+      });
+    }
+  }
+  
+  console.log('📊 [getStockBalances] Final results:', {
+    totalItemsInView: data.length,
+    itemsWithNonZeroBalance: results.length,
+    byLocation: {
+      STORE: results.filter(r => r.location_code === 'STORE').length,
+      PRODUCTION: results.filter(r => r.location_code === 'PRODUCTION').length,
+      FG_STORE: results.filter(r => r.location_code === 'FG_STORE').length,
+    }
+  });
+  
+  return results;
+}
+
+/**
+ * Helper to get balance for a specific location from view row
+ */
+function getBalanceForLocation(
+  item: Record<string, unknown>,
+  location: LocationCode
+): number {
+  switch (location) {
+    case 'STORE':
+      return (item.store_balance as number) || 0;
+    case 'PRODUCTION':
+      return (item.production_balance as number) || 0;
+    case 'FG_STORE':
+      return (item.fg_store_balance as number) || 0;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Get total balance for an item across all locations
+ */
+export async function getTotalBalance(itemCode: string): Promise<{
+  item_code: string;
+  store: number;
+  production: number;
+  fg_store: number;
+  total: number;
+}> {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('stock_items_with_balances')
+    .select('item_code, store_balance, production_balance, fg_store_balance, total_balance')
+    .eq('item_code', itemCode)
+    .single();
+  
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return {
+        item_code: itemCode,
+        store: 0,
+        production: 0,
+        fg_store: 0,
+        total: 0,
+      };
+    }
+    handleSupabaseError(error, 'fetching total balance');
+    throw error;
+  }
+  
+  return {
+    item_code: itemCode,
+    store: data?.store_balance || 0,
+    production: data?.production_balance || 0,
+    fg_store: data?.fg_store_balance || 0,
+    total: data?.total_balance || 0,
+  };
+}
+
+/**
+ * Get stock summary by location
+ */
+export async function getStockSummaryByLocation(): Promise<{
+  location_code: string;
+  location_name: string;
+  item_type: string;
+  item_count: number;
+  total_quantity: number;
+}[]> {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('stock_summary_by_location')
+    .select('*');
+  
+  if (error) {
+    handleSupabaseError(error, 'fetching stock summary');
+    throw error;
+  }
+  
+  return data || [];
+}
+
+// ============================================================================
+// LEDGER QUERIES
+// ============================================================================
+
+/**
+ * Get stock ledger entries with optional filters
+ * 
+ * @param query - Query parameters for filtering
+ * @returns Array of stock ledger entries
+ */
+export async function getStockLedger(
+  query: StockLedgerQuery = {}
+): Promise<StockLedgerEntry[]> {
+  const supabase = getSupabase();
+  
+  let queryBuilder = supabase
+    .from('stock_ledger')
+    .select(`
+      *,
+      stock_items (
+        item_name,
+        item_type
+      )
+    `);
+  
+  // Apply filters
+  if (query.item_code) {
+    queryBuilder = queryBuilder.eq('item_code', query.item_code);
+  }
+  
+  if (query.location_code) {
+    queryBuilder = queryBuilder.eq('location_code', query.location_code);
+  }
+  
+  if (query.document_type) {
+    queryBuilder = queryBuilder.eq('document_type', query.document_type);
+  }
+  
+  if (query.from_date) {
+    queryBuilder = queryBuilder.gte('transaction_date', query.from_date);
+  }
+  
+  if (query.to_date) {
+    queryBuilder = queryBuilder.lte('transaction_date', query.to_date);
+  }
+  
+  // Apply pagination
+  if (query.limit) {
+    queryBuilder = queryBuilder.limit(query.limit);
+  }
+  
+  if (query.offset) {
+    queryBuilder = queryBuilder.range(query.offset, query.offset + (query.limit || 100) - 1);
+  }
+  
+  // Order by most recent first
+  queryBuilder = queryBuilder.order('posted_at', { ascending: false });
+  
+  const { data, error } = await queryBuilder;
+  
+  if (error) {
+    handleSupabaseError(error, 'fetching stock ledger');
+    throw error;
+  }
+  
+  return data || [];
+}
+
+/**
+ * Get ledger entries for a specific item with running balance
+ */
+export async function getItemLedgerWithBalance(
+  itemCode: string,
+  locationCode?: LocationCode,
+  fromDate?: string,
+  toDate?: string
+): Promise<{
+  entry: StockLedgerEntry;
+  item_name?: string;
+}[]> {
+  const supabase = getSupabase();
+  
+  let queryBuilder = supabase
+    .from('stock_ledger_recent')
+    .select('*')
+    .eq('item_code', itemCode);
+  
+  if (locationCode) {
+    queryBuilder = queryBuilder.eq('location_code', locationCode);
+  }
+  
+  if (fromDate) {
+    queryBuilder = queryBuilder.gte('transaction_date', fromDate);
+  }
+  
+  if (toDate) {
+    queryBuilder = queryBuilder.lte('transaction_date', toDate);
+  }
+  
+  queryBuilder = queryBuilder.order('posted_at', { ascending: true });
+  
+  const { data, error } = await queryBuilder;
+  
+  if (error) {
+    handleSupabaseError(error, 'fetching item ledger');
+    throw error;
+  }
+  
+  return (data || []).map(entry => ({
+    entry: entry as StockLedgerEntry,
+    item_name: entry.item_name,
+  }));
+}
+
+/**
+ * Get document posting history
+ */
+export async function getDocumentHistory(
+  documentType: DocumentType,
+  documentId: string
+): Promise<StockLedgerEntry[]> {
+  const supabase = getSupabase();
+  
+  // Get entries for both original posting and cancellation
+  const { data, error } = await supabase
+    .from('stock_ledger')
+    .select('*')
+    .eq('document_id', documentId)
+    .in('document_type', [documentType, `${documentType}_CANCEL`])
+    .order('posted_at', { ascending: true });
+  
+  if (error) {
+    handleSupabaseError(error, 'fetching document history');
+    throw error;
+  }
+  
+  return data || [];
+}
+
+// ============================================================================
+// STOCK ITEM QUERIES
+// ============================================================================
+
+/**
+ * Get all stock items with optional filters
+ */
+export async function getStockItems(
+  itemType?: ItemType,
+  category?: string,
+  includeInactive: boolean = false
+): Promise<{
+  id: number;
+  item_code: string;
+  item_name: string;
+  item_type: ItemType;
+  category?: string;
+  sub_category?: string;
+  unit_of_measure: string;
+  is_active: boolean;
+}[]> {
+  const supabase = getSupabase();
+  
+  let queryBuilder = supabase
+    .from('stock_items')
+    .select('*');
+  
+  if (!includeInactive) {
+    queryBuilder = queryBuilder.eq('is_active', true);
+  }
+  
+  if (itemType) {
+    queryBuilder = queryBuilder.eq('item_type', itemType);
+  }
+  
+  if (category) {
+    queryBuilder = queryBuilder.eq('category', category);
+  }
+  
+  queryBuilder = queryBuilder.order('item_type').order('item_code');
+  
+  const { data, error } = await queryBuilder;
+  
+  if (error) {
+    handleSupabaseError(error, 'fetching stock items');
+    throw error;
+  }
+  
+  return data || [];
+}
+
+/**
+ * Search stock items by code or name
+ */
+export async function searchStockItems(
+  searchTerm: string,
+  limit: number = 20
+): Promise<{
+  id: number;
+  item_code: string;
+  item_name: string;
+  item_type: ItemType;
+  unit_of_measure: string;
+}[]> {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('stock_items')
+    .select('id, item_code, item_name, item_type, unit_of_measure')
+    .eq('is_active', true)
+    .or(`item_code.ilike.%${searchTerm}%,item_name.ilike.%${searchTerm}%`)
+    .limit(limit);
+  
+  if (error) {
+    handleSupabaseError(error, 'searching stock items');
+    throw error;
+  }
+  
+  return data || [];
+}
+
+// ============================================================================
+// VALIDATION QUERIES
+// ============================================================================
+
+/**
+ * Verify stock balance integrity
+ * Compares cached balance with calculated sum from ledger
+ */
+export async function verifyBalanceIntegrity(
+  itemCode: string,
+  locationCode: LocationCode
+): Promise<{
+  isValid: boolean;
+  cachedBalance: number;
+  calculatedBalance: number;
+  difference: number;
+}> {
+  const supabase = getSupabase();
+  
+  // Get cached balance
+  const { data: cacheData, error: cacheError } = await supabase
+    .from('stock_balances')
+    .select('current_balance')
+    .eq('item_code', itemCode)
+    .eq('location_code', locationCode)
+    .single();
+  
+  const cachedBalance = cacheData?.current_balance || 0;
+  
+  // Calculate from ledger
+  const { data: ledgerData, error: ledgerError } = await supabase
+    .from('stock_ledger')
+    .select('quantity')
+    .eq('item_code', itemCode)
+    .eq('location_code', locationCode);
+  
+  if (ledgerError) {
+    handleSupabaseError(ledgerError, 'fetching ledger for verification');
+    throw ledgerError;
+  }
+  
+  const calculatedBalance = (ledgerData || []).reduce(
+    (sum, entry) => sum + (entry.quantity || 0),
+    0
+  );
+  
+  const difference = Math.abs(cachedBalance - calculatedBalance);
+  
+  return {
+    isValid: difference < 0.0001, // Allow tiny floating point differences
+    cachedBalance,
+    calculatedBalance,
+    difference,
+  };
+}
+

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Wrench, Package, Link, Building, MoreHorizontal } from 'lucide-react';
+import { Wrench, Package, Link, Building, MoreHorizontal, Settings } from 'lucide-react';
 import Image from 'next/image';
 import MachineMaster from './MachineMaster';
 import MoldMaster from './MoldMaster';
@@ -11,6 +11,7 @@ import LineMaster from './LineMaster';
 import BOMMaster from '../bom-master';
 import CommercialMaster from '../commercial-master';
 import OthersMaster from './OthersMaster';
+import SparePartsMaster from './SparePartsMaster';
 
 import { 
   Machine as SupabaseMachine, 
@@ -186,6 +187,17 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
             Machine Master
           </button>
           <button
+            onClick={() => handleTabChange('lines')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+              activeTab === 'lines'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Link className="w-5 h-5 inline mr-2" />
+            Line Master
+          </button>
+          <button
             onClick={() => handleTabChange('molds')}
             className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
               activeTab === 'molds'
@@ -205,7 +217,7 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
             }`}
           >
             <Image src="/raw_materials_vector.png" alt="Raw Materials" width={20} height={20} className="inline mr-2 w-8 h-8" />
-            Raw Materials Master
+            RM Master
           </button>
           <button
             onClick={() => handleTabChange('packing_materials')}
@@ -216,18 +228,7 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
             }`}
           >
             <Image src="/packing_material_vector.png" alt="Packing Materials" width={20} height={20} className="inline mr-2 w-8 h-8" />
-            Packing Materials Master
-          </button>
-          <button
-            onClick={() => handleTabChange('lines')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-              activeTab === 'lines'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Link className="w-5 h-5 inline mr-2" />
-            Line Master
+            PM Master
           </button>
           <button
             onClick={() => handleTabChange('bom_master')}
@@ -250,6 +251,17 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
           >
             <Building className="w-5 h-5 inline mr-2" />
             Commercial Master
+          </button>
+          <button
+            onClick={() => handleTabChange('spare_parts')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+              activeTab === 'spare_parts'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Settings className="w-5 h-5 inline mr-2" />
+            Spare Parts
           </button>
           <button
             onClick={() => handleTabChange('others')}
@@ -371,6 +383,13 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
 
         {activeTab === 'commercial_master' && (
           <CommercialMaster onSubNavClick={onSubNavClick} />
+        )}
+
+        {activeTab === 'spare_parts' && (
+          <SparePartsMaster 
+            machines={machinesMaster.map(m => ({ id: m.id || '', machine_id: m.machine_id }))}
+            molds={moldsMaster.map(m => ({ id: m.id || '', mold_id: m.mold_id }))}
+          />
         )}
 
         {activeTab === 'others' && (

@@ -1,65 +1,20 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, Printer, Search, Link } from 'lucide-react';
+import { Plus, Trash2, Save, Printer, Search, Link, Upload, CheckCircle, Loader2 } from 'lucide-react';
 import { grnAPI, materialIndentSlipAPI, purchaseOrderAPI, MaterialIndentSlip, MaterialIndentSlipItem, PurchaseOrder } from '../../../lib/supabase';
 import PrintHeader from '../../shared/PrintHeader';
-
-interface GRNItem {
-  id: string;
-  description: string;
-  poQty: string;
-  grnQty: string;
-  rate: string;
-  totalPrice: string;
-}
-
-interface GRNFormData {
-  grnNo: string;
-  grnDate: string;
-  poNo: string;
-  poDate: string;
-  invoiceNo: string;
-  invoiceDate: string;
-  partyName: string;
-  address: string;
-  state: string;
-  gstNo: string;
-  totalAmount: string;
-  freightOthers: string;
-  igstPercentage: string;
-  cgstPercentage: string;
-  utgstPercentage: string;
-  roundOff: string;
-  finalAmount: string;
-  amountInWords: string;
-  items: GRNItem[];
-}
+import PartyNameSelect from './PartyNameSelect';
+import { useStoreDispatch, GRNItem } from './StoreDispatchContext';
+import { generateDocumentNumber, FORM_CODES } from '../../../utils/formCodeUtils';
 
 const GRNForm: React.FC = () => {
-  const [formData, setFormData] = useState<GRNFormData>({
-    grnNo: '',
-    grnDate: new Date().toISOString().split('T')[0],
-    poNo: '',
-    poDate: '',
-    invoiceNo: '',
-    invoiceDate: '',
-    partyName: '',
-    address: '',
-    state: '',
-    gstNo: '',
-    totalAmount: '',
-    freightOthers: '',
-    igstPercentage: '',
-    cgstPercentage: '',
-    utgstPercentage: '',
-    roundOff: '',
-    finalAmount: '',
-    amountInWords: '',
-    items: [
-      { id: '1', description: '', poQty: '', grnQty: '', rate: '', totalPrice: '' }
-    ]
-  });
+  const {
+    grnFormData: formData,
+    setGrnFormData: setFormData,
+    updateGrnField,
+    resetGrnForm,
+  } = useStoreDispatch();
 
   const [docNo, setDocNo] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -80,15 +35,25 @@ const GRNForm: React.FC = () => {
   const [calculatedUTGST, setCalculatedUTGST] = useState(0);
   const [calculatedFinal, setCalculatedFinal] = useState(0);
 
+  // Stock posting state
+  const [savedDocumentId, setSavedDocumentId] = useState<string | null>(null);
+  const [stockStatus, setStockStatus] = useState<'NOT_SAVED' | 'SAVED' | 'POSTING' | 'POSTED' | 'ERROR'>('NOT_SAVED');
+  const [stockMessage, setStockMessage] = useState<string>('');
+  
+  // Item type toggle: Production Materials (RM/PM) or Spare Parts (SPARE)
+  const [itemTypeMode, setItemTypeMode] = useState<'production' | 'spare'>('production');
+
   // Generate document number
   useEffect(() => {
-    const generateDocNo = () => {
-      const year = new Date(date || new Date()).getFullYear();
-      const month = String(new Date(date || new Date()).getMonth() + 1).padStart(2, '0');
-      const random = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
-      return `DPPL-GRN-${year}${month}-${random}/R00`;
+    const generateDocNo = async () => {
+      try {
+        const docNo = await generateDocumentNumber(FORM_CODES.GRN, date);
+        setDocNo(docNo);
+      } catch (error) {
+        console.error('Error generating document number:', error);
+      }
     };
-    setDocNo(generateDocNo());
+    generateDocNo();
   }, [date]);
 
   // Fetch indent slips and purchase orders
@@ -125,12 +90,12 @@ const GRNForm: React.FC = () => {
         setIndentItems(indentDetails.items);
         
         // Auto-fill form data from indent slip
-        setFormData(prev => ({
-          ...prev,
-          partyName: indentSlip.party_name || prev.partyName,
-          address: indentSlip.address || prev.address,
-          state: indentSlip.state || prev.state,
-          gstNo: indentSlip.gst_no || prev.gstNo,
+        setFormData({
+          ...formData,
+          partyName: indentSlip.party_name || formData.partyName,
+          address: indentSlip.address || formData.address,
+          state: indentSlip.state || formData.state,
+          gstNo: indentSlip.gst_no || formData.gstNo,
           items: indentDetails.items.map((item, index) => ({
             id: (index + 1).toString(),
             description: item.item_name || item.description_specification || '',
@@ -139,7 +104,7 @@ const GRNForm: React.FC = () => {
             rate: '',
             totalPrice: ''
           }))
-        }));
+        });
       }
       
       setShowIndentSearch(false);
@@ -157,14 +122,14 @@ const GRNForm: React.FC = () => {
       const poDetails = await purchaseOrderAPI.getById(po.id);
       if (poDetails) {
         // Auto-fill form data from PO
-        setFormData(prev => ({
-          ...prev,
-          poNo: po.po_no || prev.poNo,
-          poDate: po.date || prev.poDate,
-          partyName: po.party_name || prev.partyName,
-          address: po.address || prev.address,
-          state: po.state || prev.state,
-          gstNo: po.gst_no || prev.gstNo,
+        setFormData({
+          ...formData,
+          poNo: po.po_no || formData.poNo,
+          poDate: po.date || formData.poDate,
+          partyName: po.party_name || formData.partyName,
+          address: po.address || formData.address,
+          state: po.state || formData.state,
+          gstNo: po.gst_no || formData.gstNo,
           items: poDetails.items.map((item, index) => ({
             id: (index + 1).toString(),
             description: item.description,
@@ -173,7 +138,7 @@ const GRNForm: React.FC = () => {
             rate: (item.rate || item.unit_price)?.toString() || '',
             totalPrice: ''
           }))
-        }));
+        });
       }
       
       setShowPOSearch(false);
@@ -213,37 +178,45 @@ const GRNForm: React.FC = () => {
     
     setCalculatedFinal(final);
     
-    setFormData(prev => ({
-      ...prev,
+    setFormData({
+      ...formData,
       totalAmount: total.toFixed(2),
       finalAmount: final.toFixed(2)
-    }));
+    });
   }, [formData.items, formData.freightOthers, formData.igstPercentage, formData.cgstPercentage, formData.utgstPercentage, formData.roundOff]);
 
-  const handleInputChange = (field: keyof Omit<GRNFormData, 'items'>, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  const handleInputChange = (field: keyof Omit<typeof formData, 'items'>, value: string) => {
+    updateGrnField(field as any, value);
+  };
+
+  const handlePartySelect = (party: { id: string; name: string }) => {
+    setFormData({
+      ...formData,
+      partyId: party.id,
+      partyName: party.name,
+    });
   };
 
   const handleItemChange = (id: string, field: keyof GRNItem, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      items: prev.items.map(item => {
-        if (item.id === id) {
-          const updatedItem = { ...item, [field]: value };
-          // Auto-calculate total price
-          if (field === 'grnQty' || field === 'rate') {
-            const grnQty = parseFloat(updatedItem.grnQty) || 0;
-            const rate = parseFloat(updatedItem.rate) || 0;
-            updatedItem.totalPrice = (grnQty * rate).toFixed(2);
-          }
-          return updatedItem;
+    // Prevent editing fields fetched from PO if PO is linked
+    if (selectedPO && (field === 'poQty' || field === 'description')) {
+      return;
+    }
+    
+    const newItems = formData.items.map(item => {
+      if (item.id === id) {
+        const updatedItem = { ...item, [field]: value };
+        // Auto-calculate total price
+        if (field === 'grnQty' || field === 'rate') {
+          const grnQty = parseFloat(updatedItem.grnQty) || 0;
+          const rate = parseFloat(updatedItem.rate) || 0;
+          updatedItem.totalPrice = (grnQty * rate).toFixed(2);
         }
-        return item;
-      })
-    }));
+        return updatedItem;
+      }
+      return item;
+    });
+    updateGrnField('items', newItems);
   };
 
   const addItemRow = () => {
@@ -255,18 +228,13 @@ const GRNForm: React.FC = () => {
       rate: '',
       totalPrice: ''
     };
-    setFormData(prev => ({
-      ...prev,
-      items: [...prev.items, newItem]
-    }));
+    updateGrnField('items', [...formData.items, newItem]);
   };
 
   const removeItemRow = (id: string) => {
     if (formData.items.length > 1) {
-      setFormData(prev => ({
-        ...prev,
-        items: prev.items.filter(item => item.id !== id)
-      }));
+      const newItems = formData.items.filter(item => item.id !== id);
+      updateGrnField('items', newItems);
     }
   };
 
@@ -308,39 +276,73 @@ const GRNForm: React.FC = () => {
           total_price: item.totalPrice ? parseFloat(item.totalPrice) : undefined
         }));
 
-      await grnAPI.create(grnData, itemsData);
-      alert('GRN saved successfully!');
+      // Create the GRN
+      const newGRN = await grnAPI.create(grnData, itemsData);
       
-      // Reset form
-      setFormData({
-        grnNo: '',
-        grnDate: new Date().toISOString().split('T')[0],
-        poNo: '',
-        poDate: '',
-        invoiceNo: '',
-        invoiceDate: '',
-        partyName: '',
-        address: '',
-        state: '',
-        gstNo: '',
-        totalAmount: '',
-        freightOthers: '',
-        igstPercentage: '',
-        cgstPercentage: '',
-        utgstPercentage: '',
-        roundOff: '',
-        finalAmount: '',
-        amountInWords: '',
-        items: [{ id: '1', description: '', poQty: '', grnQty: '', rate: '', totalPrice: '' }]
-      });
-      setDate(new Date().toISOString().split('T')[0]);
-      setSelectedIndentSlip(null);
-      setSelectedPO(null);
-      setIndentItems([]);
+      if (newGRN) {
+        // Store the saved document ID for stock posting
+        setSavedDocumentId(newGRN.id);
+        setStockStatus('SAVED');
+        setStockMessage('');
+        
+        alert('GRN saved successfully! Click "Post to Stock" to update inventory.');
+      }
     } catch (error) {
       console.error('Error saving GRN:', error);
       alert('Error saving GRN. Please try again.');
     }
+  };
+
+  const handlePostToStock = async () => {
+    if (!savedDocumentId) {
+      alert('Please save the document first before posting to stock.');
+      return;
+    }
+    
+    setStockStatus('POSTING');
+    setStockMessage('');
+    
+    try {
+      const stockResponse = await fetch(`/api/stock/post/grn/${savedDocumentId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ posted_by: 'user' })
+      });
+      
+      const stockResult = await stockResponse.json();
+      
+      if (stockResult.success) {
+        setStockStatus('POSTED');
+        let message = `Stock posted successfully! (${stockResult.entries_created || 0} entries created)`;
+        if (stockResult.warnings && stockResult.warnings.length > 0) {
+          message += `\nWarnings: ${stockResult.warnings.join(', ')}`;
+        }
+        setStockMessage(message);
+        alert(message);
+      } else {
+        setStockStatus('ERROR');
+        const errorMsg = stockResult.error?.message || 'Unknown error';
+        setStockMessage(`Failed: ${errorMsg}. Items must exist in Stock Items master.`);
+        alert(`Stock posting failed: ${errorMsg}\n\nNote: Items must exist in Stock Items master for posting to work.`);
+      }
+    } catch (error) {
+      console.error('Error posting to stock:', error);
+      setStockStatus('ERROR');
+      setStockMessage('Error posting to stock. Please try again.');
+      alert('Error posting to stock. Please try again.');
+    }
+  };
+
+  const handleNewForm = () => {
+    // Reset form for a new entry
+    resetGrnForm();
+    setDate(new Date().toISOString().split('T')[0]);
+    setSelectedIndentSlip(null);
+    setSelectedPO(null);
+    setIndentItems([]);
+    setSavedDocumentId(null);
+    setStockStatus('NOT_SAVED');
+    setStockMessage('');
   };
 
   const handlePrint = () => {
@@ -355,6 +357,42 @@ const GRNForm: React.FC = () => {
         {/* Main Title */}
         <div className="text-center mb-6 print:mb-4">
           <h2 className="text-3xl font-bold text-gray-900">Good Receipt Note (GRN)</h2>
+        </div>
+
+        {/* Item Type Toggle - Production vs Spare Parts */}
+        <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg print:hidden">
+          <div className="flex items-center justify-center gap-4">
+            <span className="text-sm font-medium text-gray-700">Item Type:</span>
+            <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setItemTypeMode('production')}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  itemTypeMode === 'production'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                Production Materials (RM/PM)
+              </button>
+              <button
+                type="button"
+                onClick={() => setItemTypeMode('spare')}
+                className={`px-4 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
+                  itemTypeMode === 'spare'
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                Spare Parts
+              </button>
+            </div>
+          </div>
+          <p className="text-center text-xs text-gray-500 mt-2">
+            {itemTypeMode === 'production' 
+              ? 'Receiving raw materials and packing materials'
+              : 'Receiving spare parts and maintenance items'}
+          </p>
         </div>
 
         {/* Material Indent Slip and PO Linking Section */}
@@ -470,11 +508,11 @@ const GRNForm: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Party Name:
               </label>
-              <input
-                type="text"
+              <PartyNameSelect
                 value={formData.partyName}
-                onChange={(e) => handleInputChange('partyName', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                partyId={formData.partyId}
+                onChange={handlePartySelect}
+                placeholder="Select or search party..."
               />
             </div>
             <div>
@@ -609,7 +647,10 @@ const GRNForm: React.FC = () => {
                       type="text"
                       value={item.description}
                       onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
-                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                      readOnly={!!selectedPO}
+                      className={`w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded ${
+                        selectedPO ? 'bg-gray-50 cursor-not-allowed' : ''
+                      }`}
                       required
                     />
                   </td>
@@ -618,7 +659,10 @@ const GRNForm: React.FC = () => {
                       type="number"
                       value={item.poQty}
                       onChange={(e) => handleItemChange(item.id, 'poQty', e.target.value)}
-                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                      readOnly={!!selectedPO}
+                      className={`w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded ${
+                        selectedPO ? 'bg-gray-50 cursor-not-allowed' : ''
+                      }`}
                       step="0.01"
                       min="0"
                     />
@@ -775,8 +819,29 @@ const GRNForm: React.FC = () => {
           </div>
         </div>
 
+        {/* Stock Status Message */}
+        {stockMessage && (
+          <div className={`mt-4 p-3 rounded-lg flex items-center gap-2 ${
+            stockStatus === 'POSTED' ? 'bg-green-50 text-green-800 border border-green-200' :
+            stockStatus === 'ERROR' ? 'bg-red-50 text-red-800 border border-red-200' :
+            'bg-blue-50 text-blue-800 border border-blue-200'
+          }`}>
+            {stockStatus === 'POSTED' && <CheckCircle className="w-5 h-5" />}
+            <span className="text-sm">{stockMessage}</span>
+          </div>
+        )}
+
         {/* Action Buttons */}
         <div className="flex justify-end gap-4 mt-6 print:hidden">
+          {savedDocumentId && (
+            <button
+              type="button"
+              onClick={handleNewForm}
+              className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 flex items-center gap-2"
+            >
+              New Form
+            </button>
+          )}
           <button
             type="button"
             onClick={handlePrint}
@@ -787,10 +852,32 @@ const GRNForm: React.FC = () => {
           </button>
           <button
             type="submit"
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            disabled={stockStatus === 'POSTED'}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <Save className="w-4 h-4" />
             Save
+          </button>
+          <button
+            type="button"
+            onClick={handlePostToStock}
+            disabled={!savedDocumentId || stockStatus === 'POSTING' || stockStatus === 'POSTED'}
+            className={`px-6 py-2 rounded-lg flex items-center gap-2 ${
+              stockStatus === 'POSTED' 
+                ? 'bg-green-600 text-white cursor-not-allowed'
+                : !savedDocumentId
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-green-600 text-white hover:bg-green-700'
+            }`}
+          >
+            {stockStatus === 'POSTING' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : stockStatus === 'POSTED' ? (
+              <CheckCircle className="w-4 h-4" />
+            ) : (
+              <Upload className="w-4 h-4" />
+            )}
+            {stockStatus === 'POSTED' ? 'Posted' : stockStatus === 'POSTING' ? 'Posting...' : 'Post to Stock'}
           </button>
         </div>
       </form>

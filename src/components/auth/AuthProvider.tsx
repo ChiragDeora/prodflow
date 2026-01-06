@@ -86,39 +86,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('🔍 Starting auth check...');
       setError(null); // Clear any previous errors
       
-      // Check if user has logged out (prevent back button access)
-      if (typeof window !== 'undefined') {
-        const logoutTimestamp = localStorage.getItem('logoutTimestamp');
-        if (logoutTimestamp) {
-          const logoutTime = parseInt(logoutTimestamp);
-          const currentTime = Date.now();
-          const timeSinceLogout = currentTime - logoutTime;
-          
-          // If logout was less than 24 hours ago, force re-authentication
-          if (timeSinceLogout < 24 * 60 * 60 * 1000) {
-            console.log('🚫 User has logged out, preventing back button access');
-            setUser(null);
-            setError('Session expired. Please log in again.');
-            setIsLoading(false);
-            
-            // Clear the logout timestamp and redirect to login
-            localStorage.removeItem('logoutTimestamp');
-            router.replace('/auth/login');
-            return;
-          } else {
-            // Clear old logout timestamp
-            localStorage.removeItem('logoutTimestamp');
-          }
-        }
-      }
-      
-      // Add timeout to prevent hanging
+      // Add timeout to prevent hanging (20 seconds for cold database connections)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
       
       const response = await fetch('/api/auth/verify-session', {
-        credentials: 'include',
-        signal: controller.signal
+        credentials: 'include', // Important: ensures cookies are sent
+        signal: controller.signal,
+        cache: 'no-store' // Prevent caching of auth responses
       });
       
       clearTimeout(timeoutId);
@@ -127,14 +102,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = await response.json();
         console.log('✅ Auth successful, user data:', data.user);
         
-        // Fetch user permissions
-        const permissions = await fetchPermissions();
+        // Clear any stale logout timestamp since we have a valid session
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('logoutTimestamp');
+        }
+        
+        // Use permissions from response if available, otherwise fetch separately
+        const permissions = data.user.permissions || await fetchPermissions();
         console.log('✅ Permissions loaded:', Object.keys(permissions).length, 'permissions');
         
         setUser({ ...data.user, permissions });
         setError(null);
       } else {
         setUser(null);
+        
+        // Check logout timestamp ONLY when session verification fails
+        if (typeof window !== 'undefined') {
+          const logoutTimestamp = localStorage.getItem('logoutTimestamp');
+          if (logoutTimestamp) {
+            const logoutTime = parseInt(logoutTimestamp);
+            const currentTime = Date.now();
+            const timeSinceLogout = currentTime - logoutTime;
+            
+            // If logout was less than 24 hours ago, show message and redirect
+            if (timeSinceLogout < 24 * 60 * 60 * 1000) {
+              console.log('🚫 User has logged out, preventing back button access');
+              localStorage.removeItem('logoutTimestamp');
+              router.replace('/auth/login');
+              setIsLoading(false);
+              return;
+            } else {
+              // Clear old logout timestamp
+              localStorage.removeItem('logoutTimestamp');
+            }
+          }
+        }
+        
         // Only set error for non-401 responses (401 just means not logged in)
         if (response.status !== 401) {
           try {
@@ -145,8 +148,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.log('❌ Could not parse error response');
             setError('Authentication error');
           }
-        } else {
-          // 401 is expected for unauthenticated users - no need to log it
         }
       }
     } catch (error) {
@@ -155,8 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('❌ Auth check error:', error);
         setError('Network error. Please check your connection.');
       } else if (error instanceof Error && error.name === 'AbortError') {
-        console.log('⏰ Auth check was cancelled (likely due to navigation)');
-        // Don't set error for AbortError as it's usually due to navigation
+        console.log('⏰ Auth check timed out or was cancelled');
       }
       setUser(null);
     } finally {
@@ -182,28 +182,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await response.json();
 
       if (response.ok) {
-        // Fetch user permissions after successful login
-        const permissions = await fetchPermissions();
+        // Clear logout timestamp to prevent false logouts on refresh
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('logoutTimestamp');
+        }
+        
+        // Use permissions from response if available, otherwise fetch separately
+        const permissions = data.user.permissions || await fetchPermissions();
         
         setUser({ ...data.user, permissions });
         setError(null);
         
         // Clear console errors after successful login
         if (typeof window !== 'undefined') {
-          // Clear console
           console.clear();
-          
-          // Log successful login
-          console.log('✅ Login successful - Console cleared');
+          console.log('✅ Login successful');
           console.log('👤 User:', data.user.username);
           console.log('🔐 Role:', data.user.isRootAdmin ? 'Root Admin' : 'User');
           console.log('🔑 Permissions loaded:', Object.keys(permissions).length, 'permissions');
-          
-          // Clear any lingering extension errors by refreshing console state
-          setTimeout(() => {
-            // Force console refresh to clear extension errors
-            console.log('🧹 Console cleaned and ready for production use');
-          }, 100);
         }
         
         return { 

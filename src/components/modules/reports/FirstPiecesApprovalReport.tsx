@@ -92,7 +92,7 @@ const FirstPiecesApprovalReport: React.FC<FirstPiecesApprovalReportProps> = ({ l
       id: mold.mold_id,
       mold_name: mold.mold_name,
       cavities: mold.cavities,
-      std_weight: mold.std_wt || 100,
+      std_weight: mold.int_wt || 100,
       cycle_time: mold.cycle_time || 30,
       description: mold.item_name || ''
     }));
@@ -552,7 +552,7 @@ const FirstPiecesApprovalReport: React.FC<FirstPiecesApprovalReportProps> = ({ l
                                   </option>
                                   {lineMolds.map((mold) => (
                                     <option key={mold.id} value={mold.id}>
-                                      {mold.mold_name} - {mold.cavities} cavities, {mold.std_weight}g std wt, {mold.cycle_time}s cycle
+                                      {mold.mold_name} - {mold.cavities} cavities, {mold.std_weight}g int wt, {mold.cycle_time}s cycle
                                     </option>
                                   ))}
                                 </select>
@@ -591,7 +591,7 @@ const FirstPiecesApprovalReport: React.FC<FirstPiecesApprovalReportProps> = ({ l
                                         <span className="font-medium">Cycle:</span> {selectedMold.cycle_time}s
                                       </div>
                                       <div className="text-sm text-blue-700">
-                                        <span className="font-medium">Std Wt:</span> {selectedMold.std_weight}g
+                                        <span className="font-medium">Int Wt:</span> {selectedMold.std_weight}g
                                       </div>
                                       <div className="text-sm text-blue-700">
                                         <span className="font-medium">Cavities:</span> {selectedMold.cavities}

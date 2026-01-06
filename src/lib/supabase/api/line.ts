@@ -40,7 +40,7 @@ export const lineAPI = {
   },
 
   // Create new line
-  async create(line: Omit<Line, 'line_id' | 'created_at' | 'updated_at'>): Promise<Line | null> {
+  async create(line: Omit<Line, 'created_at' | 'updated_at'>): Promise<Line | null> {
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from('lines')
@@ -103,7 +103,8 @@ export const lineAPI = {
           im_machine:machines!fk_lines_im_machine(machine_id, make, model),
           robot_machine:machines!fk_lines_robot_machine(machine_id, make, model),
           conveyor_machine:machines!fk_lines_conveyor_machine(machine_id, make, model),
-          hoist_machine:machines!fk_lines_hoist_machine(machine_id, make, model)
+          hoist_machine:machines!fk_lines_hoist_machine(machine_id, make, model),
+          loader_machine:machines!fk_lines_loader_machine(machine_id, make, model)
         `)
         .eq('unit', unit)
         .order('line_id', { ascending: true });

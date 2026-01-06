@@ -10,6 +10,11 @@ export async function GET(request: NextRequest) {
                         request.headers.get('authorization')?.replace('Bearer ', '');
 
     if (!sessionToken) {
+      // Log for debugging (only in development)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[verify-session] No session token found. Cookies:', 
+          Array.from(request.cookies.getAll()).map(c => c.name));
+      }
       return NextResponse.json(
         { error: 'No session token provided' },
         { status: 401 }
