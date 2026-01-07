@@ -7,8 +7,17 @@ export type AccessScope = 'FACTORY_ONLY' | 'UNIVERSAL';
 // Factory IPs - configurable via environment variable
 // Format: comma-separated list of IPs or CIDR ranges (e.g., "103.243.184.31,192.168.0.0/16,10.0.0.0/8")
 // Also supports common private IP ranges: 192.168.x.x, 10.x.x.x, 172.16-31.x.x
+// Includes both IPv4 and IPv6 for factory network (some computers connected via LAN)
 export function getFactoryIPs(): string[] {
-  const factoryIPs = process.env.FACTORY_ALLOWED_IPS || '103.243.184.31,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12';
+  const defaultFactoryIPs = [
+    '103.243.184.31',           // Factory IPv4 (main internet connection)
+    '2001:4860:7:505::ca',      // Factory IPv6 (for LAN-connected computers)
+    '192.168.0.0/16',           // Private network range (local LAN)
+    '10.0.0.0/8',               // Private network range
+    '172.16.0.0/12'             // Private network range
+  ].join(',');
+  
+  const factoryIPs = process.env.FACTORY_ALLOWED_IPS || defaultFactoryIPs;
   return factoryIPs.split(',').map(ip => ip.trim()).filter(ip => ip.length > 0);
 }
 
@@ -383,7 +392,23 @@ export function getClientIP(request: NextRequest): string | null {
 }
 
 /**
- * Convert IP address to number for range comparison
+ * Check if an IP address is IPv6
+ */
+function isIPv6(ip: string): boolean {
+  return ip.includes(':');
+}
+
+/**
+ * Normalize IPv6 address for comparison (expand shorthand notation)
+ */
+function normalizeIPv6(ip: string): string {
+  // Remove leading zeros and expand :: notation
+  const normalized = ip.toLowerCase();
+  return normalized;
+}
+
+/**
+ * Convert IPv4 address to number for range comparison
  */
 function ipToNumber(ip: string): number {
   const parts = ip.split('.').map(Number);
@@ -391,9 +416,14 @@ function ipToNumber(ip: string): number {
 }
 
 /**
- * Check if IP is in CIDR range
+ * Check if IP is in CIDR range (IPv4 only)
  */
 function isIPInCIDR(ip: string, cidr: string): boolean {
+  // Skip IPv6 addresses for CIDR check (not supported yet)
+  if (isIPv6(ip) || isIPv6(cidr.split('/')[0])) {
+    return false;
+  }
+  
   const [network, prefixLength] = cidr.split('/');
   const prefix = parseInt(prefixLength, 10);
   const mask = (0xFFFFFFFF << (32 - prefix)) >>> 0;
@@ -404,8 +434,22 @@ function isIPInCIDR(ip: string, cidr: string): boolean {
 
 /**
  * Check if IP is a private/local network IP (common factory networks)
+ * Supports both IPv4 and IPv6
  */
 function isPrivateIP(ip: string): boolean {
+  // Handle IPv6 private/local addresses
+  if (isIPv6(ip)) {
+    const normalizedIP = ip.toLowerCase();
+    // fe80:: - Link-local addresses
+    if (normalizedIP.startsWith('fe80:')) return true;
+    // fc00:: or fd00:: - Unique local addresses (ULA)
+    if (normalizedIP.startsWith('fc') || normalizedIP.startsWith('fd')) return true;
+    // ::1 - Loopback
+    if (normalizedIP === '::1') return true;
+    return false;
+  }
+  
+  // Handle IPv4 private addresses
   const parts = ip.split('.').map(Number);
   
   // 192.168.0.0/16 (192.168.0.0 - 192.168.255.255)
@@ -436,7 +480,7 @@ function isLocalhost(ip: string): boolean {
 
 /**
  * Check if IP matches any of the allowed factory IPs
- * Supports exact IPs, CIDR ranges, and automatically allows private IPs
+ * Supports exact IPs (IPv4 and IPv6), CIDR ranges, and automatically allows private IPs
  */
 export function isFactoryIP(clientIP: string | null): boolean {
   if (!clientIP) {
@@ -444,14 +488,17 @@ export function isFactoryIP(clientIP: string | null): boolean {
     return false;
   }
   
+  // Normalize the client IP for comparison
+  const normalizedClientIP = clientIP.toLowerCase().trim();
+  
   // Allow localhost for development
-  if (isLocalhost(clientIP)) {
+  if (isLocalhost(normalizedClientIP)) {
     console.log(`[Factory Network Check] Client IP ${clientIP} is localhost - allowing access for development`);
     return true;
   }
   
   // Automatically allow private IPs (common in factory networks)
-  if (isPrivateIP(clientIP)) {
+  if (isPrivateIP(normalizedClientIP)) {
     console.log(`[Factory Network Check] Client IP ${clientIP} is a private IP - allowing access`);
     return true;
   }
@@ -460,16 +507,30 @@ export function isFactoryIP(clientIP: string | null): boolean {
   
   // Check exact matches and CIDR ranges
   for (const factoryIP of factoryIPs) {
-    // Check exact match
-    if (factoryIP === clientIP) {
+    const normalizedFactoryIP = factoryIP.toLowerCase().trim();
+    
+    // Check exact match (handles both IPv4 and IPv6)
+    if (normalizedFactoryIP === normalizedClientIP) {
       console.log(`[Factory Network Check] Client IP ${clientIP} matches exact factory IP ${factoryIP}`);
       return true;
     }
     
-    // Check CIDR range
-    if (factoryIP.includes('/')) {
+    // For IPv6, also check if the client IP contains the factory IP prefix
+    // This handles cases where IPv6 addresses might have different notations
+    if (isIPv6(normalizedClientIP) && isIPv6(normalizedFactoryIP)) {
+      // Remove :: shorthand for comparison (simple prefix match)
+      const clientPrefix = normalizedClientIP.replace(/::/g, ':').split(':').slice(0, 4).join(':');
+      const factoryPrefix = normalizedFactoryIP.replace(/::/g, ':').split(':').slice(0, 4).join(':');
+      if (clientPrefix === factoryPrefix) {
+        console.log(`[Factory Network Check] Client IPv6 ${clientIP} matches factory IPv6 prefix ${factoryIP}`);
+        return true;
+      }
+    }
+    
+    // Check CIDR range (IPv4 only)
+    if (normalizedFactoryIP.includes('/') && !isIPv6(normalizedClientIP)) {
       try {
-        if (isIPInCIDR(clientIP, factoryIP)) {
+        if (isIPInCIDR(normalizedClientIP, normalizedFactoryIP)) {
           console.log(`[Factory Network Check] Client IP ${clientIP} is within CIDR range ${factoryIP}`);
           return true;
         }
