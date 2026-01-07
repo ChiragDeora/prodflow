@@ -1,86 +1,133 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, Printer, FileText, Upload, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Save, Printer, ExternalLink, Upload, CheckCircle, Loader2 } from 'lucide-react';
 import { jobWorkChallanAPI } from '../../../lib/supabase';
 import { generateDocumentNumber, FORM_CODES } from '../../../utils/formCodeUtils';
+import PrintHeader from '../../shared/PrintHeader';
 
 interface JobWorkChallanItem {
   id: string;
-  materialDescription: string;
-  qty: string;
-  uom: string;
-  remarks: string;
+  itemCode: string;
+  itemName: string;
+  alternateQtyPcs: string;
+  quantityTon: string;
+  stockPcs?: number;
+  stockTons?: number;
 }
 
 interface JobWorkChallanFormData {
-  srNo: string;
-  date: string;
-  jobworkAnnexureNo: string;
-  jobworkAnnexureDate: string;
-  partyName: string;
-  partyAddress: string;
-  gstNo: string;
-  vehicleNo: string;
-  lrNo: string;
   challanNo: string;
-  challanDate: string;
-  totalQty: string;
-  preparedBy: string;
-  checkedBy: string;
-  authorizedSignatory: string;
+  dated: string;
+  motorVehicleNo: string;
+  eWayBillNo: string;
+  placeOfSupply: string;
+  customerId: string;
+  customerName: string;
+  customerAddress: string;
+  customerGstin: string;
+  customerState: string;
+  customerStateCode: string;
+  hsnSac: string;
+  taxAmount: string;
+  companyPan: string;
   items: JobWorkChallanItem[];
+}
+
+interface FGStockItem {
+  item_code: string;
+  item_name: string;
+  stock_pcs?: number;
+  stock_tons?: number;
+  unit_of_measure: string;
 }
 
 const JobWorkChallanForm: React.FC = () => {
   const [formData, setFormData] = useState<JobWorkChallanFormData>({
-    srNo: '',
-    date: new Date().toISOString().split('T')[0],
-    jobworkAnnexureNo: '',
-    jobworkAnnexureDate: '',
-    partyName: '',
-    partyAddress: '',
-    gstNo: '',
-    vehicleNo: '',
-    lrNo: '',
     challanNo: '',
-    challanDate: '',
-    totalQty: '',
-    preparedBy: '',
-    checkedBy: '',
-    authorizedSignatory: '',
+    dated: new Date().toISOString().split('T')[0],
+    motorVehicleNo: '',
+    eWayBillNo: '',
+    placeOfSupply: '',
+    customerId: '',
+    customerName: '',
+    customerAddress: '',
+    customerGstin: '',
+    customerState: '',
+    customerStateCode: '',
+    hsnSac: '39239090',
+    taxAmount: 'NIL',
+    companyPan: 'AATFD0618A',
     items: [
-      { id: '1', materialDescription: '', qty: '', uom: '', remarks: '' }
+      { id: '1', itemCode: '', itemName: '', alternateQtyPcs: '', quantityTon: '' }
     ]
   });
 
   const [docNo, setDocNo] = useState('');
-
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showCustomerSearch, setShowCustomerSearch] = useState(false);
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [fgStockItems, setFgStockItems] = useState<FGStockItem[]>([]);
+  
   // Stock posting state
   const [savedDocumentId, setSavedDocumentId] = useState<string | null>(null);
   const [stockStatus, setStockStatus] = useState<'NOT_SAVED' | 'SAVED' | 'POSTING' | 'POSTED' | 'ERROR'>('NOT_SAVED');
   const [stockMessage, setStockMessage] = useState<string>('');
 
-  // Generate document number
+  // Generate document number using JOB_WORK_CHALLAN form code
   useEffect(() => {
     const generateDocNo = async () => {
       try {
-        const docNo = await generateDocumentNumber(FORM_CODES.JOB_WORK_CHALLAN, formData.date);
+        const docNo = await generateDocumentNumber(FORM_CODES.JOB_WORK_CHALLAN, date);
         setDocNo(docNo);
+        setFormData(prev => ({ ...prev, challanNo: docNo }));
       } catch (error) {
         console.error('Error generating document number:', error);
       }
     };
     generateDocNo();
-  }, [formData.date]);
+  }, [date]);
 
-  // Auto-calculate total quantity
+  // Fetch customers and FG stock items
   useEffect(() => {
-    const total = formData.items.reduce((sum, item) => {
-      return sum + (parseFloat(item.qty) || 0);
-    }, 0);
-    setFormData(prev => ({ ...prev, totalQty: total.toString() }));
-  }, [formData.items]);
+    fetchCustomers();
+    fetchFGStockItems();
+  }, []);
+
+  const fetchCustomers = async () => {
+    try {
+      const response = await fetch('/api/masters/customers');
+      const result = await response.json();
+      if (result.success) {
+        setCustomers(result.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+    }
+  };
+
+  const fetchFGStockItems = async () => {
+    try {
+      const response = await fetch('/api/stock/ledger/fg-items');
+      const result = await response.json();
+      if (result.success) {
+        setFgStockItems(result.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching FG stock items:', error);
+      // Fallback: try alternative endpoint
+      try {
+        const response = await fetch('/api/stock/items?item_type=FG&location=FG_STORE');
+        const result = await response.json();
+        if (result.success) {
+          setFgStockItems(result.data || []);
+        }
+      } catch (err) {
+        console.error('Error fetching FG stock items from alternative endpoint:', err);
+      }
+    }
+  };
 
   const handleInputChange = (field: keyof Omit<JobWorkChallanFormData, 'items'>, value: string) => {
     setFormData(prev => ({
@@ -98,13 +145,46 @@ const JobWorkChallanForm: React.FC = () => {
     }));
   };
 
+  const handleFGItemSelect = (itemId: string, fgItem: FGStockItem) => {
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.map(item =>
+        item.id === itemId 
+          ? { 
+              ...item, 
+              itemCode: fgItem.item_code,
+              itemName: fgItem.item_name,
+              alternateQtyPcs: (fgItem.stock_pcs || 0).toString(),
+              quantityTon: (fgItem.stock_tons || 0).toString(),
+              stockPcs: fgItem.stock_pcs,
+              stockTons: fgItem.stock_tons
+            } 
+          : item
+      )
+    }));
+  };
+
+  const handleCustomerSelect = (customer: any) => {
+    setFormData(prev => ({
+      ...prev,
+      customerId: customer.id,
+      customerName: customer.customer_name || '',
+      customerAddress: customer.address || '',
+      customerGstin: customer.gst_number || customer.gstin || customer.gst_no || '',
+      customerState: customer.state || '',
+      customerStateCode: customer.state_code || ''
+    }));
+    setShowCustomerSearch(false);
+    setCustomerSearchTerm('');
+  };
+
   const addItemRow = () => {
     const newItem: JobWorkChallanItem = {
       id: Date.now().toString(),
-      materialDescription: '',
-      qty: '',
-      uom: '',
-      remarks: ''
+      itemCode: '',
+      itemName: '',
+      alternateQtyPcs: '',
+      quantityTon: ''
     };
     setFormData(prev => ({
       ...prev,
@@ -121,45 +201,80 @@ const JobWorkChallanForm: React.FC = () => {
     }
   };
 
+  // Calculate totals
+  const totalPcs = formData.items.reduce((sum, item) => {
+    return sum + (parseFloat(item.alternateQtyPcs) || 0);
+  }, 0);
+
+  const totalTon = formData.items.reduce((sum, item) => {
+    return sum + (parseFloat(item.quantityTon) || 0);
+  }, 0);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const challanData = {
         doc_no: docNo,
-        sr_no: formData.srNo,
-        date: formData.date,
-        jobwork_annexure_no: formData.jobworkAnnexureNo || undefined,
-        jobwork_annexure_date: formData.jobworkAnnexureDate || undefined,
-        party_name: formData.partyName,
-        party_address: formData.partyAddress || undefined,
-        gst_no: formData.gstNo || undefined,
-        vehicle_no: formData.vehicleNo || undefined,
-        lr_no: formData.lrNo || undefined,
+        sr_no: formData.challanNo || docNo,
+        date: date,
+        party_name: formData.customerName || '',
+        party_address: formData.customerAddress || undefined,
+        gst_no: formData.customerGstin || undefined,
+        vehicle_no: formData.motorVehicleNo || undefined,
+        e_way_bill_no: formData.eWayBillNo || undefined,
+        place_of_supply: formData.placeOfSupply || undefined,
         challan_no: formData.challanNo || undefined,
-        challan_date: formData.challanDate || undefined,
-        total_qty: formData.totalQty ? parseFloat(formData.totalQty) : undefined,
-        prepared_by: formData.preparedBy || undefined,
-        checked_by: formData.checkedBy || undefined,
-        authorized_signatory: formData.authorizedSignatory || undefined
+        challan_date: formData.dated || undefined
       };
 
       const itemsData = formData.items
-        .filter(item => item.materialDescription.trim() !== '')
+        .filter(item => {
+          // Include items that have at least itemCode, itemName, qty, or qty_pcs
+          return item.itemCode?.trim() || item.itemName?.trim() || item.quantityTon || item.alternateQtyPcs;
+        })
         .map(item => ({
-          material_description: item.materialDescription,
-          qty: item.qty ? parseFloat(item.qty) : undefined,
-          uom: item.uom || undefined,
-          remarks: item.remarks || undefined
+          item_code: item.itemCode || undefined,
+          item_name: item.itemName || undefined,
+          material_description: item.itemName || item.itemCode || 'Item', // Required field, use itemName or itemCode, fallback to 'Item'
+          qty: item.quantityTon ? parseFloat(item.quantityTon) : undefined,
+          qty_pcs: item.alternateQtyPcs ? parseFloat(item.alternateQtyPcs) : undefined,
+          uom: 'ton',
+          remarks: undefined
         }));
 
       const newChallan = await jobWorkChallanAPI.create(challanData, itemsData);
       
-      if (newChallan) {
+      // Store the saved document ID for stock posting
+      if (newChallan && newChallan.id) {
         setSavedDocumentId(newChallan.id);
         setStockStatus('SAVED');
         setStockMessage('');
         alert('Job Work Challan saved successfully! Click "Post to Stock" to update inventory.');
+      } else {
+        alert('Job Work Challan saved successfully!');
       }
+      
+      // Reset form
+      setFormData({
+        challanNo: '',
+        dated: new Date().toISOString().split('T')[0],
+        motorVehicleNo: '',
+        eWayBillNo: '',
+        placeOfSupply: '',
+        customerId: '',
+        customerName: '',
+        customerAddress: '',
+        customerGstin: '',
+        customerState: '',
+        customerStateCode: '',
+        hsnSac: '39239090',
+        taxAmount: 'NIL',
+        companyPan: 'AATFD0618A',
+        items: [
+          { id: '1', itemCode: '', itemName: '', alternateQtyPcs: '', quantityTon: '' }
+        ]
+      });
+      setDate(new Date().toISOString().split('T')[0]);
     } catch (error) {
       console.error('Error saving job work challan:', error);
       alert('Error saving job work challan. Please try again.');
@@ -206,357 +321,348 @@ const JobWorkChallanForm: React.FC = () => {
     }
   };
 
-  const handleNewForm = () => {
-    setFormData({
-      srNo: '',
-      date: new Date().toISOString().split('T')[0],
-      jobworkAnnexureNo: '',
-      jobworkAnnexureDate: '',
-      partyName: '',
-      partyAddress: '',
-      gstNo: '',
-      vehicleNo: '',
-      lrNo: '',
-      challanNo: '',
-      challanDate: '',
-      totalQty: '',
-      preparedBy: '',
-      checkedBy: '',
-      authorizedSignatory: '',
-      items: [{ id: '1', materialDescription: '', qty: '', uom: '', remarks: '' }]
-    });
-    setSavedDocumentId(null);
-    setStockStatus('NOT_SAVED');
-    setStockMessage('');
-  };
-
   const handlePrint = () => {
     window.print();
   };
 
+  const navigateToCustomerMaster = () => {
+    // Navigate to masters module
+    if (typeof window !== 'undefined') {
+      const userId = localStorage.getItem('currentUserId') || 'default';
+      localStorage.setItem(`prodSchedulerCurrentModule_${userId}`, 'masters');
+      // Trigger navigation event
+      window.dispatchEvent(new CustomEvent('navigateToModule', { 
+        detail: { 
+          module: 'masters', 
+          subModule: 'commercial_master', 
+          tab: 'customers' 
+        } 
+      }));
+      // Reload to apply navigation
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow p-8 max-w-6xl mx-auto">
+      {/* Print Header - Hidden on screen, shown on print */}
+      <PrintHeader hideLogo={false} />
+
+      {/* Print Heading - Hidden on screen, shown on print */}
+      <div className="hidden print:block mb-4 text-center">
+        <h2 className="text-xl font-bold text-gray-900 mb-1">JOBWORK CHALLAN (ANNEX - ||)</h2>
+        <p className="text-sm font-semibold text-gray-700">(Rule 55 Section 143 of GST Act 2017)</p>
+      </div>
+
       <form onSubmit={handleSubmit} className="print:p-8">
-        {/* Header Section */}
-        <div className="flex justify-between items-start mb-6">
-          <div className="flex items-center gap-4">
-            <img
-              src="/dppl_logo.png"
-              alt="DEORA POLYPLAST LLP Logo"
-              width={380}
-              height={180}
-              className="object-contain"
-              onError={(e) => {
-                console.error('Failed to load logo:', e);
-              }}
-            />
-          </div>
-          <div className="text-right text-sm">
-            <div className="mb-1">
-              <span className="font-semibold">Doc. No.:</span>{' '}
-              <span>{docNo}</span>
+        {/* Screen Header - Hidden on print */}
+        <div className="print:hidden mb-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Job Work Annexure Delivery Challan</h2>
+        </div>
+
+        {/* Main Content: Dispatch To / Party (Left) and Details (Right) */}
+        <div className="grid grid-cols-2 gap-6 mb-6 print:mb-4">
+          {/* Left Side: Dispatch To / Party */}
+          <div>
+            <div className="mb-3">
+              <h3 className="font-semibold text-gray-900">Dispatch To / Party</h3>
             </div>
-            <div>
-              <span className="font-semibold">Date :</span>{' '}
-              <input
-                type="date"
-                value={formData.date}
-                onChange={(e) => handleInputChange('date', e.target.value)}
-                className="border-b border-gray-300 focus:outline-none focus:border-blue-500"
-              />
-            </div>
-          </div>
-        </div>
 
-        {/* Main Title */}
-        <div className="text-center mb-6">
-          <h2 className="text-3xl font-bold text-gray-900">JOB WORK CHALLAN</h2>
-          <p className="text-sm text-gray-600 mt-2">As per GST Act 2017, Rule 55, Section 143 - Job Work Annexure-II</p>
-        </div>
-
-        {/* Basic Details Section */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Sr. No. :-
-            </label>
-            <input
-              type="text"
-              value={formData.srNo}
-              onChange={(e) => handleInputChange('srNo', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Job Work Annexure No. :-
-            </label>
-            <input
-              type="text"
-              value={formData.jobworkAnnexureNo}
-              onChange={(e) => handleInputChange('jobworkAnnexureNo', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Job Work Annexure Date :-
-            </label>
-            <input
-              type="date"
-              value={formData.jobworkAnnexureDate}
-              onChange={(e) => handleInputChange('jobworkAnnexureDate', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-        </div>
-
-        {/* Party Details Section */}
-        <div className="mb-6">
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Party Name :-
-              </label>
-              <input
-                type="text"
-                value={formData.partyName}
-                onChange={(e) => handleInputChange('partyName', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                GST No. :-
-              </label>
-              <input
-                type="text"
-                value={formData.gstNo}
-                onChange={(e) => handleInputChange('gstNo', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Party Address :-
-            </label>
-            <textarea
-              value={formData.partyAddress}
-              onChange={(e) => handleInputChange('partyAddress', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-20"
-            />
-          </div>
-        </div>
-
-        {/* Transport Details Section */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Vehicle No. :-
-            </label>
-            <input
-              type="text"
-              value={formData.vehicleNo}
-              onChange={(e) => handleInputChange('vehicleNo', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              LR No. :-
-            </label>
-            <input
-              type="text"
-              value={formData.lrNo}
-              onChange={(e) => handleInputChange('lrNo', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Challan No. :-
-            </label>
-            <input
-              type="text"
-              value={formData.challanNo}
-              onChange={(e) => handleInputChange('challanNo', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Challan Date :-
-            </label>
-            <input
-              type="date"
-              value={formData.challanDate}
-              onChange={(e) => handleInputChange('challanDate', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-        </div>
-
-        {/* Items Table */}
-        <div className="mb-6 overflow-x-auto">
-          <table className="w-full border-collapse border border-gray-300">
-            <thead>
-              <tr className="bg-orange-100">
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold w-16">SR. No.</th>
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold">MATERIAL DESCRIPTION</th>
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold w-32">QTY.</th>
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold w-24">UOM</th>
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold">REMARKS</th>
-                <th className="border border-gray-300 px-4 py-2 text-left font-semibold w-16">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {formData.items.map((item, index) => (
-                <tr key={item.id}>
-                  <td className="border border-gray-300 px-4 py-2 text-center">{index + 1}</td>
-                  <td className="border border-gray-300 px-4 py-2">
-                    <input
-                      type="text"
-                      value={item.materialDescription}
-                      onChange={(e) => handleItemChange(item.id, 'materialDescription', e.target.value)}
-                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                      required
-                    />
-                  </td>
-                  <td className="border border-gray-300 px-4 py-2">
-                    <input
-                      type="number"
-                      value={item.qty}
-                      onChange={(e) => handleItemChange(item.id, 'qty', e.target.value)}
-                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                      step="0.01"
-                      min="0"
-                    />
-                  </td>
-                  <td className="border border-gray-300 px-4 py-2">
-                    <input
-                      type="text"
-                      value={item.uom}
-                      onChange={(e) => handleItemChange(item.id, 'uom', e.target.value)}
-                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                    />
-                  </td>
-                  <td className="border border-gray-300 px-4 py-2">
-                    <input
-                      type="text"
-                      value={item.remarks}
-                      onChange={(e) => handleItemChange(item.id, 'remarks', e.target.value)}
-                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                    />
-                  </td>
-                  <td className="border border-gray-300 px-4 py-2 text-center">
-                    {formData.items.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeItemRow(item.id)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <button
-            type="button"
-            onClick={addItemRow}
-            className="mt-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Add Row
-          </button>
-        </div>
-
-        {/* Total Quantity */}
-        <div className="flex justify-end mb-6">
-          <div className="w-64">
-            <div className="bg-orange-100 border border-orange-300 rounded-lg p-4">
-              <div className="flex justify-between items-center">
-                <span className="font-semibold text-orange-800">Total Quantity:</span>
-                <span className="text-xl font-bold text-orange-900">{formData.totalQty || '0'}</span>
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <div className="mb-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Party Name:</label>
+                <select
+                  value={formData.customerId}
+                  onChange={(e) => {
+                    const selectedCustomer = customers.find(c => c.id === e.target.value);
+                    if (selectedCustomer) {
+                      handleCustomerSelect(selectedCustomer);
+                    } else {
+                      setFormData(prev => ({ ...prev, customerId: '', customerName: '', customerAddress: '', customerGstin: '', customerState: '', customerStateCode: '' }));
+                    }
+                  }}
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+                >
+                  <option value="">Select from Customer Master</option>
+                  {customers.map(customer => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.customer_name || 'Unnamed Customer'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="mb-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Address:</label>
+                <textarea
+                  value={formData.customerAddress}
+                  onChange={(e) => handleInputChange('customerAddress', e.target.value)}
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm h-16 resize-none"
+                  placeholder="Customer address"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">GSTIN/UIN:</label>
+                  <input
+                    type="text"
+                    value={formData.customerGstin}
+                    onChange={(e) => handleInputChange('customerGstin', e.target.value)}
+                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">State Name & Code:</label>
+                  <input
+                    type="text"
+                    value={formData.customerState ? `${formData.customerState}, Code: ${formData.customerStateCode}` : ''}
+                    onChange={(e) => {
+                      const parts = e.target.value.split(', Code: ');
+                      handleInputChange('customerState', parts[0] || '');
+                      if (parts[1]) handleInputChange('customerStateCode', parts[1]);
+                    }}
+                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                    placeholder="State, Code: XX"
+                  />
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* GST Compliance Note */}
-        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <div className="flex items-start gap-3">
-            <FileText className="w-5 h-5 text-yellow-600 mt-0.5" />
+          {/* Right Side: Challan Details */}
+          <div className="space-y-3">
             <div>
-              <h4 className="font-semibold text-yellow-800 mb-1">GST Compliance Note</h4>
-              <p className="text-sm text-yellow-700">
-                This Job Work Challan is prepared as per GST Act 2017, Rule 55, Section 143. 
-                It serves as documentation for materials sent for job work and ensures GST compliance 
-                for outsourced manufacturing processes.
-              </p>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Challan No. :-
+              </label>
+              <input
+                type="text"
+                value={formData.challanNo || docNo}
+                onChange={(e) => handleInputChange('challanNo', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Dated :-
+              </label>
+              <input
+                type="date"
+                value={formData.dated}
+                onChange={(e) => {
+                  handleInputChange('dated', e.target.value);
+                  setDate(e.target.value);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Motor Vehicle No. :-
+              </label>
+              <input
+                type="text"
+                value={formData.motorVehicleNo}
+                onChange={(e) => handleInputChange('motorVehicleNo', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                E-Way bill no. :-
+              </label>
+              <input
+                type="text"
+                value={formData.eWayBillNo}
+                onChange={(e) => handleInputChange('eWayBillNo', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Place of supply :-
+              </label>
+              <input
+                type="text"
+                value={formData.placeOfSupply}
+                onChange={(e) => handleInputChange('placeOfSupply', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
             </div>
           </div>
         </div>
 
-        {/* Signature Section */}
-        <div className="grid grid-cols-3 gap-6 mt-8 border-t border-gray-300 pt-4">
+        {/* Description of Goods Table */}
+        <div className="mb-6 print:mb-4">
+          <h3 className="font-semibold text-gray-900 mb-3">Description of Goods</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse border border-gray-300">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-12">Sl.</th>
+                  <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Item Code</th>
+                  <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Item Name</th>
+                  <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Qty (Pcs)</th>
+                  <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Quantity (ton)</th>
+                  <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-16 print:hidden">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {formData.items.map((item, index) => (
+                  <tr key={item.id}>
+                    <td className="border border-gray-300 px-2 py-2 text-center">{index + 1}</td>
+                    <td className="border border-gray-300 px-2 py-2">
+                      <select
+                        value={item.itemCode}
+                        onChange={(e) => {
+                          const selectedItem = fgStockItems.find(fg => fg.item_code === e.target.value);
+                          if (selectedItem) {
+                            handleFGItemSelect(item.id, selectedItem);
+                          } else {
+                            handleItemChange(item.id, 'itemCode', '');
+                            handleItemChange(item.id, 'itemName', '');
+                            handleItemChange(item.id, 'alternateQtyPcs', '');
+                            handleItemChange(item.id, 'quantityTon', '');
+                          }
+                        }}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+                      >
+                        <option value="">Select FG Item</option>
+                        {fgStockItems.map(fgItem => (
+                          <option key={fgItem.item_code} value={fgItem.item_code}>
+                            {fgItem.item_code} - {fgItem.item_name} (Stock: {fgItem.stock_pcs || 0} Pcs, {fgItem.stock_tons || 0} Tons)
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="border border-gray-300 px-2 py-2">
+                      <input
+                        type="text"
+                        value={item.itemName}
+                        onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
+                        className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                        required
+                      />
+                      {item.stockPcs !== undefined && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Available: {item.stockPcs} Pcs, {item.stockTons || 0} Tons
+                        </p>
+                      )}
+                    </td>
+                    <td className="border border-gray-300 px-2 py-2">
+                      <input
+                        type="number"
+                        value={item.alternateQtyPcs}
+                        onChange={(e) => handleItemChange(item.id, 'alternateQtyPcs', e.target.value)}
+                        className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded text-right"
+                        step="0.01"
+                        min="0"
+                        max={item.stockPcs}
+                      />
+                    </td>
+                    <td className="border border-gray-300 px-2 py-2">
+                      <input
+                        type="number"
+                        value={item.quantityTon}
+                        onChange={(e) => handleItemChange(item.id, 'quantityTon', e.target.value)}
+                        className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded text-right"
+                        step="0.01"
+                        min="0"
+                        max={item.stockTons}
+                      />
+                    </td>
+                    <td className="border border-gray-300 px-2 py-2 text-center print:hidden">
+                      {formData.items.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeItemRow(item.id)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-gray-100">
+                  <td colSpan={3} className="border border-gray-300 px-4 py-2 font-semibold text-right">
+                    Total
+                  </td>
+                  <td className="border border-gray-300 px-4 py-2 font-bold text-right">
+                    {totalPcs.toFixed(2)} Pcs
+                  </td>
+                  <td className="border border-gray-300 px-4 py-2 font-bold text-right">
+                    {totalTon.toFixed(2)} ton
+                  </td>
+                  <td className="border border-gray-300 print:hidden"></td>
+                </tr>
+              </tfoot>
+            </table>
+            <button
+              type="button"
+              onClick={addItemRow}
+              className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 print:hidden"
+            >
+              <Plus className="w-4 h-4" />
+              Add Row
+            </button>
+          </div>
+        </div>
+
+        {/* HSN/SAC, Tax Amount, Company PAN */}
+        <div className="grid grid-cols-3 gap-4 mb-6 print:mb-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Prepared By
+              HSN/SAC :-
             </label>
             <input
               type="text"
-              value={formData.preparedBy}
-              onChange={(e) => handleInputChange('preparedBy', e.target.value)}
+              value={formData.hsnSac}
+              onChange={(e) => handleInputChange('hsnSac', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Checked By
+              Tax Amount (in words) :-
             </label>
             <input
               type="text"
-              value={formData.checkedBy}
-              onChange={(e) => handleInputChange('checkedBy', e.target.value)}
+              value={formData.taxAmount}
+              onChange={(e) => handleInputChange('taxAmount', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Authorized Signatory
+              Company's PAN :-
             </label>
             <input
               type="text"
-              value={formData.authorizedSignatory}
-              onChange={(e) => handleInputChange('authorizedSignatory', e.target.value)}
+              value={formData.companyPan}
+              onChange={(e) => handleInputChange('companyPan', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
+        </div>
+
+        {/* Footer Note */}
+        <div className="mb-6 print:mb-4 text-center text-sm text-gray-600">
+          <p>This is a Computer Generated Document</p>
         </div>
 
         {/* Stock Status Message */}
         {stockMessage && (
-          <div className={`mt-4 p-4 rounded-lg flex items-start gap-3 print:hidden ${
-            stockStatus === 'POSTED' 
-              ? 'bg-green-50 border border-green-200 text-green-800' 
-              : stockStatus === 'ERROR'
-              ? 'bg-red-50 border border-red-200 text-red-800'
-              : 'bg-blue-50 border border-blue-200 text-blue-800'
+          <div className={`mt-4 p-3 rounded-lg flex items-center gap-2 ${
+            stockStatus === 'POSTED' ? 'bg-green-50 text-green-800 border border-green-200' :
+            stockStatus === 'ERROR' ? 'bg-red-50 text-red-800 border border-red-200' :
+            'bg-blue-50 text-blue-800 border border-blue-200'
           }`}>
-            {stockStatus === 'POSTED' ? (
-              <CheckCircle className="w-5 h-5 shrink-0 mt-0.5" />
-            ) : stockStatus === 'ERROR' ? (
-              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-            ) : (
-              <Loader2 className="w-5 h-5 shrink-0 mt-0.5 animate-spin" />
-            )}
-            <div className="whitespace-pre-wrap text-sm">{stockMessage}</div>
+            {stockStatus === 'POSTED' && <CheckCircle className="w-5 h-5" />}
+            <span className="text-sm">{stockMessage}</span>
           </div>
         )}
 
@@ -570,43 +676,35 @@ const JobWorkChallanForm: React.FC = () => {
             <Printer className="w-4 h-4" />
             Print
           </button>
-          {savedDocumentId && stockStatus !== 'POSTED' && (
-            <button
-              type="button"
-              onClick={handlePostToStock}
-              disabled={stockStatus === 'POSTING'}
-              className="px-6 py-2 bg-green-600 hover:bg-green-500 disabled:bg-green-400 text-white rounded-lg flex items-center gap-2"
-            >
-              {stockStatus === 'POSTING' ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Upload className="w-4 h-4" />
-              )}
-              {stockStatus === 'POSTING' ? 'Posting...' : 'Post to Stock'}
-            </button>
-          )}
-          {stockStatus === 'POSTED' && (
-            <span className="px-6 py-2 bg-emerald-600 text-white rounded-lg flex items-center gap-2">
-              <CheckCircle className="w-4 h-4" />
-              Posted to Stock
-            </span>
-          )}
           <button
             type="submit"
-            className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 flex items-center gap-2"
+            disabled={stockStatus === 'POSTED'}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <Save className="w-4 h-4" />
-            {savedDocumentId ? 'Update Job Work Challan' : 'Save Job Work Challan'}
+            Save
           </button>
-          {savedDocumentId && (
-            <button
-              type="button"
-              onClick={handleNewForm}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-            >
-              New Form
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handlePostToStock}
+            disabled={!savedDocumentId || stockStatus === 'POSTING' || stockStatus === 'POSTED'}
+            className={`px-6 py-2 rounded-lg flex items-center gap-2 ${
+              stockStatus === 'POSTED' 
+                ? 'bg-green-600 text-white cursor-not-allowed'
+                : !savedDocumentId
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-green-600 text-white hover:bg-green-700'
+            }`}
+          >
+            {stockStatus === 'POSTING' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : stockStatus === 'POSTED' ? (
+              <CheckCircle className="w-4 h-4" />
+            ) : (
+              <Upload className="w-4 h-4" />
+            )}
+            {stockStatus === 'POSTED' ? 'Posted' : stockStatus === 'POSTING' ? 'Posting...' : 'Post to Stock'}
+          </button>
         </div>
       </form>
     </div>

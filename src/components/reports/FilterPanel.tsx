@@ -251,7 +251,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
         </>
       )}
       
-      {category === 'procurement' && (
+      {category === 'store' && (
         <>
           {/* Suppliers Filter */}
           {filterOptions.suppliers && (filterOptions.suppliers as string[]).length > 0 && (

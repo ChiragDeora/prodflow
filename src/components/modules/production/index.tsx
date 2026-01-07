@@ -28,10 +28,12 @@ import {
   ChevronDown,
   Loader2,
   MoreVertical,
-  Database
+  Database,
+  RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../../auth/AuthProvider';
 import ExcelFileReader from '../../ExcelFileReader';
+import BlockingLoadingModal from '../../ui/BlockingLoadingModal';
 import MouldLoadingUnloadingReport from './MouldLoadingUnloadingReport';
 import SiloManagement from './SiloManagement';
 import FGNForm from '../store-dispatch/FGNForm';
@@ -354,6 +356,8 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
   const [showExcelReader, setShowExcelReader] = useState(false);
   const [dprData, setDprData] = useState<DPRData[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [skipNextFetch, setSkipNextFetch] = useState(false);
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(loadColumnVisibility);
   const [sectionVisibility, setSectionVisibility] = useState<SectionVisibility>(loadSectionVisibility);
   const [shiftTotalMetrics, setShiftTotalMetrics] = useState<ShiftTotalMetrics>(loadShiftTotalMetrics);
@@ -492,19 +496,40 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
     loadMasters();
   }, []);
 
-  // Load DPR data from API when component mounts or date/shift changes
-  useEffect(() => {
-    const loadDprData = async () => {
-      try {
-        console.log('🔄 Loading DPR data for:', { date: selectedDate, shift: selectedShift });
-        const response = await fetch(`/api/dpr?from_date=${selectedDate}&to_date=${selectedDate}&shift=${selectedShift}`);
-        const result = await response.json();
-        
-        if (result.success && result.data && result.data.length > 0) {
-          console.log('✅ Loaded DPR data from API:', result.data.length, 'entries');
+  // Load DPR data from API - extracted for reuse with refresh button
+  // Fetches from both regular DPR table and Excel DPR table
+  const loadDprData = async (showRefreshIndicator = false) => {
+    if (showRefreshIndicator) {
+      setIsRefreshing(true);
+    }
+    try {
+      console.log('🔄 Loading DPR data for:', { date: selectedDate, shift: selectedShift });
+      
+      // Fetch from both regular DPR and Excel DPR tables in parallel
+      const [regularResponse, excelResponse] = await Promise.all([
+        fetch(`/api/dpr?from_date=${selectedDate}&to_date=${selectedDate}&shift=${selectedShift}`),
+        fetch(`/api/dpr-excel?from_date=${selectedDate}&to_date=${selectedDate}&shift=${selectedShift}`)
+      ]);
+      
+      const regularResult = await regularResponse.json();
+      const excelResult = await excelResponse.json();
+      
+      // Combine data from both sources
+      const allData = [
+        ...(regularResult.success && regularResult.data ? regularResult.data : []),
+        ...(excelResult.success && excelResult.data ? excelResult.data.map((d: any) => ({
+          ...d,
+          // Map Excel table fields to regular DPR structure
+          dpr_machine_entries: d.dpr_excel_machine_entries || [],
+          is_excel_data: true
+        })) : [])
+      ];
+      
+      if (allData.length > 0) {
+        console.log('✅ Loaded DPR data from API:', allData.length, 'entries (regular:', regularResult.data?.length || 0, ', excel:', excelResult.data?.length || 0, ')');
           
           // Convert API response to DPRData format
-          const convertedData = result.data.map((apiDpr: any) => {
+          const convertedData = allData.map((apiDpr: any) => {
             // Group machine entries by machine_no (combine current and changeover)
             const machineMap = new Map<string, MachineData>();
             
@@ -715,16 +740,26 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
 
           setDprData(convertedData);
           console.log('✅ Converted and set DPR data:', convertedData.length, 'entries');
-        } else {
-          console.log('ℹ️ No DPR data found for selected date/shift');
-          setDprData([]);
-        }
-      } catch (error) {
-        console.error('❌ Error loading DPR data:', error);
+      } else {
+        console.log('ℹ️ No DPR data found for selected date/shift');
         setDprData([]);
       }
-    };
+    } catch (error) {
+      console.error('❌ Error loading DPR data:', error);
+      setDprData([]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
+  // Load DPR data from API when component mounts or date/shift changes
+  useEffect(() => {
+    // Skip fetch if flag is set (e.g., after Excel import to preserve local data)
+    if (skipNextFetch) {
+      console.log('⏭️ Skipping DPR data fetch (skipNextFetch flag set)');
+      setSkipNextFetch(false);
+      return;
+    }
     loadDprData();
   }, [selectedDate, selectedShift]);
 
@@ -908,9 +943,9 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
         } : null
       })).filter(entry => entry.current_production || entry.changeover);
 
-      // Send to API as Excel upload (reference data)
+      // Send to API as Excel upload (reference data) - uses separate Excel DPR table
       try {
-        const createResponse = await fetch('/api/dpr', {
+        const createResponse = await fetch('/api/dpr-excel', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -920,8 +955,7 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
             shift: finalShift,
             shift_incharge: shiftIncharge,
             machine_entries: machineEntriesForApi,
-            created_by: 'user', // TODO: Get from auth context
-            entry_type: 'EXCEL_UPLOAD', // Mark as Excel upload (reference data)
+            created_by: user?.email || 'user',
             excel_file_name: file.name
           })
         });
@@ -2234,6 +2268,19 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
                       <option value="NIGHT">NIGHT</option>
                     </select>
                   </div>
+                  {/* Refresh Button */}
+                  <button
+                    onClick={() => loadDprData(true)}
+                    disabled={isRefreshing}
+                    className={`flex items-center justify-center p-2 rounded-md transition-colors ${
+                      isRefreshing 
+                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                    }`}
+                    title="Refresh DPR Data"
+                  >
+                    <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  </button>
                   {getCurrentDPRData() && (
                     <div className="text-sm text-gray-600">
                       <span className="ml-4"><strong>Shift Incharge:</strong> {getCurrentDPRData()?.shiftIncharge || 'N/A'}</span>
@@ -2275,13 +2322,19 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
                     </button>
                   )}
                   
-                  {/* Post to Stock Button - Only show when there's existing DPR data */}
-                  {getCurrentDPRData() && getCurrentDPRData()?.id && (
+                  {/* Post to Stock Button - Only show when there's existing DPR data AND it's NOT Excel data */}
+                  {getCurrentDPRData() && getCurrentDPRData()?.id && !(getCurrentDPRData() as any)?.is_excel_data && (
                     <button
                       onClick={async () => {
                         const currentData = getCurrentDPRData();
                         if (!currentData || !currentData.id) {
                           alert('No DPR data to post');
+                          return;
+                        }
+                        
+                        // Double-check: Don't post Excel data
+                        if ((currentData as any).is_excel_data) {
+                          alert('Excel/legacy DPR data cannot be posted to stock. It is for reference only.');
                           return;
                         }
                         
@@ -2397,13 +2450,23 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
               </div>
 
               <div className="text-center mb-6">
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">DAILY PRODUCTION REPORT (DPR)</h1>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                  DAILY PRODUCTION REPORT (DPR)
+                  {(getCurrentDPRData() as any)?.is_excel_data && (
+                    <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                      📊 Excel/Reference Data
+                    </span>
+                  )}
+                </h1>
                 <div className="text-lg text-gray-600">
                   <strong>DATE:</strong> {new Date(selectedDate).toLocaleDateString('en-GB', { 
                     day: '2-digit', 
                     month: 'short', 
                     year: 'numeric' 
                   })} | <strong>SHIFT:</strong> {selectedShift}
+                  {(getCurrentDPRData() as any)?.is_excel_data && (
+                    <span className="ml-2 text-sm text-amber-600">(Cannot be posted to stock)</span>
+                  )}
                 </div>
               </div>
 
@@ -3612,7 +3675,7 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
             <div className="flex-1 overflow-y-auto p-4">
               <ExcelFileReader
                 defaultDataType="dpr"
-                onDataImported={(importData) => {
+                onDataImported={async (importData) => {
                   // Convert ExcelFileReader's DPR format to ProductionModule's DPRData format
                   if (importData.dpr) {
                     // Handle both single object and array of objects
@@ -3643,24 +3706,143 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
                     
                     console.log('📊 Converted DPR data:', convertedDataArray);
 
+                    // Save each DPR to the database
+                    let savedCount = 0;
+                    let failedCount = 0;
+                    const savedIds: string[] = [];
+                    
+                    for (const converted of convertedDataArray) {
+                      try {
+                        // Build machine entries for API
+                        const machineEntriesForApi = converted.machines.map(m => ({
+                          machine_no: m.machineNo,
+                          operator_name: m.operatorName,
+                          current_production: m.currentProduction?.product ? {
+                            product: m.currentProduction.product,
+                            cavity: m.currentProduction.cavity,
+                            trg_cycle_sec: m.currentProduction.targetCycle,
+                            trg_run_time_min: m.currentProduction.targetRunTime,
+                            part_wt_gm: m.currentProduction.partWeight,
+                            act_part_wt_gm: m.currentProduction.actualPartWeight,
+                            act_cycle_sec: m.currentProduction.actualCycle,
+                            shots_start: m.currentProduction.shotsStart,
+                            shots_end: m.currentProduction.shotsEnd,
+                            target_qty_nos: m.currentProduction.targetQty,
+                            actual_qty_nos: m.currentProduction.actualQty,
+                            ok_prod_qty_nos: m.currentProduction.okProdQty,
+                            ok_prod_kgs: m.currentProduction.okProdKgs,
+                            ok_prod_percent: m.currentProduction.okProdPercent,
+                            rej_kgs: m.currentProduction.rejKgs,
+                            lumps_kgs: m.currentProduction.lumps,
+                            run_time_mins: m.currentProduction.runTime,
+                            down_time_min: m.currentProduction.downTime,
+                            stoppage_reason: m.currentProduction.stoppageReason,
+                            stoppage_start: m.currentProduction.startTime,
+                            stoppage_end: m.currentProduction.endTime,
+                            mould_change: m.currentProduction.mouldChange,
+                            remark: m.currentProduction.remark,
+                            part_wt_check: m.currentProduction.partWeightCheck,
+                            cycle_time_check: m.currentProduction.cycleTimeCheck
+                          } : null,
+                          changeover: m.changeover?.product ? {
+                            product: m.changeover.product,
+                            cavity: m.changeover.cavity,
+                            trg_cycle_sec: m.changeover.targetCycle,
+                            trg_run_time_min: m.changeover.targetRunTime,
+                            part_wt_gm: m.changeover.partWeight,
+                            act_part_wt_gm: m.changeover.actualPartWeight,
+                            act_cycle_sec: m.changeover.actualCycle,
+                            shots_start: m.changeover.shotsStart,
+                            shots_end: m.changeover.shotsEnd,
+                            target_qty_nos: m.changeover.targetQty,
+                            actual_qty_nos: m.changeover.actualQty,
+                            ok_prod_qty_nos: m.changeover.okProdQty,
+                            ok_prod_kgs: m.changeover.okProdKgs,
+                            ok_prod_percent: m.changeover.okProdPercent,
+                            rej_kgs: m.changeover.rejKgs,
+                            lumps_kgs: m.changeover.lumps,
+                            run_time_mins: m.changeover.runTime,
+                            down_time_min: m.changeover.downTime,
+                            stoppage_reason: m.changeover.stoppageReason,
+                            changeover_start_time: m.changeover.startTime,
+                            changeover_end_time: m.changeover.endTime,
+                            changeover_duration_min: m.changeover.totalTime || null,
+                            changeover_reason: m.changeover.stoppageReason || m.changeover.remark || null,
+                            mould_change: m.changeover.mouldChange,
+                            remark: m.changeover.remark,
+                            part_wt_check: m.changeover.partWeightCheck,
+                            cycle_time_check: m.changeover.cycleTimeCheck
+                          } : null
+                        })).filter(entry => entry.current_production || entry.changeover);
+
+                        // Use /api/dpr-excel for Excel imports (separate table, no FK constraints)
+                        const response = await fetch('/api/dpr-excel', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            report_date: converted.date,
+                            shift: converted.shift,
+                            shift_incharge: converted.shiftIncharge,
+                            machine_entries: machineEntriesForApi,
+                            created_by: user?.email || 'user',
+                            excel_file_name: 'ExcelFileReader import'
+                          })
+                        });
+
+                        const result = await response.json();
+                        if (result.success) {
+                          savedCount++;
+                          savedIds.push(result.data?.id || converted.id);
+                          console.log('✅ Saved DPR to database:', converted.date, converted.shift);
+                        } else {
+                          // Check if it's a duplicate error
+                          if (result.error?.includes('already exists')) {
+                            console.log('⚠️ DPR already exists, skipping:', converted.date, converted.shift);
+                          } else {
+                            failedCount++;
+                            console.error('❌ Failed to save DPR:', result.error);
+                          }
+                        }
+                      } catch (err) {
+                        failedCount++;
+                        console.error('❌ Error saving DPR:', err);
+                      }
+                    }
+
+                    // Set flag to skip the next auto-fetch (we'll load the data ourselves)
+                    setSkipNextFetch(true);
+
                     // Update date and shift from first imported data
                     if (convertedDataArray.length > 0) {
                       setSelectedDate(convertedDataArray[0].date);
                       setSelectedShift(convertedDataArray[0].shift as 'DAY' | 'NIGHT');
                     }
 
-                    // Add all DPR objects, replacing any existing ones for same date+shift
+                    // Add all DPR objects to local state
                     setDprData(prev => {
                       let filtered = prev;
-                      // Remove existing entries for each imported shift
                       convertedDataArray.forEach(converted => {
                         filtered = filtered.filter(dpr => !(dpr.date === converted.date && dpr.shift === converted.shift));
                       });
                       return [...filtered, ...convertedDataArray];
                     });
 
+                    // Only refresh from database if some saves were successful
+                    // Otherwise keep showing local data
+                    if (savedCount > 0) {
+                      setTimeout(() => {
+                        loadDprData();
+                      }, 500);
+                    }
+
                     const shiftsInfo = convertedDataArray.map(d => `${d.shift} (${d.machines.length} machines)`).join(', ');
-                    alert(`DPR imported successfully!\n\nImported:\n- ${shiftsInfo}\n- Date: ${new Date(convertedDataArray[0].date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}\n- Shift Incharge: ${convertedDataArray[0].shiftIncharge}`);
+                    
+                    if (savedCount > 0) {
+                      alert(`DPR imported successfully!\n\nImported:\n- ${shiftsInfo}\n- Date: ${new Date(convertedDataArray[0].date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}\n- Shift Incharge: ${convertedDataArray[0].shiftIncharge}\n\nSaved to database: ${savedCount} entries${failedCount > 0 ? `\nFailed: ${failedCount} entries (check console for details)` : ''}`);
+                    } else {
+                      // All saves failed - show local data only with warning
+                      alert(`⚠️ DPR imported locally but failed to save to database!\n\nImported:\n- ${shiftsInfo}\n- Date: ${new Date(convertedDataArray[0].date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}\n\nThe data is shown locally but will be lost on page refresh.\nPlease check the browser console for error details.\n\nCommon issue: Machine numbers in Excel don't match the lines table. Run the database migration to fix this.`);
+                    }
                     
                     // Close the modal
                     setShowExcelReader(false);
@@ -3700,6 +3882,16 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
           onClose={() => setShowManualEntry(false)}
         />
       )}
+
+      {/* Blocking Loading Modal for Post to Stock and Excel Import */}
+      <BlockingLoadingModal
+        isOpen={isPostingToStock || isImporting}
+        title={isPostingToStock ? "Posting to Stock Ledger..." : "Importing Excel Data..."}
+        message={isPostingToStock 
+          ? "Processing DPR entries. Please wait. Do not refresh or close this tab."
+          : "Importing DPR data from Excel. Please wait. Do not refresh or close this tab."}
+        showWarning={true}
+      />
     </div>
   );
 };
@@ -4348,121 +4540,125 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
       }
 
       // Convert API response to DPRData format for local state
+      // Group machine entries by machine_no (combine current and changeover) - same as load logic
       const apiDpr = result.data;
-      const machinesData: MachineData[] = (apiDpr.dpr_machine_entries || []).map((me: any) => ({
-        machineNo: me.machine_no,
-        operatorName: me.operator_name || '',
-        currentProduction: me.section_type === 'current' ? {
-          product: me.product || '',
-          cavity: me.cavity || 0,
-          targetCycle: me.trg_cycle_sec || 0,
-          targetRunTime: me.trg_run_time_min || 0,
-          partWeight: me.part_wt_gm || 0,
-          actualPartWeight: me.act_part_wt_gm || 0,
-          actualCycle: me.act_cycle_sec || 0,
-          shotsStart: me.shots_start || 0,
-          shotsEnd: me.shots_end || 0,
-          targetQty: me.target_qty_nos || 0,
-          actualQty: me.actual_qty_nos || 0,
-          okProdQty: me.ok_prod_qty_nos || 0,
-          okProdKgs: me.ok_prod_kgs || 0,
-          okProdPercent: me.ok_prod_percent || 0,
-          rejKgs: me.rej_kgs || 0,
-          lumps: me.lumps_kgs || 0,
-          runTime: me.run_time_mins || 0,
-          downTime: me.down_time_min || 0,
-          stoppageReason: me.stoppage_reason || '',
-          startTime: me.stoppage_start || '',
-          endTime: me.stoppage_end || '',
-          totalTime: (me.run_time_mins || 0) + (me.down_time_min || 0),
-          mouldChange: me.mould_change || '',
-          remark: me.remark || '',
-          partWeightCheck: me.part_wt_check || '',
-          cycleTimeCheck: me.cycle_time_check || ''
-        } : {
-          product: '',
-          cavity: 0,
-          targetCycle: 0,
-          targetRunTime: 0,
-          partWeight: 0,
-          actualPartWeight: 0,
-          actualCycle: 0,
-          shotsStart: 0,
-          shotsEnd: 0,
-          targetQty: 0,
-          actualQty: 0,
-          okProdQty: 0,
-          okProdKgs: 0,
-          okProdPercent: 0,
-          rejKgs: 0,
-          lumps: 0,
-          runTime: 0,
-          downTime: 0,
-          stoppageReason: '',
-          startTime: '',
-          endTime: '',
-          totalTime: 0,
-          mouldChange: '',
-          remark: '',
-          partWeightCheck: '',
-          cycleTimeCheck: ''
-        },
-        changeover: me.section_type === 'changeover' ? {
-          product: me.product || '',
-          cavity: me.cavity || 0,
-          targetCycle: me.trg_cycle_sec || 0,
-          targetRunTime: me.trg_run_time_min || 0,
-          partWeight: me.part_wt_gm || 0,
-          actualPartWeight: me.act_part_wt_gm || 0,
-          actualCycle: me.act_cycle_sec || 0,
-          shotsStart: me.shots_start || 0,
-          shotsEnd: me.shots_end || 0,
-          targetQty: me.target_qty_nos || 0,
-          actualQty: me.actual_qty_nos || 0,
-          okProdQty: me.ok_prod_qty_nos || 0,
-          okProdKgs: me.ok_prod_kgs || 0,
-          okProdPercent: me.ok_prod_percent || 0,
-          rejKgs: me.rej_kgs || 0,
-          lumps: me.lumps_kgs || 0,
-          runTime: me.run_time_mins || 0,
-          downTime: me.down_time_min || 0,
-          stoppageReason: me.stoppage_reason || '',
-          startTime: me.changeover_start_time || '',
-          endTime: me.changeover_end_time || '',
-          totalTime: (me.run_time_mins || 0) + (me.down_time_min || 0),
-          mouldChange: me.mould_change || '',
-          remark: me.remark || '',
-          partWeightCheck: me.part_wt_check || '',
-          cycleTimeCheck: me.cycle_time_check || ''
-        } : {
-          product: '',
-          cavity: 0,
-          targetCycle: 0,
-          targetRunTime: 0,
-          partWeight: 0,
-          actualPartWeight: 0,
-          actualCycle: 0,
-          shotsStart: 0,
-          shotsEnd: 0,
-          targetQty: 0,
-          actualQty: 0,
-          okProdQty: 0,
-          okProdKgs: 0,
-          okProdPercent: 0,
-          rejKgs: 0,
-          lumps: 0,
-          runTime: 0,
-          downTime: 0,
-          stoppageReason: '',
-          startTime: '',
-          endTime: '',
-          totalTime: 0,
-          mouldChange: '',
-          remark: '',
-          partWeightCheck: '',
-          cycleTimeCheck: ''
+      const machineMap = new Map<string, MachineData>();
+      
+      (apiDpr.dpr_machine_entries || []).forEach((me: any) => {
+        const machineNo = me.machine_no;
+        const isCurrent = me.section_type === 'current' && !me.is_changeover;
+        const isChangeover = me.section_type === 'changeover' || me.is_changeover;
+        
+        if (!machineMap.has(machineNo)) {
+          // Create new machine entry with empty defaults
+          machineMap.set(machineNo, {
+            machineNo: machineNo,
+            operatorName: me.operator_name || '',
+            currentProduction: {
+              product: '',
+              cavity: 0,
+              targetCycle: 0,
+              targetRunTime: 0,
+              partWeight: 0,
+              actualPartWeight: 0,
+              actualCycle: 0,
+              shotsStart: 0,
+              shotsEnd: 0,
+              targetQty: 0,
+              actualQty: 0,
+              okProdQty: 0,
+              okProdKgs: 0,
+              okProdPercent: 0,
+              rejKgs: 0,
+              lumps: 0,
+              runTime: 0,
+              downTime: 0,
+              stoppageReason: '',
+              startTime: '',
+              endTime: '',
+              totalTime: 0,
+              mouldChange: '',
+              remark: '',
+              partWeightCheck: '',
+              cycleTimeCheck: ''
+            },
+            changeover: {
+              product: '',
+              cavity: 0,
+              targetCycle: 0,
+              targetRunTime: 0,
+              partWeight: 0,
+              actualPartWeight: 0,
+              actualCycle: 0,
+              shotsStart: 0,
+              shotsEnd: 0,
+              targetQty: 0,
+              actualQty: 0,
+              okProdQty: 0,
+              okProdKgs: 0,
+              okProdPercent: 0,
+              rejKgs: 0,
+              lumps: 0,
+              runTime: 0,
+              downTime: 0,
+              stoppageReason: '',
+              startTime: '',
+              endTime: '',
+              totalTime: 0,
+              mouldChange: '',
+              remark: '',
+              partWeightCheck: '',
+              cycleTimeCheck: ''
+            }
+          });
         }
-      }));
+        
+        const machine = machineMap.get(machineNo)!;
+        
+        // Update operator name if present
+        if (me.operator_name) {
+          machine.operatorName = me.operator_name;
+        }
+        
+        // Build production data object
+        const productionData = {
+          product: me.product || '',
+          cavity: me.cavity || 0,
+          targetCycle: me.trg_cycle_sec || 0,
+          targetRunTime: me.trg_run_time_min || 0,
+          partWeight: me.part_wt_gm || 0,
+          actualPartWeight: me.act_part_wt_gm || 0,
+          actualCycle: me.act_cycle_sec || 0,
+          shotsStart: me.shots_start || 0,
+          shotsEnd: me.shots_end || 0,
+          targetQty: me.target_qty_nos || 0,
+          actualQty: me.actual_qty_nos || 0,
+          okProdQty: me.ok_prod_qty_nos || 0,
+          okProdKgs: me.ok_prod_kgs || 0,
+          okProdPercent: me.ok_prod_percent || 0,
+          rejKgs: me.rej_kgs || 0,
+          lumps: me.lumps_kgs || 0,
+          runTime: me.run_time_mins || 0,
+          downTime: me.down_time_min || 0,
+          stoppageReason: me.stoppage_reason || '',
+          startTime: isChangeover ? (me.changeover_start_time || '') : (me.stoppage_start || ''),
+          endTime: isChangeover ? (me.changeover_end_time || '') : (me.stoppage_end || ''),
+          totalTime: (me.run_time_mins || 0) + (me.down_time_min || 0),
+          mouldChange: me.mould_change || '',
+          remark: me.remark || '',
+          partWeightCheck: me.part_wt_check || '',
+          cycleTimeCheck: me.cycle_time_check || ''
+        };
+        
+        // Assign to current or changeover based on section_type
+        if (isCurrent) {
+          machine.currentProduction = productionData;
+        } else if (isChangeover) {
+          machine.changeover = productionData;
+        }
+      });
+      
+      const machinesData: MachineData[] = Array.from(machineMap.values());
 
       // Calculate summary
       console.log('📊 Calculating summary from', machinesData.length, 'machines');

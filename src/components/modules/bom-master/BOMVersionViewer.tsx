@@ -115,10 +115,10 @@ const BOMVersionViewer: React.FC<BOMVersionViewerProps> = ({ bom, onClose }) => 
           <div className="flex justify-between items-center mb-6">
             <div>
               <h3 className="text-lg font-medium text-gray-900">
-                BOM Versions - {bom.product_name}
+                BOM Versions - {bom.item_name || bom.sfg_code || bom.item_code}
               </h3>
               <p className="text-sm text-gray-500">
-                Code: {bom.product_code} • Category: {bom.category}
+                Code: {bom.sfg_code || bom.item_code} • Category: {bom.category}
               </p>
             </div>
             <div className="flex space-x-3">

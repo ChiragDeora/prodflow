@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Wrench, Package, Link, Building, MoreHorizontal, Settings } from 'lucide-react';
 import Image from 'next/image';
 import MachineMaster from './MachineMaster';
@@ -12,6 +12,7 @@ import BOMMaster from '../bom-master';
 import CommercialMaster from '../commercial-master';
 import OthersMaster from './OthersMaster';
 import SparePartsMaster from './SparePartsMaster';
+import { useAccessControl } from '@/lib/useAccessControl';
 
 import { 
   Machine as SupabaseMachine, 
@@ -93,12 +94,25 @@ interface MasterDataModuleProps {
   
   // Common handlers
   openExcelReader: (type: string) => void;
-  handleAction: (actionType: ActionType, item: any, itemType: ItemType | 'line' | 'color_label' | 'party_name') => Promise<void>;
+  handleAction: (actionType: ActionType, item: any, itemType: 'line' | ItemType) => Promise<void>;
   setViewingNameplate: (nameplate: string | null) => void;
   InfoButton: React.ComponentType<{ type: string }>;
   // Callback to collapse sidebar when sub nav is clicked
   onSubNavClick?: () => void;
 }
+
+// Tab configuration with permission mapping
+const TAB_CONFIG = [
+  { id: 'machines', label: 'Machine Master', resource: 'Machine Master', icon: 'wrench' },
+  { id: 'lines', label: 'Line Master', resource: 'Line Master', icon: 'link' },
+  { id: 'molds', label: 'Mold Master', resource: 'Mold Master', icon: 'mold' },
+  { id: 'raw_materials', label: 'RM Master', resource: 'Raw Materials Master', icon: 'raw_materials' },
+  { id: 'packing_materials', label: 'PM Master', resource: 'Packing Materials Master', icon: 'packing_materials' },
+  { id: 'bom_master', label: 'BOM Master', resource: 'BOM Master', icon: 'package' },
+  { id: 'commercial_master', label: 'Commercial Master', resource: 'Commercial Master', icon: 'building' },
+  { id: 'spare_parts', label: 'Spare Parts', resource: 'Spare Parts', icon: 'settings' },
+  { id: 'others', label: 'Others', resource: 'Others', icon: 'more' },
+];
 
 const MasterDataModule: React.FC<MasterDataModuleProps> = ({
   machinesMaster,
@@ -149,13 +163,27 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
   units,
   onSubNavClick
 }) => {
-  // Initialize activeTab from localStorage or default to 'machines'
+  const { canAccessResource, isRootAdmin } = useAccessControl();
+
+  // Filter tabs based on user permissions
+  const accessibleTabs = useMemo(() => {
+    // Root admin can see all tabs
+    if (isRootAdmin) return TAB_CONFIG;
+    
+    return TAB_CONFIG.filter(tab => canAccessResource(tab.resource));
+  }, [canAccessResource, isRootAdmin]);
+
+  // Initialize activeTab from localStorage or default to first accessible tab
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== 'undefined') {
       const savedTab = localStorage.getItem('masterDataActiveTab');
-      return savedTab || 'machines';
+      // Check if saved tab is still accessible
+      if (savedTab && accessibleTabs.some(tab => tab.id === savedTab)) {
+        return savedTab;
+      }
     }
-    return 'machines';
+    // Default to first accessible tab
+    return accessibleTabs.length > 0 ? accessibleTabs[0].id : 'machines';
   });
 
   // Save active tab to localStorage whenever it changes
@@ -170,110 +198,54 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
     }
   };
 
+  // Get icon component for tab
+  const getTabIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'wrench': return <Wrench className="w-5 h-5 inline mr-2" />;
+      case 'link': return <Link className="w-5 h-5 inline mr-2" />;
+      case 'mold': return <Image src="/mold_vector.png" alt="Mold" width={20} height={20} className="inline mr-2 w-8 h-8" />;
+      case 'raw_materials': return <Image src="/raw_materials_vector.png" alt="Raw Materials" width={20} height={20} className="inline mr-2 w-8 h-8" />;
+      case 'packing_materials': return <Image src="/packing_material_vector.png" alt="Packing Materials" width={20} height={20} className="inline mr-2 w-8 h-8" />;
+      case 'package': return <Package className="w-5 h-5 inline mr-2" />;
+      case 'building': return <Building className="w-5 h-5 inline mr-2" />;
+      case 'settings': return <Settings className="w-5 h-5 inline mr-2" />;
+      case 'more': return <MoreHorizontal className="w-5 h-5 inline mr-2" />;
+      default: return null;
+    }
+  };
+
+  // If user has no access to any tabs, show a message
+  if (accessibleTabs.length === 0) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-8">
+        <div className="text-center">
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">No Access</h3>
+          <p className="text-gray-600">You don't have permission to access any Master Data tabs.</p>
+          <p className="text-sm text-gray-500 mt-2">Please contact your administrator for access.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col">
-      {/* Tab Navigation */}
+      {/* Tab Navigation - Only shows tabs user has permission for */}
       <div className="border-b border-gray-200 bg-white">
         <nav className="flex space-x-8 px-6 overflow-x-auto">
-          <button
-            onClick={() => handleTabChange('machines')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-              activeTab === 'machines'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Wrench className="w-5 h-5 inline mr-2" />
-            Machine Master
-          </button>
-          <button
-            onClick={() => handleTabChange('lines')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-              activeTab === 'lines'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Link className="w-5 h-5 inline mr-2" />
-            Line Master
-          </button>
-          <button
-            onClick={() => handleTabChange('molds')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-              activeTab === 'molds'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Image src="/mold_vector.png" alt="Mold" width={20} height={20} className="inline mr-2 w-8 h-8" />
-            Mold Master
-          </button>
-          <button
-            onClick={() => handleTabChange('raw_materials')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-              activeTab === 'raw_materials'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Image src="/raw_materials_vector.png" alt="Raw Materials" width={20} height={20} className="inline mr-2 w-8 h-8" />
-            RM Master
-          </button>
-          <button
-            onClick={() => handleTabChange('packing_materials')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-              activeTab === 'packing_materials'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Image src="/packing_material_vector.png" alt="Packing Materials" width={20} height={20} className="inline mr-2 w-8 h-8" />
-            PM Master
-          </button>
-          <button
-            onClick={() => handleTabChange('bom_master')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-              activeTab === 'bom_master'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Package className="w-5 h-5 inline mr-2" />
-            BOM Master
-          </button>
-          <button
-            onClick={() => handleTabChange('commercial_master')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-              activeTab === 'commercial_master'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Building className="w-5 h-5 inline mr-2" />
-            Commercial Master
-          </button>
-          <button
-            onClick={() => handleTabChange('spare_parts')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-              activeTab === 'spare_parts'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Settings className="w-5 h-5 inline mr-2" />
-            Spare Parts
-          </button>
-          <button
-            onClick={() => handleTabChange('others')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-              activeTab === 'others'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <MoreHorizontal className="w-5 h-5 inline mr-2" />
-            Others
-          </button>
+          {accessibleTabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => handleTabChange(tab.id)}
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                activeTab === tab.id
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {getTabIcon(tab.icon)}
+              {tab.label}
+            </button>
+          ))}
         </nav>
       </div>
 
@@ -386,10 +358,7 @@ const MasterDataModule: React.FC<MasterDataModuleProps> = ({
         )}
 
         {activeTab === 'spare_parts' && (
-          <SparePartsMaster 
-            machines={machinesMaster.map(m => ({ id: m.id || '', machine_id: m.machine_id }))}
-            molds={moldsMaster.map(m => ({ id: m.id || '', mold_id: m.mold_id }))}
-          />
+          <SparePartsMaster />
         )}
 
         {activeTab === 'others' && (

@@ -6,8 +6,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { generateDocumentNumber, FORM_CODES } from '@/utils/formCodeUtils';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const date = searchParams.get('date') || new Date().toISOString().split('T')[0];

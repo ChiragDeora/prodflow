@@ -1,7 +1,11 @@
 import { NextRequest } from 'next/server';
 import { createHash, randomBytes } from 'crypto';
 
-const CSRF_SECRET = process.env.CSRF_SECRET || 'your-csrf-secret-key-change-in-production';
+const CSRF_SECRET = process.env.CSRF_SECRET;
+
+if (!CSRF_SECRET) {
+  throw new Error('CSRF_SECRET environment variable is required. Set it in your .env file.');
+}
 
 export function generateCSRFToken(sessionId: string): string {
   const timestamp = Date.now().toString();

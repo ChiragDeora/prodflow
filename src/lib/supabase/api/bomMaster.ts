@@ -230,6 +230,15 @@ export const bomMasterAPI = {
       // Fix: Ensure quantity fields are properly converted to numbers for FG and LOCAL BOMs
       let processedBomMaster = { ...bomMaster };
       
+      // Normalize item_name for SFG BOM: trim whitespace and ensure consistent format
+      if (tableName === 'sfg_bom' && processedBomMaster.item_name) {
+        processedBomMaster.item_name = processedBomMaster.item_name.trim();
+        // Remove any leading/trailing spaces and normalize
+        if (processedBomMaster.item_name === '') {
+          processedBomMaster.item_name = undefined;
+        }
+      }
+      
       console.log('🔍 Original BOM Master data:', bomMaster);
       console.log('🔍 Original qty_meter:', bomMaster.qty_meter, 'Type:', typeof bomMaster.qty_meter);
       console.log('🔍 Original qty_meter_2:', bomMaster.qty_meter_2, 'Type:', typeof bomMaster.qty_meter_2);

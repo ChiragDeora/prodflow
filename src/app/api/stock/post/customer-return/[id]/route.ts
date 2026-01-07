@@ -5,11 +5,18 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { postCustomerReturnToStock } from '@/lib/stock';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Verify authentication
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const { id } = await params;
     
@@ -20,8 +27,8 @@ export async function POST(
       );
     }
     
-    const body = await request.json().catch(() => ({}));
-    const postedBy = body.posted_by || 'system';
+    // Get user from authenticated session
+    const postedBy = auth.user?.username || 'system';
     
     const result = await postCustomerReturnToStock(id, postedBy);
     

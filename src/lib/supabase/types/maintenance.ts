@@ -5,7 +5,7 @@ export interface MaintenanceTask {
   description?: string;
   task_type: 'preventive' | 'corrective' | 'emergency' | 'line_maintenance';
   priority: 'low' | 'medium' | 'high' | 'critical';
-  status: 'pending' | 'in_progress' | 'completed' | 'overdue' | 'cancelled';
+  status: 'pending' | 'in_progress' | 'completed' | 'overdue' | 'cancelled' | 'skipped';
   machine_id?: string;
   line_id?: string;
   unit?: string;

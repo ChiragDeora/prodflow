@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, Printer, Upload, CheckCircle, Loader2 } from 'lucide-react';
-import { misAPI, rawMaterialAPI } from '../../../lib/supabase';
+import { misAPI, rawMaterialAPI, packingMaterialAPI } from '../../../lib/supabase';
 import PrintHeader from '../../shared/PrintHeader';
 import { generateDocumentNumber, FORM_CODES } from '../../../utils/formCodeUtils';
 
@@ -14,8 +14,8 @@ interface MISItem {
   currentStock: string;
   issueQty: string;
   remarks: string;
-  // For RM items
-  rmType?: string; // regrind or HP
+  // Sub-type selection (RM Type, PM Type, or Spares Type)
+  subType?: string;
   grade?: string;
 }
 
@@ -46,17 +46,23 @@ const MISForm: React.FC = () => {
   const [stockStatus, setStockStatus] = useState<'NOT_SAVED' | 'SAVED' | 'POSTING' | 'POSTED' | 'ERROR'>('NOT_SAVED');
   const [stockMessage, setStockMessage] = useState<string>('');
   
-  // Stock items and balances
-  const [stockItems, setStockItems] = useState<any[]>([]);
-  const [stockBalances, setStockBalances] = useState<Record<string, number>>({});
-  const [loadingStock, setLoadingStock] = useState(false);
+  // Loading state per row
+  const [loadingStock, setLoadingStock] = useState<Record<string, boolean>>({});
   
-  // RM Type dropdown data (HP, Regrind, etc. with stock)
-  const [rmTypesWithStock, setRmTypesWithStock] = useState<Array<{ type: string; stock: number }>>([]);
-  const [selectedRmType, setSelectedRmType] = useState<string>('');
-  const [gradesForRmType, setGradesForRmType] = useState<Array<{ itemCode: string; grade: string; stock: number; supplier?: string }>>([]);
+  // Sub-types with stock (RM Types, PM Categories, Spares Categories)
+  // Format: { type: string; stock: number }[]
+  const [subTypesWithStock, setSubTypesWithStock] = useState<Array<{ type: string; stock: number }>>([]);
+  // Selected sub-type per row (itemId -> subType)
+  const [selectedSubType, setSelectedSubType] = useState<Record<string, string>>({});
+  // Items/grades for sub-type per row (itemId -> items[])
+  const [itemsForSubType, setItemsForSubType] = useState<Record<string, Array<{ itemCode: string; grade: string; stock: number; supplier?: string }>>>({});
   // Raw materials master data
   const [rawMaterials, setRawMaterials] = useState<any[]>([]);
+  // Packing materials master data
+  const [packingMaterials, setPackingMaterials] = useState<any[]>([]);
+  // Stock items and balances per type
+  const [stockItemsByType, setStockItemsByType] = useState<Record<string, any[]>>({});
+  const [stockBalancesByType, setStockBalancesByType] = useState<Record<string, Record<string, number>>>({});
 
   // Generate document number
   useEffect(() => {
@@ -77,266 +83,306 @@ const MISForm: React.FC = () => {
       [field]: value
     }));
     
-    // When type of issue changes, auto-fill the table
+    // When type of issue changes, fetch sub-types for that type
     if (field === 'typeOfIssue' && value) {
-      fetchItemsByType(value as 'RM' | 'PM' | 'Spares');
+      fetchSubTypesByMainType(value as 'RM' | 'PM' | 'SPARE');
+      // Clear all row-level selections
+      setSelectedSubType({});
+      setItemsForSubType({});
+      // Reset all items
+      setFormData(prev => ({
+        ...prev,
+        items: prev.items.map(item => ({
+          ...item,
+          itemCode: '',
+          itemDescription: '',
+          currentStock: '',
+          uom: '',
+          subType: ''
+        }))
+      }));
     }
   };
 
-  // Fetch items by type and populate table
-  const fetchItemsByType = async (type: 'RM' | 'PM' | 'SPARE') => {
-    setLoadingStock(true);
+  // Fetch sub-types (RM Types, PM Categories, Spares Categories) by main type - optimized
+  const fetchSubTypesByMainType = async (type: 'RM' | 'PM' | 'SPARE') => {
+    setLoadingStock(prev => ({ ...prev, ['main']: true }));
     try {
       if (type === 'RM') {
-        // For RM, fetch from raw_materials table to get types (HP, ICP, etc.) and grades
-        const rmData = await rawMaterialAPI.getAll();
-        setRawMaterials(rmData);
+        // For RM, fetch raw materials types first (cached)
+        if (rawMaterials.length === 0) {
+          const rmData = await rawMaterialAPI.getAll();
+          setRawMaterials(rmData);
+        }
         
-        // Also fetch stock items and balances for RM
-        const response = await fetch(`/api/admin/stock-items?item_type=RM`);
-        const result = await response.json();
+        // Use batch API to get all RM balances at once
+        const balanceResponse = await fetch(`/api/stock/balance?item_type=RM`);
+        const balanceResult = await balanceResponse.json();
         
-        if (result.success && result.data) {
-          const items = result.data;
-          setStockItems(items);
+        if (balanceResult.success && balanceResult.data) {
+          // Aggregate balances by item_code and group by sub_category
+          const subTypeGroups: Record<string, number> = {};
           
-          // Fetch stock balances for all items
-          const balancePromises = items.map(async (item: any) => {
-            try {
-              const balanceRes = await fetch(`/api/stock/balance?item_code=${item.item_code}&total=true`);
-              const balanceData = await balanceRes.json();
-              // API returns { total: number } when total=true is set
-              return { itemCode: item.item_code, balance: balanceData.total || balanceData.total_balance || 0, item };
-            } catch (error) {
-              return { itemCode: item.item_code, balance: 0, item };
-            }
-          });
-          
-          const balances = await Promise.all(balancePromises);
-          const balanceMap: Record<string, number> = {};
-          balances.forEach(b => {
-            balanceMap[b.itemCode] = b.balance;
-          });
-          setStockBalances(balanceMap);
-          
-          // Group by RM type (HP, ICP, REGRIND, etc.) - extract from sub_category
-          // sub_category might be "HP", "RM-HP", "REGRIND", etc.
-          const typeGroups: Record<string, number> = {};
-          balances.forEach(b => {
-            let rmType = b.item.sub_category || 'Other';
+          balanceResult.data.forEach((balance: any) => {
+            let rmType = balance.sub_category || 'Other';
             // Remove "RM-" prefix if present
             if (rmType.startsWith('RM-')) {
               rmType = rmType.replace('RM-', '');
             }
-            if (!typeGroups[rmType]) {
-              typeGroups[rmType] = 0;
+            if (!subTypeGroups[rmType]) {
+              subTypeGroups[rmType] = 0;
             }
-            typeGroups[rmType] += b.balance;
+            subTypeGroups[rmType] += balance.current_balance || 0;
           });
           
           // Also add types from raw_materials that might not have stock yet
-          const uniqueRmTypes = [...new Set(rmData.map((rm: any) => rm.type))];
+          const uniqueRmTypes = [...new Set(rawMaterials.map((rm: any) => rm.type))];
           uniqueRmTypes.forEach(t => {
-            if (!typeGroups[t]) {
-              typeGroups[t] = 0;
+            if (!subTypeGroups[t]) {
+              subTypeGroups[t] = 0;
             }
           });
           
-          // Convert to array - show all types, sorted by stock descending
-          const typesWithStock = Object.entries(typeGroups)
+          // Convert to array - show all sub-types, sorted by stock descending
+          const subTypesWithStockArray = Object.entries(subTypeGroups)
             .map(([type, stock]) => ({ type, stock }))
-            .sort((a, b) => b.stock - a.stock); // Sort by stock descending
+            .sort((a, b) => b.stock - a.stock);
           
-          setRmTypesWithStock(typesWithStock);
-          
-          // Reset table to empty
-          setFormData(prev => ({
-            ...prev,
-            items: [{ id: '1', itemCode: '', itemDescription: '', uom: '', currentStock: '', issueQty: '', remarks: '' }]
-          }));
+          setSubTypesWithStock(subTypesWithStockArray);
         }
-      } else {
-        // For PM and SPARE, use the old logic
-        let itemType: 'RM' | 'PM' | 'SFG' | 'FG' | 'SPARE' | undefined;
-        if (type === 'PM') itemType = 'PM';
-        if (type === 'SPARE') itemType = 'SPARE';
-        
-        let url = `/api/admin/stock-items`;
-        if (itemType) {
-          url += `?item_type=${itemType}`;
+      } else if (type === 'PM') {
+        // For PM, fetch packing materials first (cached)
+        if (packingMaterials.length === 0) {
+          const pmData = await packingMaterialAPI.getAll();
+          setPackingMaterials(pmData);
         }
         
-        const response = await fetch(url);
-        const result = await response.json();
+        // Fetch only stock items (not balances) to get categories quickly
+        const stockItemsResponse = await fetch(`/api/admin/stock-items?item_type=PM`);
+        const stockItemsResult = await stockItemsResponse.json();
         
-        if (result.success && result.data) {
-          let items = result.data;
+        if (stockItemsResult.success && stockItemsResult.data) {
+          // Group by category from stock items
+          const subTypeGroups: Record<string, number> = {};
           
-          setStockItems(items);
-          
-          // Fetch stock balances for all items
-          const balancePromises = items.map(async (item: any) => {
-            try {
-              const balanceRes = await fetch(`/api/stock/balance?item_code=${item.item_code}&total=true`);
-              const balanceData = await balanceRes.json();
-              // API returns { total: number } when total=true is set
-              return { itemCode: item.item_code, balance: balanceData.total || balanceData.total_balance || 0 };
-            } catch (error) {
-              return { itemCode: item.item_code, balance: 0 };
+          // Get unique categories from stock items
+          const categories = new Set<string>();
+          stockItemsResult.data.forEach((item: any) => {
+            if (item.category) {
+              categories.add(item.category);
             }
           });
           
-          const balances = await Promise.all(balancePromises);
-          const balanceMap: Record<string, number> = {};
-          balances.forEach(b => {
-            balanceMap[b.itemCode] = b.balance;
+          // Initialize all categories with 0 stock (we'll fetch balances on-demand)
+          categories.forEach(cat => {
+            subTypeGroups[cat] = 0;
           });
-          setStockBalances(balanceMap);
           
-          // Auto-fill table with items that have stock > 0
-          const itemsWithStock = items
-            .filter((item: any) => (balanceMap[item.item_code] || 0) > 0)
-            .slice(0, 10); // Limit to 10 items initially
+          // Also add categories from packing_materials that might not have stock yet
+          const uniquePmCategories = [...new Set(packingMaterials.map((pm: any) => pm.category))];
+          uniquePmCategories.forEach(cat => {
+            if (cat && !subTypeGroups[cat]) {
+              subTypeGroups[cat] = 0;
+            }
+          });
           
-          const newItems: MISItem[] = itemsWithStock.map((item: any, index: number) => ({
-            id: (index + 1).toString(),
-            itemCode: item.item_code || '',
-            itemDescription: item.item_name || '',
-            uom: item.unit_of_measure || '',
-            currentStock: (balanceMap[item.item_code] || 0).toString(),
-            issueQty: '',
-            remarks: ''
-          }));
+          // Convert to array - show all categories
+          const subTypesWithStockArray = Object.entries(subTypeGroups)
+            .map(([type, stock]) => ({ type, stock }))
+            .sort((a, b) => a.type.localeCompare(b.type)); // Sort alphabetically
           
-          // If no items with stock, still show empty row
-          if (newItems.length === 0) {
-            setFormData(prev => ({
-              ...prev,
-              items: [{ id: '1', itemCode: '', itemDescription: '', uom: '', currentStock: '', issueQty: '', remarks: '' }]
-            }));
-          } else {
-            setFormData(prev => ({
-              ...prev,
-              items: newItems
-            }));
-          }
+          setSubTypesWithStock(subTypesWithStockArray);
+        }
+      } else if (type === 'SPARE') {
+        // For SPARE, fetch only stock items to get categories quickly
+        const stockItemsResponse = await fetch(`/api/admin/stock-items?item_type=SPARE`);
+        const stockItemsResult = await stockItemsResponse.json();
+        
+        if (stockItemsResult.success && stockItemsResult.data) {
+          // Group by category from stock items
+          const subTypeGroups: Record<string, number> = {};
+          
+          // Get unique categories from stock items
+          const categories = new Set<string>();
+          stockItemsResult.data.forEach((item: any) => {
+            if (item.category) {
+              categories.add(item.category);
+            }
+          });
+          
+          // Initialize all categories with 0 stock (we'll fetch balances on-demand)
+          categories.forEach(cat => {
+            subTypeGroups[cat] = 0;
+          });
+          
+          // Convert to array - show all categories
+          const subTypesWithStockArray = Object.entries(subTypeGroups)
+            .map(([type, stock]) => ({ type, stock }))
+            .sort((a, b) => a.type.localeCompare(b.type)); // Sort alphabetically
+          
+          setSubTypesWithStock(subTypesWithStockArray);
         }
       }
     } catch (error) {
-      console.error('Error fetching items by type:', error);
+      console.error('Error fetching sub-types by main type:', error);
+      // Set empty array on error so UI doesn't break
+      setSubTypesWithStock([]);
     } finally {
-      setLoadingStock(false);
+      setLoadingStock(prev => ({ ...prev, ['main']: false }));
     }
   };
 
-  // Handle RM Type selection
-  const handleRmTypeSelect = async (rmType: string) => {
-    setSelectedRmType(rmType);
+  // Handle sub-type selection for a specific row (RM Type, PM Category, or Spares Category)
+  const handleSubTypeSelect = async (itemId: string, subType: string) => {
+    setSelectedSubType(prev => ({ ...prev, [itemId]: subType }));
+    setLoadingStock(prev => ({ ...prev, [itemId]: true }));
     
-    // Get grades from raw_materials for this type
-    const gradesFromRM = rawMaterials
-      .filter((rm: any) => rm.type === rmType)
-      .map((rm: any) => ({
-        grade: rm.grade,
-        supplier: rm.supplier
-      }));
+    const mainType = formData.typeOfIssue;
+    if (!mainType) return;
     
-    // Find matching stock items - try different item_code formats
-    // Could be: "PP-HP-HJ333MO", "RM-HP", "HP", etc.
-    const matchingStockItems: Array<{ itemCode: string; grade: string; stock: number; supplier?: string }> = [];
-    
-    // First, check stock items that match this RM type
-    stockItems.forEach((item: any) => {
-      let itemSubCategory = item.sub_category || '';
-      // Remove "RM-" prefix if present
-      if (itemSubCategory.startsWith('RM-')) {
-        itemSubCategory = itemSubCategory.replace('RM-', '');
+    try {
+      // For PM and SPARE, only fetch stock items (balances will be fetched on-demand when item is selected)
+      // For RM, we still need balances to show stock
+      if (mainType === 'RM') {
+        // Fetch stock items and balances for RM
+        const [stockItemsRes, balanceRes] = await Promise.all([
+          fetch(`/api/admin/stock-items?item_type=RM`),
+          fetch(`/api/stock/balance?item_type=RM`)
+        ]);
+        
+        const stockItemsResult = await stockItemsRes.json();
+        const balanceResult = await balanceRes.json();
+        
+        if (stockItemsResult.success && stockItemsResult.data && balanceResult.success && balanceResult.data) {
+          const stockItems = stockItemsResult.data;
+          const balances = balanceResult.data;
+          
+          // Create a map of item_code -> balance for quick lookup
+          const balanceMap: Record<string, number> = {};
+          balances.forEach((b: any) => {
+            balanceMap[b.item_code] = (balanceMap[b.item_code] || 0) + (b.current_balance || 0);
+          });
+          
+          // Store for future use
+          setStockItemsByType(prev => ({ ...prev, [mainType]: stockItems }));
+          setStockBalancesByType(prev => ({ ...prev, [mainType]: balanceMap }));
+          
+          const matchingItems: Array<{ itemCode: string; grade: string; stock: number; supplier?: string }> = [];
+          
+          // Get grades from raw_materials for this type
+          const gradesFromRM = rawMaterials
+            .filter((rm: any) => rm.type === subType)
+            .map((rm: any) => ({
+              grade: rm.grade,
+              supplier: rm.supplier
+            }));
+          
+          // Find matching stock items
+          stockItems.forEach((item: any) => {
+            let itemSubCategory = item.sub_category || '';
+            if (itemSubCategory.startsWith('RM-')) {
+              itemSubCategory = itemSubCategory.replace('RM-', '');
+            }
+            
+            if (itemSubCategory === subType || item.sub_category === subType) {
+              const stock = balanceMap[item.item_code] || 0;
+              let grade = item.item_code;
+              if (item.item_code.includes('-')) {
+                const parts = item.item_code.split('-');
+                grade = parts[parts.length - 1];
+              }
+              matchingItems.push({
+                itemCode: item.item_code,
+                grade: grade,
+                stock: stock,
+                supplier: item.category
+              });
+            }
+          });
+          
+          // Also add grades from raw_materials
+          gradesFromRM.forEach((rm: any) => {
+            const matchingItem = stockItems.find((item: any) => 
+              item.item_code.includes(rm.grade) || item.item_name.includes(rm.grade)
+            );
+            if (matchingItem && !matchingItems.find(m => m.grade === rm.grade)) {
+              matchingItems.push({
+                itemCode: matchingItem.item_code,
+                grade: rm.grade,
+                stock: balanceMap[matchingItem.item_code] || 0,
+                supplier: rm.supplier
+              });
+            }
+          });
+          
+          // Sort by stock descending
+          matchingItems.sort((a, b) => b.stock - a.stock);
+          
+          setItemsForSubType(prev => ({ ...prev, [itemId]: matchingItems }));
+        }
+      } else {
+        // For PM and SPARE, only fetch stock items (fast)
+        const stockItemsRes = await fetch(`/api/admin/stock-items?item_type=${mainType}`);
+        const stockItemsResult = await stockItemsRes.json();
+        
+        if (stockItemsResult.success && stockItemsResult.data) {
+          const stockItems = stockItemsResult.data;
+          
+          // Store for future use
+          setStockItemsByType(prev => ({ ...prev, [mainType]: stockItems }));
+          
+          const matchingItems: Array<{ itemCode: string; grade: string; stock: number; supplier?: string }> = [];
+          
+          // Find items matching this category
+          stockItems.forEach((item: any) => {
+            if (item.category === subType) {
+              matchingItems.push({
+                itemCode: item.item_code,
+                grade: item.item_name || item.item_code,
+                stock: 0, // Will be fetched on-demand when item is selected
+                supplier: item.category
+              });
+            }
+          });
+          
+          // Sort alphabetically
+          matchingItems.sort((a, b) => a.grade.localeCompare(b.grade));
+          
+          setItemsForSubType(prev => ({ ...prev, [itemId]: matchingItems }));
+        }
       }
       
-      if (itemSubCategory === rmType || item.sub_category === rmType) {
-        const stock = stockBalances[item.item_code] || 0;
-        // Try to extract grade from item_code or item_name
-        let grade = item.item_code;
-        if (item.item_code.includes('-')) {
-          const parts = item.item_code.split('-');
-          grade = parts[parts.length - 1]; // Last part is usually the grade
-        }
-        matchingStockItems.push({
-          itemCode: item.item_code,
-          grade: grade,
-          stock: stock,
-          supplier: item.category
-        });
-      }
-    });
-    
-    // Also add grades from raw_materials that have matching stock items
-    gradesFromRM.forEach((rm: any) => {
-      // Check if this grade has stock (look for item codes like PP-HP-{grade})
-      const matchingItem = stockItems.find((item: any) => 
-        item.item_code.includes(rm.grade) || 
-        item.item_name.includes(rm.grade)
-      );
-      if (matchingItem && !matchingStockItems.find(m => m.grade === rm.grade)) {
-        const stock = stockBalances[matchingItem.item_code] || 0;
-        matchingStockItems.push({
-          itemCode: matchingItem.item_code,
-          grade: rm.grade,
-          stock: stock,
-          supplier: rm.supplier
-        });
-      }
-    });
-    
-    // If no specific grades found, show the general RM type item
-    if (matchingStockItems.length === 0) {
-      const generalItem = stockItems.find((item: any) => {
-        const subCat = (item.sub_category || '').replace('RM-', '');
-        return subCat === rmType || item.item_code === `RM-${rmType}`;
-      });
-      if (generalItem) {
-        matchingStockItems.push({
-          itemCode: generalItem.item_code,
-          grade: generalItem.item_name || rmType,
-          stock: stockBalances[generalItem.item_code] || 0
-        });
-      }
+      // Auto-fill the row
+      handleItemChange(itemId, 'itemDescription', subType);
+      handleItemChange(itemId, 'itemCode', '');
+      handleItemChange(itemId, 'currentStock', '');
+      handleItemChange(itemId, 'uom', mainType === 'RM' ? 'KG' : '');
+    } catch (error) {
+      console.error('Error fetching sub-type items:', error);
+    } finally {
+      setLoadingStock(prev => ({ ...prev, [itemId]: false }));
     }
-    
-    // Sort by stock descending
-    matchingStockItems.sort((a, b) => b.stock - a.stock);
-    
-    setGradesForRmType(matchingStockItems);
-    
-    // Auto-fill the first row with RM type as item name
-    setFormData(prev => ({
-      ...prev,
-      items: prev.items.map((item, index) => 
-        index === 0 
-          ? { ...item, itemDescription: rmType, itemCode: '', currentStock: '', uom: 'KG' }
-          : item
-      )
-    }));
   };
 
-  // Handle Grade (Item Code) selection
-  const handleGradeSelect = (itemId: string, itemCode: string) => {
-    const selectedGrade = gradesForRmType.find(g => g.itemCode === itemCode);
-    if (selectedGrade) {
+  // Handle Item Code selection
+  const handleItemCodeSelect = (itemId: string, itemCode: string) => {
+    const items = itemsForSubType[itemId] || [];
+    const selectedItem = items.find(i => i.itemCode === itemCode);
+    if (selectedItem) {
       handleItemChange(itemId, 'itemCode', itemCode);
-      handleItemChange(itemId, 'currentStock', selectedGrade.stock.toString());
+      handleItemChange(itemId, 'currentStock', selectedItem.stock.toString());
     }
   };
 
   // Fetch current stock when item code changes (for PM and Spares)
-  const fetchCurrentStock = async (itemCode: string, itemId: string) => {
+  const fetchCurrentStock = async (itemCode: string, itemId: string, typeOfIssue?: string) => {
     if (!itemCode) {
       handleItemChange(itemId, 'currentStock', '');
       return;
     }
     
     // For RM, stock is already set when grade is selected
-    if (formData.typeOfIssue === 'RM') {
+    if (typeOfIssue === 'RM') {
       return;
     }
     
@@ -353,25 +399,34 @@ const MISForm: React.FC = () => {
   };
 
   const handleItemChange = (id: string, field: keyof MISItem, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      items: prev.items.map(item =>
+    setFormData(prev => {
+      const updatedItems = prev.items.map(item =>
         item.id === id ? { ...item, [field]: value } : item
-      )
-    }));
-    
-    // When item code changes, fetch current stock
-    if (field === 'itemCode') {
-      fetchCurrentStock(value, id);
-    }
+      );
+      
+      // When sub-type changes, fetch items for that sub-type
+      if (field === 'subType' && value) {
+        handleSubTypeSelect(id, value);
+      }
+      
+      // When item code changes, fetch current stock
+      if (field === 'itemCode') {
+        fetchCurrentStock(value, id, formData.typeOfIssue);
+      }
+      
+      return {
+        ...prev,
+        items: updatedItems
+      };
+    });
   };
 
   const addItemRow = () => {
     const newItem: MISItem = {
       id: Date.now().toString(),
       itemCode: '',
-      itemDescription: formData.typeOfIssue === 'RM' && selectedRmType ? selectedRmType : '',
-      uom: formData.typeOfIssue === 'RM' ? 'KG' : '',
+      itemDescription: '',
+      uom: '',
       currentStock: '',
       issueQty: '',
       remarks: ''
@@ -388,6 +443,22 @@ const MISForm: React.FC = () => {
         ...prev,
         items: prev.items.filter(item => item.id !== id)
       }));
+      // Clean up per-row state
+      setSelectedSubType(prev => {
+        const updated = { ...prev };
+        delete updated[id];
+        return updated;
+      });
+      setItemsForSubType(prev => {
+        const updated = { ...prev };
+        delete updated[id];
+        return updated;
+      });
+      setLoadingStock(prev => {
+        const updated = { ...prev };
+        delete updated[id];
+        return updated;
+      });
     }
   };
 
@@ -479,12 +550,14 @@ const MISForm: React.FC = () => {
     setSavedDocumentId(null);
     setStockStatus('NOT_SAVED');
     setStockMessage('');
-    setStockItems([]);
-    setStockBalances({});
-    setRmTypesWithStock([]);
-    setSelectedRmType('');
-    setGradesForRmType([]);
+    setStockItemsByType({});
+    setStockBalancesByType({});
+    setSubTypesWithStock([]);
+    setSelectedSubType({});
+    setItemsForSubType({});
     setRawMaterials([]);
+    setPackingMaterials([]);
+    setLoadingStock({});
   };
 
   const handlePrint = () => {
@@ -553,11 +626,7 @@ const MISForm: React.FC = () => {
           </label>
           <select
             value={formData.typeOfIssue}
-            onChange={(e) => {
-              handleInputChange('typeOfIssue', e.target.value);
-              setSelectedRmType('');
-              setGradesForRmType([]);
-            }}
+            onChange={(e) => handleInputChange('typeOfIssue', e.target.value)}
             className="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
           >
@@ -566,39 +635,21 @@ const MISForm: React.FC = () => {
             <option value="PM">PM (Packing Materials)</option>
             <option value="SPARE">Spare Parts</option>
           </select>
-          {loadingStock && (
-            <span className="ml-2 text-sm text-gray-500">Loading items...</span>
+          {loadingStock['main'] && (
+            <span className="ml-2 text-sm text-gray-500">Loading...</span>
           )}
         </div>
 
-        {/* RM Type Dropdown (only for RM) */}
-        {formData.typeOfIssue === 'RM' && rmTypesWithStock.length > 0 && (
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              RM Type :-
-            </label>
-            <select
-              value={selectedRmType}
-              onChange={(e) => handleRmTypeSelect(e.target.value)}
-              className="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">Select RM Type</option>
-              {rmTypesWithStock.map(({ type, stock }) => (
-                <option key={type} value={type}>
-                  {type} (Stock: {stock.toFixed(2)})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Items Table - Only show when type is selected */}
+        {/* Items Table */}
         {formData.typeOfIssue && (
           <div className="mb-6 print:mb-4 overflow-x-auto">
             <table className="w-full border-collapse border border-gray-300">
             <thead>
               <tr className="bg-gray-100">
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-12">Sl.</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">
+                  {formData.typeOfIssue === 'RM' ? 'RM Type' : formData.typeOfIssue === 'PM' ? 'PM Type' : 'Spares Type'}
+                </th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Item Code</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Item Description</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-24">UOM</th>
@@ -613,16 +664,37 @@ const MISForm: React.FC = () => {
                 <tr key={item.id}>
                   <td className="border border-gray-300 px-2 py-2 text-center">{index + 1}</td>
                   <td className="border border-gray-300 px-2 py-2">
-                    {formData.typeOfIssue === 'RM' && selectedRmType && gradesForRmType.length > 0 ? (
+                    {subTypesWithStock.length > 0 ? (
                       <select
-                        value={item.itemCode}
-                        onChange={(e) => handleGradeSelect(item.id, e.target.value)}
+                        value={selectedSubType[item.id] || ''}
+                        onChange={(e) => handleItemChange(item.id, 'subType', e.target.value)}
                         className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
-                        <option value="">Select Grade</option>
-                        {gradesForRmType.map((grade) => (
-                          <option key={grade.itemCode} value={grade.itemCode}>
-                            {grade.grade}{grade.supplier ? ` - ${grade.supplier}` : ''} (Stock: {grade.stock.toFixed(2)})
+                        <option value="">Select {formData.typeOfIssue === 'RM' ? 'RM Type' : formData.typeOfIssue === 'PM' ? 'PM Type' : 'Spares Type'}</option>
+                        {subTypesWithStock.map(({ type, stock }) => (
+                          <option key={type} value={type}>
+                            {type} (Stock: {stock.toFixed(2)})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-gray-400 text-sm">-</span>
+                    )}
+                    {loadingStock[item.id] && (
+                      <span className="text-xs text-gray-500 block mt-1">Loading...</span>
+                    )}
+                  </td>
+                  <td className="border border-gray-300 px-2 py-2">
+                    {selectedSubType[item.id] && itemsForSubType[item.id] && itemsForSubType[item.id].length > 0 ? (
+                      <select
+                        value={item.itemCode}
+                        onChange={(e) => handleItemCodeSelect(item.id, e.target.value)}
+                        className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select Item</option>
+                        {itemsForSubType[item.id].map((itemOption) => (
+                          <option key={itemOption.itemCode} value={itemOption.itemCode}>
+                            {itemOption.grade}{itemOption.supplier ? ` - ${itemOption.supplier}` : ''} (Stock: {itemOption.stock.toFixed(2)})
                           </option>
                         ))}
                       </select>
@@ -703,7 +775,7 @@ const MISForm: React.FC = () => {
             <Plus className="w-4 h-4" />
             Add Row
           </button>
-        </div>
+      </div>
         )}
 
         {/* Stock Status Message */}

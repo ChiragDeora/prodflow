@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase, handleSupabaseError } from '@/lib/supabase/utils';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 interface OpeningStockEntry {
   item_code: string;
@@ -15,6 +16,11 @@ interface OpeningStockEntry {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const supabase = getSupabase();
     const body = await request.json();
@@ -163,6 +169,11 @@ export async function POST(request: NextRequest) {
 
 // GET - List all opening stock entries
 export async function GET(request: NextRequest) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const supabase = getSupabase();
     const { searchParams } = new URL(request.url);

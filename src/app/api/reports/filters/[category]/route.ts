@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 // Create Supabase client
 const supabase = createClient(
@@ -18,6 +19,11 @@ interface RouteParams {
 
 // GET - Get filter options
 export async function GET(request: NextRequest, { params }: RouteParams) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const { category } = await params;
     

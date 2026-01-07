@@ -8,7 +8,7 @@ type ActionType = 'edit' | 'delete' | 'view' | 'approve' | 'mark_done';
 type ItemType = 'machine' | 'mold' | 'schedule' | 'material' | 'product' | 'raw_material' | 'packing_material' | 'color_label' | 'party_name';
 
 interface OthersMasterProps {
-  handleAction: (actionType: ActionType, item: any, itemType: ItemType | 'line' | 'color_label' | 'party_name') => Promise<void>;
+  handleAction: (actionType: ActionType, item: any, itemType: 'line' | ItemType) => Promise<void>;
   openExcelReader?: (type: string) => void;
 }
 

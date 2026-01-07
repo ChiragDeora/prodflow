@@ -94,6 +94,7 @@ const RESOURCE_KEY_MAP: Record<string, string> = {
   'BOM Master': 'bomMaster',
   'Commercial Master': 'commercialMaster',
   'Others': 'othersMaster',
+  'Spare Parts': 'sparePartsMaster',
   'Material Indent': 'materialIndent',
   'Purchase Order': 'purchaseOrder',
   'Open Indent': 'openIndent',
@@ -128,6 +129,44 @@ const RESOURCE_KEY_MAP: Record<string, string> = {
   'Maintenance History': 'maintenanceHistory',
   'Daily Readings': 'dailyReadings',
   'Maintenance Report': 'maintenanceReport',
+  // Stock Ledger
+  'Stock Ledger': 'stockLedger',
+  'Movement Log': 'stockLedgerMovements',
+  'Current Stock': 'stockLedgerBalances',
+  'Stock Analytics': 'stockLedgerAnalytics',
+  // Reports
+  'Reports': 'reports',
+  'Reports Dashboard': 'reportsDashboard',
+  'Report Builder': 'reportBuilder',
+  'Report Templates': 'reportTemplates',
+  'Saved Reports': 'savedReports',
+  'Smart Query': 'smartQuery',
+  'AI Insights': 'aiInsights',
+};
+
+// Tab ID to Resource Name mapping for permission checks
+const TAB_ID_TO_RESOURCE: Record<string, string> = {
+  // Master Data tabs
+  'machines': 'Machine Master',
+  'molds': 'Mold Master',
+  'raw_materials': 'Raw Materials Master',
+  'packing_materials': 'Packing Materials Master',
+  'lines': 'Line Master',
+  'bom_master': 'BOM Master',
+  'commercial_master': 'Commercial Master',
+  'spare_parts': 'Spare Parts',
+  'others': 'Others',
+  // Stock Ledger tabs
+  'movements': 'Movement Log',
+  'balances': 'Current Stock',
+  'analytics': 'Stock Analytics',
+  // Reports tabs
+  'dashboard': 'Reports Dashboard',
+  'builder': 'Report Builder',
+  'templates': 'Report Templates',
+  'saved': 'Saved Reports',
+  'smart-query': 'Smart Query',
+  'insights': 'AI Insights',
 };
 
 // Action mapping
@@ -147,7 +186,10 @@ interface AccessControlState {
   canAccessModule: (moduleName: string) => boolean;
   hasPermission: (permissionName: string) => boolean;
   canPerformAction: (action: string, resource: string) => boolean;
+  canAccessResource: (resource: string) => boolean;
+  canAccessTab: (tabId: string, moduleName?: string) => boolean;
   getModuleAccessLevel: (moduleName: string) => 'full' | 'read' | 'blocked';
+  isRootAdmin: boolean;
   isLoading: boolean;
   error: string | null;
 }
@@ -221,6 +263,52 @@ export const useAccessControl = (): AccessControlState => {
   };
 
   /**
+   * Check if user can access a specific resource (has at least read/view permission)
+   * @param resource - Resource name (e.g., "Machine Master", "Mold Master")
+   */
+  const canAccessResource = (resource: string): boolean => {
+    if (!user) return false;
+    
+    // Root admin can access everything
+    if (user.isRootAdmin) return true;
+    
+    const permissions = user.permissions || {};
+    const moduleKey = MODULE_KEY_MAP[resource] || '';
+    const resourceKey = RESOURCE_KEY_MAP[resource] || resource;
+    
+    if (!moduleKey) {
+      console.warn(`Unknown module for resource: ${resource}`);
+      return false;
+    }
+    
+    // Check if user has any permission for this resource (read/view at minimum)
+    const permissionName = `${moduleKey}.${resourceKey}.read`;
+    
+    return permissions[permissionName] === true;
+  };
+
+  /**
+   * Check if user can access a specific tab
+   * @param tabId - Tab identifier (e.g., "machines", "molds", "raw_materials")
+   * @param moduleName - Optional module name for context
+   */
+  const canAccessTab = (tabId: string, moduleName?: string): boolean => {
+    if (!user) return false;
+    
+    // Root admin can access everything
+    if (user.isRootAdmin) return true;
+    
+    // Get the resource name from tab ID
+    const resourceName = TAB_ID_TO_RESOURCE[tabId];
+    if (!resourceName) {
+      // If no mapping exists, allow access (unknown tabs are accessible)
+      return true;
+    }
+    
+    return canAccessResource(resourceName);
+  };
+
+  /**
    * Get the access level for a module
    * @returns 'full' if user can create/update/delete, 'read' if only view, 'blocked' if no access
    */
@@ -254,7 +342,10 @@ export const useAccessControl = (): AccessControlState => {
     canAccessModule,
     hasPermission,
     canPerformAction,
+    canAccessResource,
+    canAccessTab,
     getModuleAccessLevel,
+    isRootAdmin: user?.isRootAdmin || false,
     isLoading,
     error
   };
@@ -292,5 +383,28 @@ export const useActionPermission = (action: string, resource: string) => {
   };
 };
 
+export const useResourceAccess = (resource: string) => {
+  const { canAccessResource, canPerformAction, isLoading, error } = useAccessControl();
+  
+  return {
+    canView: canAccessResource(resource),
+    canCreate: canPerformAction('create', resource),
+    canUpdate: canPerformAction('update', resource),
+    canDelete: canPerformAction('delete', resource),
+    isLoading,
+    error
+  };
+};
+
+export const useTabAccess = (tabId: string, moduleName?: string) => {
+  const { canAccessTab, isLoading, error } = useAccessControl();
+  
+  return {
+    canAccess: canAccessTab(tabId, moduleName),
+    isLoading,
+    error
+  };
+};
+
 // Export the mappings for use in other components
-export { MODULE_KEY_MAP, RESOURCE_KEY_MAP, ACTION_MAP };
+export { MODULE_KEY_MAP, RESOURCE_KEY_MAP, ACTION_MAP, TAB_ID_TO_RESOURCE };

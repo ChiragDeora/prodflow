@@ -201,7 +201,7 @@ interface TableConfig {
   stockStatusColumn?: string;
 }
 
-const TABLE_CONFIGS: Record<MetricCategory, TableConfig> = {
+const TABLE_CONFIGS: Partial<Record<MetricCategory, TableConfig>> = {
   production: {
     mainTable: 'dpr_production_entries',
     joins: ['LEFT JOIN dpr_data ON dpr_production_entries.dpr_id = dpr_data.id'],

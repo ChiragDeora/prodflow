@@ -1032,11 +1032,11 @@ const ProductionSchedulerERP: React.FC = () => {
   });
 
   // Access control hook for permission checking
-  const { canAccessModule } = useAccessControl();
+  const { canAccessModule, isRootAdmin } = useAccessControl();
 
   // Map module IDs to permission module keys (some modules map to multiple permission modules)
   const moduleIdToPermissionKeys: Record<string, string[]> = {
-    'welcome-dashboard': [], // Always accessible (empty array = no permission check needed)
+    'welcome-dashboard': [], // Restricted to root admin only
     'masters': ['masterData'],
     'store-dispatch': ['storePurchase', 'storeInward', 'storeOutward', 'storeSales'], // Any store permission grants access
     'prod-planner': ['productionPlanner'],
@@ -1045,6 +1045,7 @@ const ProductionSchedulerERP: React.FC = () => {
     'maintenance': ['maintenance'],
     'approvals': ['approvals'],
     'reports': ['reports'],
+    'stock-ledger': ['stockLedger'],
     'scheduler': ['productionPlanner'],
     'profile': [], // Always accessible
   };
@@ -1053,8 +1054,10 @@ const ProductionSchedulerERP: React.FC = () => {
   const menuItems: MenuItem[] = getAvailableModules()
     .filter(config => config.id !== 'profile' && config.id !== 'scheduler') // Commented out Production Scheduler
     .filter(config => {
-      // Always show welcome dashboard
-      if (config.id === 'welcome-dashboard') return true;
+      // Dashboard is only visible to root admin (Yogesh Deora)
+      if (config.id === 'welcome-dashboard') {
+        return isRootAdmin;
+      }
       
       // Get permission keys for this module
       const permissionKeys = moduleIdToPermissionKeys[config.id] || [config.id];
@@ -2012,6 +2015,20 @@ const ProductionSchedulerERP: React.FC = () => {
     }
   }, []);
 
+  // Redirect non-root-admin users away from dashboard
+  useEffect(() => {
+    // If user is not root admin and is on the dashboard, redirect to first accessible module
+    if (!isRootAdmin && currentModule === 'welcome-dashboard' && menuItems.length > 0) {
+      const firstAccessibleModule = menuItems[0].id as ModuleType;
+      setCurrentModule(firstAccessibleModule);
+      if (typeof window !== 'undefined') {
+        const userId = localStorage.getItem('currentUserId') || 'default';
+        localStorage.setItem(`prodSchedulerCurrentModule_${userId}`, firstAccessibleModule);
+      }
+      console.log('📍 Non-root admin redirected from dashboard to:', firstAccessibleModule);
+    }
+  }, [isRootAdmin, currentModule, menuItems]);
+
   // Restore unit selection after units are loaded
   useEffect(() => {
     if (units.length > 0) {
@@ -2449,37 +2466,93 @@ const ProductionSchedulerERP: React.FC = () => {
               const formData = new FormData(e.currentTarget);
               const itemName = formData.get('item_name') as string;
               const itemCode = formData.get('item_code') as string;
+              
+              // Helper function to convert form values to proper types
+              const getNumberOrUndefined = (value: FormDataEntryValue | null): number | undefined => {
+                if (!value || value === '') return undefined;
+                const num = parseFloat(value as string);
+                return isNaN(num) ? undefined : num;
+              };
+              
+              const getStringOrUndefined = (value: FormDataEntryValue | null): string | undefined => {
+                if (!value || value === '') return undefined;
+                return value as string;
+              };
+              
               const moldData = {
                 mold_id: formData.get('mold_id') as string,
                 // Use item_name as mold_name if provided, otherwise use the hidden mold_name field
                 mold_name: itemName || (formData.get('mold_name') as string) || '',
                 cavities: parseInt(formData.get('cavities') as string) || 0,
                 compatible_machines: [],
-                purchase_date: new Date().toISOString().split('T')[0],
-                maker: 'Unknown',
+                purchase_date: formData.get('start_date') as string || new Date().toISOString().split('T')[0],
+                maker: formData.get('make') as string || 'Unknown',
                 // New fields
                 item_code: itemCode,
                 item_name: itemName,
                 type: formData.get('type') as string,
-                cycle_time: parseFloat(formData.get('cycle_time') as string) || 0,
-                st_wt: parseFloat(formData.get('st_wt') as string) || 0,
+                cycle_time: getNumberOrUndefined(formData.get('cycle_time')),
+                st_wt: getNumberOrUndefined(formData.get('st_wt')),
+                dwg_wt: getNumberOrUndefined(formData.get('dwg_wt')),
+                int_wt: getNumberOrUndefined(formData.get('int_wt')),
+                rp_bill_wt: getNumberOrUndefined(formData.get('rp_bill_wt')),
+                mold_wt: getNumberOrUndefined(formData.get('mold_wt')),
+                dimensions: getStringOrUndefined(formData.get('dimensions')),
+                hrc_make: getStringOrUndefined(formData.get('hrc_make')),
                 hrc_zone: formData.get('hrc_zone') as string,
                 make: formData.get('make') as string,
+                start_date: getStringOrUndefined(formData.get('start_date')),
                 unit: unitManagementEnabled ? (formData.get('unit') as string) || defaultUnit : undefined
-              };
+              } as Partial<Mold>;
               
               try {
                 if (editingItem && 'mold_id' in editingItem && editingItem.mold_id) {
                   // Update existing mold - use the returned value from API to ensure UI reflects all database fields
-                  const updatedMold = await moldAPI.update(editingItem.mold_id, moldData);
+                  const updatedMold = await moldAPI.update(editingItem.mold_id, moldData as Partial<Mold>);
                   if (updatedMold) {
                     setMoldsMaster(prev => prev.map(m => 
                       m.mold_id === editingItem.mold_id ? updatedMold : m
                     ));
                   }
                 } else {
-                  // Create new mold
-                  const newMold = await moldAPI.create(moldData);
+                  // Create new mold - ensure all required fields are present
+                  // Extract required fields with defaults to ensure they're not undefined
+                  const moldId: string = moldData.mold_id || `MOLD-${Date.now()}`;
+                  const moldName: string = moldData.mold_name || '';
+                  const cavities: number = moldData.cavities || 0;
+                  const purchaseDate: string = moldData.purchase_date || new Date().toISOString().split('T')[0];
+                  const maker: string = moldData.maker || 'Unknown';
+                  const itemCode: string = moldData.item_code || '';
+                  const itemName: string = moldData.item_name || '';
+                  const type: string = moldData.type || 'Container';
+                  const hrcZone: string = moldData.hrc_zone || '07 ZONE';
+                  const make: string = moldData.make || '';
+                  
+                  const createData = {
+                    mold_id: moldId,
+                    mold_name: moldName,
+                    cavities: cavities,
+                    compatible_machines: [],
+                    purchase_date: purchaseDate,
+                    maker: maker,
+                    item_code: itemCode,
+                    item_name: itemName,
+                    type: type,
+                    hrc_zone: hrcZone,
+                    make: make,
+                    cycle_time: moldData.cycle_time,
+                    st_wt: moldData.st_wt,
+                    dwg_wt: moldData.dwg_wt,
+                    int_wt: moldData.int_wt,
+                    rp_bill_wt: moldData.rp_bill_wt,
+                    mold_wt: moldData.mold_wt,
+                    dimensions: moldData.dimensions,
+                    hrc_make: moldData.hrc_make,
+                    start_date: moldData.start_date,
+                    unit: moldData.unit,
+                  } as Omit<Mold, 'created_at' | 'updated_at'>;
+                  
+                  const newMold = await moldAPI.create(createData);
                   if (newMold) {
                     setMoldsMaster(prev => [...prev, newMold]);
                   }
@@ -2509,7 +2582,7 @@ const ProductionSchedulerERP: React.FC = () => {
                         name="item_code"
                         required
                         placeholder="e.g., MOLD-001"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-500"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
                         defaultValue={editingItem && 'item_code' in editingItem && editingItem.item_code ? editingItem.item_code : (editingItem && 'mold_id' in editingItem ? editingItem.mold_id : '')}
                       />
                     </div>
@@ -2522,7 +2595,7 @@ const ProductionSchedulerERP: React.FC = () => {
                         name="item_name"
                         required
                         placeholder="e.g., Ro10-C"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-500"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
                         defaultValue={editingItem && 'item_name' in editingItem && editingItem.item_name ? editingItem.item_name : (editingItem && 'mold_name' in editingItem ? editingItem.mold_name : '')}
                       />
                     </div>
@@ -2532,8 +2605,8 @@ const ProductionSchedulerERP: React.FC = () => {
                       </label>
                       <select
                         name="type"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-500"
-                        defaultValue={editingItem && 'type' in editingItem ? editingItem.type : 'Injection Mold'}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'type' in editingItem && editingItem.type ? editingItem.type : 'Container'}
                       >
                         <option value="Container">Container</option>
                         <option value="Lid">Lid</option>
@@ -2547,8 +2620,8 @@ const ProductionSchedulerERP: React.FC = () => {
                         type="text"
                         name="make"
                         placeholder="e.g., Toolcraft Inc"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-500"
-                        defaultValue={editingItem && 'make' in editingItem && editingItem.make ? editingItem.make : (editingItem && 'maker' in editingItem ? editingItem.maker : '')}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'make' in editingItem && editingItem.make ? editingItem.make : (editingItem && 'maker' in editingItem && editingItem.maker ? editingItem.maker : '')}
                       />
                     </div>
                   </div>
@@ -2571,8 +2644,8 @@ const ProductionSchedulerERP: React.FC = () => {
                         required
                         min="1"
                         placeholder="e.g., 4"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-500"
-                        defaultValue={editingItem && 'cavities' in editingItem ? editingItem.cavities : ''}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'cavities' in editingItem && editingItem.cavities != null ? editingItem.cavities : (editingItem && 'cavity' in editingItem && editingItem.cavity != null ? editingItem.cavity : '')}
                       />
                     </div>
                     <div>
@@ -2585,8 +2658,8 @@ const ProductionSchedulerERP: React.FC = () => {
                         step="0.1"
                         min="0"
                         placeholder="e.g., 30.0"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-500"
-                        defaultValue={editingItem && 'cycle_time' in editingItem ? editingItem.cycle_time : ''}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'cycle_time' in editingItem && editingItem.cycle_time != null ? editingItem.cycle_time : ''}
                       />
                     </div>
                     <div>
@@ -2599,8 +2672,88 @@ const ProductionSchedulerERP: React.FC = () => {
                         step="0.1"
                         min="0"
                         placeholder="e.g., 100.0"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-500"
-                        defaultValue={editingItem && 'st_wt' in editingItem ? editingItem.st_wt : ''}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'st_wt' in editingItem && editingItem.st_wt != null ? editingItem.st_wt : ''}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Dwg Wt. (grams)
+                      </label>
+                      <input
+                        type="number"
+                        name="dwg_wt"
+                        step="0.1"
+                        min="0"
+                        placeholder="e.g., 10.0"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'dwg_wt' in editingItem && editingItem.dwg_wt != null ? editingItem.dwg_wt : ''}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Int. Wt. (grams)
+                      </label>
+                      <input
+                        type="number"
+                        name="int_wt"
+                        step="0.1"
+                        min="0"
+                        placeholder="e.g., 1.0"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'int_wt' in editingItem && editingItem.int_wt != null ? editingItem.int_wt : ''}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        RP Bill Wt. (grams)
+                      </label>
+                      <input
+                        type="number"
+                        name="rp_bill_wt"
+                        step="0.1"
+                        min="0"
+                        placeholder="e.g., 1.0"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'rp_bill_wt' in editingItem && editingItem.rp_bill_wt != null ? editingItem.rp_bill_wt : ''}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Mold Wt. (grams)
+                      </label>
+                      <input
+                        type="number"
+                        name="mold_wt"
+                        step="0.1"
+                        min="0"
+                        placeholder="e.g., 1100.77"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'mold_wt' in editingItem && editingItem.mold_wt != null ? editingItem.mold_wt : ''}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Dimensions
+                      </label>
+                      <input
+                        type="text"
+                        name="dimensions"
+                        placeholder="e.g., 701 x 579 x 434"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'dimensions' in editingItem && editingItem.dimensions ? editingItem.dimensions : ''}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        HRC Make
+                      </label>
+                      <input
+                        type="text"
+                        name="hrc_make"
+                        placeholder="e.g., HRC Make"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'hrc_make' in editingItem && editingItem.hrc_make ? editingItem.hrc_make : ''}
                       />
                     </div>
                     <div>
@@ -2609,8 +2762,8 @@ const ProductionSchedulerERP: React.FC = () => {
                       </label>
                       <select
                         name="hrc_zone"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-500"
-                        defaultValue={editingItem && 'hrc_zone' in editingItem ? editingItem.hrc_zone : '07 ZONE'}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'hrc_zone' in editingItem && editingItem.hrc_zone ? editingItem.hrc_zone : '07 ZONE'}
                       >
                         <option value="01 ZONE">01 ZONE</option>
                         <option value="02 ZONE">02 ZONE</option>
@@ -2626,6 +2779,17 @@ const ProductionSchedulerERP: React.FC = () => {
                         <option value="12 ZONE">12 ZONE</option>
                       </select>
                     </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Start Date
+                      </label>
+                      <input
+                        type="date"
+                        name="start_date"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'start_date' in editingItem && editingItem.start_date ? (typeof editingItem.start_date === 'string' ? editingItem.start_date.split('T')[0] : new Date(editingItem.start_date).toISOString().split('T')[0]) : ''}
+                      />
+                    </div>
                     {unitManagementEnabled && units.length > 0 && (
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -2633,8 +2797,8 @@ const ProductionSchedulerERP: React.FC = () => {
                         </label>
                         <select 
                           name="unit" 
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-500"
-                          defaultValue={editingItem && 'unit' in editingItem ? editingItem.unit || defaultUnit : defaultUnit}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900"
+                          defaultValue={editingItem && 'unit' in editingItem && editingItem.unit ? editingItem.unit : defaultUnit}
                         >
                           {units
                             .filter(unit => unit.status === 'Active')
@@ -3046,8 +3210,8 @@ const ProductionSchedulerERP: React.FC = () => {
                         required
                         min="1"
                         placeholder="e.g., 1"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
-                        defaultValue={editingItem && 'sl_no' in editingItem ? editingItem.sl_no : ''}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'sl_no' in editingItem && editingItem.sl_no != null ? editingItem.sl_no : ''}
                       />
                     </div>
                     <div>
@@ -3057,8 +3221,8 @@ const ProductionSchedulerERP: React.FC = () => {
                       <select
                         name="category"
                         required
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
-                        defaultValue={editingItem && 'category' in editingItem ? editingItem.category : 'PP'}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'category' in editingItem && editingItem.category ? editingItem.category : 'PP'}
                       >
                         <option value="PP">PP</option>
                         <option value="PE">PE</option>
@@ -3073,8 +3237,8 @@ const ProductionSchedulerERP: React.FC = () => {
                       <select
                         name="type"
                         required
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
-                        defaultValue={editingItem && 'type' in editingItem ? editingItem.type : 'HP'}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'type' in editingItem && editingItem.type ? editingItem.type : 'HP'}
                       >
                         <option value="HP">HP</option>
                         <option value="ICP">ICP</option>
@@ -3092,8 +3256,8 @@ const ProductionSchedulerERP: React.FC = () => {
                         name="grade"
                         required
                         placeholder="e.g., HJ333MO, 1750 MN"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
-                        defaultValue={editingItem && 'grade' in editingItem ? editingItem.grade : ''}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'grade' in editingItem && editingItem.grade ? editingItem.grade : ''}
                       />
                     </div>
                     <div>
@@ -3105,8 +3269,8 @@ const ProductionSchedulerERP: React.FC = () => {
                         name="supplier"
                         required
                         placeholder="e.g., Borouge, IOCL, Basell"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
-                        defaultValue={editingItem && 'supplier' in editingItem ? editingItem.supplier : ''}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'supplier' in editingItem && editingItem.supplier ? editingItem.supplier : ''}
                       />
                     </div>
                   </div>
@@ -3129,8 +3293,8 @@ const ProductionSchedulerERP: React.FC = () => {
                         step="0.01"
                         min="0"
                         placeholder="e.g., 75"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
-                        defaultValue={editingItem && 'mfi' in editingItem ? editingItem.mfi || '' : ''}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'mfi' in editingItem && editingItem.mfi != null ? editingItem.mfi : ''}
                       />
                     </div>
                     <div>
@@ -3143,8 +3307,8 @@ const ProductionSchedulerERP: React.FC = () => {
                         step="0.001"
                         min="0"
                         placeholder="e.g., 910"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
-                        defaultValue={editingItem && 'density' in editingItem ? editingItem.density || '' : ''}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-900"
+                        defaultValue={editingItem && 'density' in editingItem && editingItem.density != null ? editingItem.density : ''}
                       />
                     </div>
                     {unitManagementEnabled && units.length > 0 && (
@@ -3154,8 +3318,8 @@ const ProductionSchedulerERP: React.FC = () => {
                         </label>
                         <select 
                           name="unit" 
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
-                          defaultValue={editingItem && 'unit' in editingItem ? editingItem.unit || defaultUnit : defaultUnit}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-900"
+                          defaultValue={editingItem && 'unit' in editingItem && editingItem.unit ? editingItem.unit : defaultUnit}
                         >
                           {units
                             .filter(unit => unit.status === 'Active')
@@ -3185,8 +3349,8 @@ const ProductionSchedulerERP: React.FC = () => {
                       type="url"
                       name="tds_image"
                       placeholder="Enter TDS image URL or leave blank"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-500"
-                      defaultValue={editingItem && 'tds_image' in editingItem ? editingItem.tds_image || '' : ''}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-900"
+                      defaultValue={editingItem && 'tds_image' in editingItem && editingItem.tds_image ? editingItem.tds_image : ''}
                     />
                     <p className="text-xs text-gray-500 mt-1">Enter a URL to the TDS image or leave blank if not available</p>
                   </div>
@@ -3206,8 +3370,8 @@ const ProductionSchedulerERP: React.FC = () => {
                       name="remark"
                       rows={3}
                       placeholder="Enter any additional notes or remarks..."
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors resize-none text-gray-500"
-                      defaultValue={editingItem && 'remark' in editingItem ? editingItem.remark || '' : ''}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors resize-none text-gray-900"
+                      defaultValue={editingItem && 'remark' in editingItem && editingItem.remark ? editingItem.remark : ''}
                     />
                   </div>
                 </div>
@@ -4160,9 +4324,9 @@ const ProductionSchedulerERP: React.FC = () => {
                                 </label>
                                 <textarea
                                   name="description"
-                                  defaultValue={(editingItem as Line).description || ''}
+                                  defaultValue={editingItem && 'description' in editingItem && editingItem.description ? (editingItem as Line).description : ''}
                                   rows={3}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900"
                                   placeholder="Description of the production line"
                                 />
                               </div>
@@ -4182,7 +4346,7 @@ const ProductionSchedulerERP: React.FC = () => {
                                 </label>
                                 <select
                                   name="im_machine_id"
-                                  defaultValue={(editingItem as Line).im_machine_id || ''}
+                                  defaultValue={editingItem && 'im_machine_id' in editingItem && editingItem.im_machine_id ? (editingItem as Line).im_machine_id : ''}
                                   className="w-full px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                                 >
                                   <option value="">Select IM Machine</option>
@@ -4214,7 +4378,7 @@ const ProductionSchedulerERP: React.FC = () => {
                                 </label>
                                 <select
                                   name="robot_machine_id"
-                                  defaultValue={(editingItem as Line).robot_machine_id || ''}
+                                  defaultValue={editingItem && 'robot_machine_id' in editingItem && editingItem.robot_machine_id ? (editingItem as Line).robot_machine_id : ''}
                                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 text-gray-900 focus:ring-purple-500 focus:border-purple-500"
                                 >
                                   <option value="">Select Robot</option>
@@ -4246,7 +4410,7 @@ const ProductionSchedulerERP: React.FC = () => {
                                 </label>
                                 <select
                                   name="conveyor_machine_id"
-                                  defaultValue={(editingItem as Line).conveyor_machine_id || ''}
+                                  defaultValue={editingItem && 'conveyor_machine_id' in editingItem && editingItem.conveyor_machine_id ? (editingItem as Line).conveyor_machine_id : ''}
                                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 text-gray-900 focus:ring-purple-500 focus:border-purple-500"
                                 >
                                   <option value="">Select Conveyor</option>
@@ -4278,7 +4442,7 @@ const ProductionSchedulerERP: React.FC = () => {
                                 </label>
                                 <select
                                   name="hoist_machine_id"
-                                  defaultValue={(editingItem as Line).hoist_machine_id || ''}
+                                  defaultValue={editingItem && 'hoist_machine_id' in editingItem && editingItem.hoist_machine_id ? (editingItem as Line).hoist_machine_id : ''}
                                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 text-gray-900 focus:ring-purple-500 focus:border-purple-500"
                                 >
                                   <option value="">Select Hoist</option>
@@ -4310,7 +4474,7 @@ const ProductionSchedulerERP: React.FC = () => {
                                 </label>
                                 <select
                                   name="loader_machine_id"
-                                  defaultValue={(editingItem as Line).loader_machine_id || ''}
+                                  defaultValue={editingItem && 'loader_machine_id' in editingItem && editingItem.loader_machine_id ? (editingItem as Line).loader_machine_id : ''}
                                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 text-gray-900 focus:ring-purple-500 focus:border-purple-500"
                                 >
                                   <option value="">Select Loader (Optional)</option>
@@ -4351,7 +4515,7 @@ const ProductionSchedulerERP: React.FC = () => {
                                 </label>
                                 <select
                                   name="status"
-                                  defaultValue={(editingItem as Line).status}
+                                  defaultValue={editingItem && 'status' in editingItem && editingItem.status ? (editingItem as Line).status : 'Active'}
                                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 text-gray-900 focus:ring-purple-500 focus:border-purple-500"
                                 >
                                   <option value="Active">Active</option>
@@ -4365,7 +4529,7 @@ const ProductionSchedulerERP: React.FC = () => {
                                 </label>
                                 <select
                                   name="unit"
-                                  defaultValue={(editingItem as Line).unit || 'Unit 1'}
+                                  defaultValue={editingItem && 'unit' in editingItem && editingItem.unit ? (editingItem as Line).unit : defaultUnit}
                                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 text-gray-900 focus:ring-purple-500 focus:border-purple-500"
                                 >
                                   {units.map(unit => (
@@ -4391,7 +4555,7 @@ const ProductionSchedulerERP: React.FC = () => {
                                 </label>
                                 <select
                                   name="grinding"
-                                  defaultValue={(editingItem as Line).grinding ? 'true' : 'false'}
+                                  defaultValue={editingItem && 'grinding' in editingItem && editingItem.grinding ? 'true' : 'false'}
                                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 text-gray-900 focus:ring-purple-500 focus:border-purple-500"
                                 >
                                   <option value="false">No</option>

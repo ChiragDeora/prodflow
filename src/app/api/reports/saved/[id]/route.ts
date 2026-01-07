@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 // Create Supabase client
 const supabase = createClient(
@@ -18,6 +19,11 @@ interface RouteParams {
 
 // GET - Get report by ID
 export async function GET(request: NextRequest, { params }: RouteParams) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const { id } = await params;
     
@@ -67,6 +73,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // PUT - Update report
 export async function PUT(request: NextRequest, { params }: RouteParams) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const { id } = await params;
     const body = await request.json();
@@ -124,6 +135,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 // DELETE - Delete report
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const { id } = await params;
     

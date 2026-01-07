@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, Printer } from 'lucide-react';
 import { deliveryChallanAPI } from '../../../lib/supabase';
 import PrintHeader from '../../shared/PrintHeader';
-import PartyNameSelect from './PartyNameSelect';
+import CustomerSelect from './CustomerSelect';
 import { useStoreDispatch, DeliveryChallanItem } from './StoreDispatchContext';
 import { generateDocumentNumber, FORM_CODES } from '../../../utils/formCodeUtils';
 
@@ -36,11 +36,21 @@ const DeliveryChallanForm: React.FC = () => {
     updateDeliveryChallanField(field as any, value as any);
   };
 
-  const handlePartySelect = (party: { id: string; name: string }) => {
+  const handleCustomerSelect = (customer: { 
+    id: string; 
+    name: string;
+    address?: string;
+    state?: string;
+    stateCode?: string;
+    gstNumber?: string;
+  }) => {
     setFormData({
       ...formData,
-      partyId: party.id,
-      partyName: party.name,
+      partyId: customer.id,
+      partyName: customer.name,
+      address: customer.address || '',
+      state: customer.state || '',
+      gstNo: customer.gstNumber || '',
     });
   };
 
@@ -79,6 +89,7 @@ const DeliveryChallanForm: React.FC = () => {
       const challanData = {
         doc_no: docNo,
         date: date,
+        sr_no: formData.dcNo || undefined, // Serial number
         dc_no: formData.dcNo || undefined,
         dc_date: formData.dcDate || undefined,
         po_no: formData.poNo || undefined,
@@ -87,6 +98,7 @@ const DeliveryChallanForm: React.FC = () => {
         returnable: formData.returnable,
         party_name: formData.partyName || undefined,
         address: formData.address || undefined,
+        to_address: formData.address || undefined, // Copy address to to_address
         state: formData.state || undefined,
         gst_no: formData.gstNo || undefined
       };
@@ -94,14 +106,10 @@ const DeliveryChallanForm: React.FC = () => {
       const itemsData = formData.items
         .filter(item => item.itemDescription.trim() !== '' || item.itemCode.trim() !== '')
         .map(item => ({
-          item_code: item.itemCode || undefined,
-          item_description: item.itemDescription,
-          hsn_code: item.hsnCode || undefined,
+          material_description: item.itemDescription, // Required field
+          qty: item.noOfPcs ? parseFloat(item.noOfPcs) : undefined,
           uom: item.uom || undefined,
-          pack_size: item.packSize || undefined,
-          box_no: item.boxNo || undefined,
-          no_of_pcs: item.noOfPcs ? parseFloat(item.noOfPcs) : undefined,
-          value: item.value ? parseFloat(item.value) : undefined
+          remarks: item.hsnCode ? `HSN: ${item.hsnCode}` : undefined
         }));
 
       await deliveryChallanAPI.create(challanData, itemsData);
@@ -139,11 +147,11 @@ const DeliveryChallanForm: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Party Name:
               </label>
-              <PartyNameSelect
+              <CustomerSelect
                 value={formData.partyName}
-                partyId={formData.partyId}
-                onChange={handlePartySelect}
-                placeholder="Select or search party..."
+                customerId={formData.partyId}
+                onChange={handleCustomerSelect}
+                placeholder="Select or search customer..."
               />
             </div>
             <div>

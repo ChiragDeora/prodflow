@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const { data, error } = await supabase
       .from('vendor_master')
@@ -26,6 +32,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const body = await request.json();
     
@@ -46,7 +57,7 @@ export async function POST(request: NextRequest) {
       .from('vendor_master')
       .insert([{
         ...body,
-        created_by: 'system', // Replace with actual user ID
+        created_by: auth.user?.username || 'system',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }])

@@ -1,5 +1,7 @@
 // Report Components
 export { default as ReportBuilder } from './ReportBuilder';
+export { default as UnifiedReportBuilder } from './UnifiedReportBuilder';
+export { default as DataExplorer } from './DataExplorer';
 export { default as MetricSelector } from './MetricSelector';
 export { default as DimensionSelector } from './DimensionSelector';
 export { default as FilterPanel } from './FilterPanel';

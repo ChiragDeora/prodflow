@@ -6,8 +6,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase, handleSupabaseError } from '@/lib/supabase/utils';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const supabase = getSupabase();
     const { searchParams } = new URL(request.url);
@@ -56,6 +62,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const supabase = getSupabase();
     const body = await request.json();

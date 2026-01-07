@@ -6,8 +6,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStockLedger, getItemLedgerWithBalance, getDocumentHistory } from '@/lib/stock';
 import type { LocationCode, DocumentType } from '@/lib/supabase/types/stock';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest) {
+  // Verify authentication
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     

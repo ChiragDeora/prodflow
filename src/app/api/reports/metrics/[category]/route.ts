@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getMetricsForCategory, MetricCategory, ALL_METRICS } from '@/lib/reports';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 interface RouteParams {
   params: Promise<{ category: string }>;
@@ -12,6 +13,11 @@ interface RouteParams {
 
 // GET - Get metrics for category
 export async function GET(request: NextRequest, { params }: RouteParams) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const { category } = await params;
     
@@ -25,7 +31,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
     
     // Validate category
-    const validCategories: MetricCategory[] = ['production', 'dispatch', 'stock', 'procurement', 'maintenance', 'quality'];
+    const validCategories: MetricCategory[] = ['production', 'dispatch', 'stock', 'store', 'maintenance', 'quality'];
     
     if (!validCategories.includes(category as MetricCategory)) {
       return NextResponse.json(

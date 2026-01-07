@@ -54,7 +54,7 @@ const BOMAuditTrail: React.FC<BOMAuditTrailProps> = ({ bom, auditData, onClose }
               <div>
                 <h3 className="text-lg font-medium text-gray-900">Audit Trail</h3>
                 <p className="text-sm text-gray-500">
-                  {bom.product_name} ({bom.product_code})
+                  {bom.item_name || bom.sfg_code || bom.item_code} ({bom.sfg_code || bom.item_code})
                 </p>
               </div>
             </div>

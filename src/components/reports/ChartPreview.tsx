@@ -130,7 +130,7 @@ const ChartPreview: React.FC<ChartPreviewProps> = ({
 // ============================================================================
 
 interface BarChartSVGProps {
-  data: { labels: string[]; datasets: { label: string; data: number[]; backgroundColor?: string }[] };
+  data: { labels: string[]; datasets: { label: string; data: number[]; backgroundColor?: string | string[] }[] };
   horizontal?: boolean;
   stacked?: boolean;
   showValues?: boolean;
@@ -233,7 +233,7 @@ const BarChartSVG: React.FC<BarChartSVGProps> = ({
                         y={y}
                         width={barWidth}
                         height={barHeight}
-                        fill={dataset.backgroundColor || CHART_COLORS[dsIndex % CHART_COLORS.length]}
+                        fill={Array.isArray(dataset.backgroundColor) ? dataset.backgroundColor[dsIndex % dataset.backgroundColor.length] : (dataset.backgroundColor || CHART_COLORS[dsIndex % CHART_COLORS.length])}
                         rx={2}
                         className="transition-opacity hover:opacity-80"
                       />
@@ -274,7 +274,7 @@ const BarChartSVG: React.FC<BarChartSVGProps> = ({
             <div key={i} className="flex items-center gap-2">
               <div
                 className="w-3 h-3 rounded"
-                style={{ backgroundColor: ds.backgroundColor || CHART_COLORS[i % CHART_COLORS.length] }}
+                style={{ backgroundColor: Array.isArray(ds.backgroundColor) ? ds.backgroundColor[0] : (ds.backgroundColor || CHART_COLORS[i % CHART_COLORS.length]) }}
               />
               <span className="text-sm text-gray-600">{ds.label}</span>
             </div>
@@ -290,7 +290,7 @@ const BarChartSVG: React.FC<BarChartSVGProps> = ({
 // ============================================================================
 
 interface LineChartSVGProps {
-  data: { labels: string[]; datasets: { label: string; data: number[]; borderColor?: string }[] };
+  data: { labels: string[]; datasets: { label: string; data: number[]; borderColor?: string | string[] }[] };
   area?: boolean;
   showValues?: boolean;
   showLegend?: boolean;
@@ -352,7 +352,8 @@ const LineChartSVG: React.FC<LineChartSVGProps> = ({
           
           {/* Lines/Areas */}
           {pointsPerDataset.map((points, dsIndex) => {
-            const color = data.datasets[dsIndex].borderColor || CHART_COLORS[dsIndex % CHART_COLORS.length];
+            const borderColor = data.datasets[dsIndex].borderColor;
+            const color = Array.isArray(borderColor) ? borderColor[dsIndex % borderColor.length] : (borderColor || CHART_COLORS[dsIndex % CHART_COLORS.length]);
             const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
             
             return (
@@ -426,7 +427,7 @@ const LineChartSVG: React.FC<LineChartSVGProps> = ({
             <div key={i} className="flex items-center gap-2">
               <div
                 className="w-3 h-3 rounded"
-                style={{ backgroundColor: ds.borderColor || CHART_COLORS[i % CHART_COLORS.length] }}
+                style={{ backgroundColor: Array.isArray(ds.borderColor) ? ds.borderColor[0] : (ds.borderColor || CHART_COLORS[i % CHART_COLORS.length]) }}
               />
               <span className="text-sm text-gray-600">{ds.label}</span>
             </div>
@@ -442,7 +443,7 @@ const LineChartSVG: React.FC<LineChartSVGProps> = ({
 // ============================================================================
 
 interface PieChartSVGProps {
-  data: { labels: string[]; datasets: { data: number[]; backgroundColor?: string[] }[] };
+  data: { labels: string[]; datasets: { data: number[]; backgroundColor?: string | string[] }[] };
   donut?: boolean;
   showValues?: boolean;
   showLegend?: boolean;
@@ -473,11 +474,17 @@ const PieChartSVG: React.FC<PieChartSVGProps> = ({
     const midAngle = startAngle + sliceAngle / 2;
     const labelRadius = radius * 0.7;
     
+    // Handle backgroundColor being either string or string[]
+    const bgColor = dataset.backgroundColor;
+    const sliceColor = Array.isArray(bgColor) 
+      ? (bgColor[i] || CHART_COLORS[i % CHART_COLORS.length])
+      : (bgColor || CHART_COLORS[i % CHART_COLORS.length]);
+    
     return {
       value,
       percentage: (value / total) * 100,
       label: data.labels[i],
-      color: (dataset.backgroundColor && dataset.backgroundColor[i]) || CHART_COLORS[i % CHART_COLORS.length],
+      color: sliceColor,
       startAngle,
       endAngle,
       labelX: center + Math.cos(midAngle) * labelRadius,

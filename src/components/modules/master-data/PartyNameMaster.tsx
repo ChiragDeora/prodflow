@@ -4,8 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Eye, Trash2, Pencil, Building2, Upload, Download } from 'lucide-react';
 import { PartyName, partyNameAPI } from '../../../lib/supabase';
 
+type ActionType = 'edit' | 'delete' | 'view' | 'approve' | 'mark_done';
+type ItemType = 'machine' | 'mold' | 'schedule' | 'material' | 'product' | 'raw_material' | 'packing_material' | 'color_label' | 'party_name';
+
 interface PartyNameMasterProps {
-  handleAction: (actionType: 'edit' | 'delete' | 'view', item: any, itemType: string) => Promise<void>;
+  handleAction: (actionType: ActionType, item: any, itemType: 'line' | ItemType) => Promise<void>;
   openExcelReader?: (type: string) => void;
 }
 

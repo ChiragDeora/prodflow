@@ -6,6 +6,7 @@ import {
   Package, Upload, Plus, ArrowUp, ArrowDown, Eye, Edit, Trash2 
 } from 'lucide-react';
 import { Mold as SupabaseMold, Unit } from '../../../lib/supabase';
+import { useAccessControl } from '../../../lib/useAccessControl';
 
 type Mold = SupabaseMold;
 type ActionType = 'edit' | 'delete' | 'view' | 'approve' | 'mark_done';
@@ -42,6 +43,14 @@ const MoldMaster: React.FC<MoldMasterProps> = ({
   defaultUnit,
   units
 }) => {
+  // Permission checks for Mold Master actions
+  const { canPerformAction, isRootAdmin } = useAccessControl();
+  
+  // Root admin has all permissions; otherwise check specific action permissions
+  const canCreateMolds = isRootAdmin || canPerformAction('create', 'Mold Master');
+  const canEditMolds = isRootAdmin || canPerformAction('update', 'Mold Master');
+  const canDeleteMolds = isRootAdmin || canPerformAction('delete', 'Mold Master');
+
   // Debug: Log first mold to check data structure
   React.useEffect(() => {
     if (sortedMolds && sortedMolds.length > 0) {
@@ -67,21 +76,25 @@ const MoldMaster: React.FC<MoldMasterProps> = ({
         <div className="flex space-x-3">
 
           
-          <button 
-            onClick={() => openExcelReader('molds')}
-            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            Import Excel
-          </button>
+          {canCreateMolds && (
+            <button 
+              onClick={() => openExcelReader('molds')}
+              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Import Excel
+            </button>
+          )}
           
-          <button 
-            onClick={() => handleAction('edit', {} as Mold, 'mold')}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Mold
-          </button>
+          {canCreateMolds && (
+            <button 
+              onClick={() => handleAction('edit', {} as Mold, 'mold')}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Mold
+            </button>
+          )}
         </div>
       </div>
 
@@ -315,16 +328,18 @@ const MoldMaster: React.FC<MoldMasterProps> = ({
                       <Eye className="w-4 h-4" />
                     </button>
                     <button 
-                      onClick={() => handleAction('edit', mold, 'mold')}
-                      className="text-green-600 hover:text-green-900"
-                      title="Edit Mold"
+                      onClick={() => canEditMolds && handleAction('edit', mold, 'mold')}
+                      className={`${canEditMolds ? 'text-green-600 hover:text-green-900 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`}
+                      title={canEditMolds ? 'Edit Mold' : 'No permission to edit'}
+                      disabled={!canEditMolds}
                     >
                       <Edit className="w-4 h-4" />
                     </button>
                     <button 
-                      onClick={() => handleAction('delete', mold, 'mold')}
-                      className="text-red-600 hover:text-red-900"
-                      title="Delete Mold"
+                      onClick={() => canDeleteMolds && handleAction('delete', mold, 'mold')}
+                      className={`${canDeleteMolds ? 'text-red-600 hover:text-red-900 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`}
+                      title={canDeleteMolds ? 'Delete Mold' : 'No permission to delete'}
+                      disabled={!canDeleteMolds}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

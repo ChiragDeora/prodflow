@@ -57,7 +57,7 @@ export async function GET(
     }
 
     // Get permission details separately
-    let enrichedDirectPermissions = [];
+    let enrichedDirectPermissions: any[] = [];
     if (directPermissions && directPermissions.length > 0) {
       const permissionIds = directPermissions.map(dp => dp.permission_id);
       const { data: permissions } = await supabase
@@ -66,7 +66,7 @@ export async function GET(
         .in('id', permissionIds);
 
       const resourceIds = [...new Set(permissions?.map(p => p.resource_id).filter(Boolean) || [])];
-      let resources = [];
+      let resources: any[] = [];
       if (resourceIds.length > 0) {
         const { data: resourceData } = await supabase
           .from('auth_resources')
@@ -100,7 +100,7 @@ export async function GET(
     }
 
     // For now, skip detailed permissions function since it may not exist
-    const detailedPermissions = [];
+    const detailedPermissions: any[] = [];
 
     // Organize permissions by module for easier display
     const permissionsByModule: Record<string, any[]> = {};
@@ -268,7 +268,7 @@ export async function POST(
       ...new Set(validPermissions.map((p) => p.id as string)),
     ];
 
-    let results = [];
+    let results: any[] = [];
 
     if (action === 'grant') {
       // Grant permissions

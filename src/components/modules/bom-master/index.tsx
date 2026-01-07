@@ -11,6 +11,9 @@ import type { BOMMasterWithVersions, BOMVersion, BOMComponent, BOMAudit } from '
 import { removeOldPrefix, updateItemNameWithRPOrCK } from '@/utils/bomCodeUtils';
 
 import ExcelFileReader from '../../ExcelFileReader';
+import BlockingLoadingModal from '../../ui/BlockingLoadingModal';
+import BOMVersionViewer from './BOMVersionViewer';
+import BOMAuditTrail from './BOMAuditTrail';
 
 // Utility function to format numeric values with 2 decimal places
 const formatNumericValue = (value: any): string => {
@@ -50,6 +53,9 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
   const [filterByStatus, setFilterByStatus] = useState<string>('all');
   const [filterByCode, setFilterByCode] = useState<string>('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [isReleasingAll, setIsReleasingAll] = useState(false);
+  const [isImportingExcel, setIsImportingExcel] = useState(false);
+  const [blockingMessage, setBlockingMessage] = useState('');
 
   // Load BOM masters on component mount and when category changes
   useEffect(() => {
@@ -164,11 +170,69 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
     }
   };
 
-  const handleExcelDataImported = (data: any) => {
-    // Handle Excel import
-    console.log('Excel import data:', data);
-    setShowExcelReader(false);
-    loadBomMasters();
+  const handleExcelDataImported = async (data: any) => {
+    // Show blocking modal during import
+    setIsImportingExcel(true);
+    setBlockingMessage('Importing Excel data. Please wait...');
+    
+    try {
+      // Handle Excel import
+      console.log('Excel import data:', data);
+      setShowExcelReader(false);
+      await loadBomMasters();
+    } finally {
+      setIsImportingExcel(false);
+      setBlockingMessage('');
+    }
+  };
+
+  // Release all BOMs (current category or all)
+  const handleReleaseAll = async (allCategories: boolean = false) => {
+    const draftCount = bomMasters.filter(bom => bom.status === 'draft').length;
+    
+    if (draftCount === 0 && !allCategories) {
+      alert(`No draft BOMs to release in ${selectedCategory} category.`);
+      return;
+    }
+    
+    const confirmMessage = allCategories
+      ? 'Are you sure you want to release ALL draft BOMs across all categories (SFG, FG, LOCAL)? This will make them view-only and cannot be undone.'
+      : `Are you sure you want to release all ${draftCount} draft BOMs in ${selectedCategory} category? This will make them view-only and cannot be undone.`;
+    
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+    
+    setIsReleasingAll(true);
+    setBlockingMessage(`Releasing ${draftCount} BOMs. Please wait...`);
+    
+    try {
+      const response = await fetch('/api/bom/release-all', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          category: allCategories ? null : selectedCategory,
+          releasedBy: 'current_user'
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        alert(result.message);
+        await loadBomMasters();
+      } else {
+        alert(`Failed to release BOMs: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error releasing all BOMs:', error);
+      alert('Failed to release BOMs');
+    } finally {
+      setIsReleasingAll(false);
+      setBlockingMessage('');
+    }
   };
 
   const handleSortChange = (field: string) => {
@@ -340,6 +404,19 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
               <Plus className="w-4 h-4 mr-2" />
               Add BOM
             </button>
+            <button
+              onClick={() => handleReleaseAll(false)}
+              disabled={isReleasingAll || loading}
+              className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+              title={`Release all draft ${selectedCategory} BOMs`}
+            >
+              {isReleasingAll ? (
+                <RotateCcw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Lock className="w-4 h-4 mr-2" />
+              )}
+              {isReleasingAll ? 'Releasing...' : `Release All ${selectedCategory}`}
+            </button>
           </div>
         </div>
       </div>
@@ -481,9 +558,13 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
       {/* BOM Masters Table */}
       <div className="flex-1 overflow-auto p-6">
         {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-2 text-gray-600">Loading BOM masters...</span>
+          <div className="flex flex-col items-center justify-center h-64">
+            <div className="relative mb-4">
+              <div className="w-16 h-16 border-4 border-blue-100 rounded-full"></div>
+              <div className="absolute top-0 left-0 w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <span className="text-gray-700 font-medium text-lg">Loading BOM Masters...</span>
+            <span className="text-gray-500 text-sm mt-2">Please wait. Do not refresh or close this tab.</span>
           </div>
         ) : sortedBomMasters.length === 0 ? (
           <div className="text-center py-12">
@@ -911,6 +992,38 @@ const BOMMaster: React.FC<BOMMasterProps> = () => {
           defaultDataType="sfg_bom"
         />
       )}
+
+      {/* BOM Version Viewer Modal */}
+      {showVersionViewer && selectedBOM && (
+        <BOMVersionViewer
+          bom={selectedBOM}
+          onClose={() => {
+            setShowVersionViewer(false);
+            setSelectedBOM(null);
+          }}
+        />
+      )}
+
+      {/* BOM Audit Trail Modal */}
+      {showAuditTrail && selectedBOM && (
+        <BOMAuditTrail
+          bom={selectedBOM}
+          auditData={auditData}
+          onClose={() => {
+            setShowAuditTrail(false);
+            setSelectedBOM(null);
+            setAuditData([]);
+          }}
+        />
+      )}
+
+      {/* Blocking Loading Modal for long operations (not regular loading) */}
+      <BlockingLoadingModal
+        isOpen={isReleasingAll || isImportingExcel}
+        title={isReleasingAll ? 'Releasing BOMs...' : 'Importing Data...'}
+        message={blockingMessage || 'Please wait. Do not press back or close this tab.'}
+        showWarning={true}
+      />
     </div>
   );
 };

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { buildReportQuery, buildStockBalanceQuery, ReportConfig } from '@/lib/reports';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 // Create Supabase client
 const supabase = createClient(
@@ -14,6 +15,11 @@ const supabase = createClient(
 );
 
 export async function POST(request: NextRequest) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const config: ReportConfig = await request.json();
     
@@ -210,8 +216,14 @@ async function executeProductionQuery(config: ReportConfig) {
   }
   
   // Aggregate data based on dimensions
+  // Transform Supabase nested data to match ProductionEntry type
+  const transformedData: ProductionEntry[] = (data || []).map((row: Record<string, unknown>) => ({
+    ...row,
+    dpr_data: Array.isArray(row.dpr_data) ? row.dpr_data[0] : row.dpr_data,
+  }));
+  
   return {
-    data: aggregateData(data || [], config),
+    data: aggregateData(transformedData, config),
   };
 }
 
@@ -252,8 +264,14 @@ async function executeDispatchQuery(config: ReportConfig) {
     throw new Error(`Dispatch query failed: ${error.message}`);
   }
   
+  // Transform Supabase nested data to match ProductionEntry type
+  const transformedData: ProductionEntry[] = (data || []).map((row: Record<string, unknown>) => ({
+    ...row,
+    dispatch_memos: Array.isArray(row.dispatch_memos) ? row.dispatch_memos[0] : row.dispatch_memos,
+  }));
+  
   return {
-    data: aggregateData(data || [], config),
+    data: aggregateData(transformedData, config),
   };
 }
 
@@ -298,8 +316,14 @@ async function executeStockQuery(config: ReportConfig) {
     throw new Error(`Stock query failed: ${error.message}`);
   }
   
+  // Transform Supabase nested data to match ProductionEntry type
+  const transformedData: ProductionEntry[] = (data || []).map((row: Record<string, unknown>) => ({
+    ...row,
+    stock_items: Array.isArray(row.stock_items) ? row.stock_items[0] : row.stock_items,
+  }));
+  
   return {
-    data: aggregateData(data || [], config),
+    data: aggregateData(transformedData, config),
   };
 }
 
@@ -340,8 +364,14 @@ async function executeProcurementQuery(config: ReportConfig) {
     throw new Error(`Procurement query failed: ${error.message}`);
   }
   
+  // Transform Supabase nested data to match ProductionEntry type
+  const transformedData: ProductionEntry[] = (data || []).map((row: Record<string, unknown>) => ({
+    ...row,
+    store_grn: Array.isArray(row.store_grn) ? row.store_grn[0] : row.store_grn,
+  }));
+  
   return {
-    data: aggregateData(data || [], config),
+    data: aggregateData(transformedData, config),
   };
 }
 
@@ -397,6 +427,7 @@ function getDateRange(dateRange: string | { from: string; to: string } | undefin
 }
 
 // Type for nested record with dpr_data
+// Note: Supabase returns nested relations as arrays or single objects depending on the relationship
 interface ProductionEntry {
   id?: string;
   product?: string;
@@ -416,18 +447,30 @@ interface ProductionEntry {
     date?: string;
     shift?: string;
     shift_incharge?: string;
-  };
+  } | {
+    date?: string;
+    shift?: string;
+    shift_incharge?: string;
+  }[];
   dispatch_memos?: {
     date?: string;
     party_name?: string;
-  };
+  } | {
+    date?: string;
+    party_name?: string;
+  }[];
   store_grn?: {
     grn_date?: string;
     party_name?: string;
-  };
+  } | {
+    grn_date?: string;
+    party_name?: string;
+  }[];
   stock_items?: {
     item_type?: string;
-  };
+  } | {
+    item_type?: string;
+  }[];
   [key: string]: unknown;
 }
 
@@ -501,12 +544,18 @@ function getDimensionKey(row: ProductionEntry, config: ReportConfig): string {
   return parts.join('|');
 }
 
+// Helper to unwrap nested data that may be array or object
+function unwrap<T>(value: T | T[] | undefined): T | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
 function getDimensionValue(row: ProductionEntry, dimension: string, dataSource: string): unknown {
-  // Handle nested data
-  const dprData = row.dpr_data;
-  const dispatchMemo = row.dispatch_memos;
-  const grn = row.store_grn;
-  const stockItem = row.stock_items;
+  // Handle nested data - unwrap arrays if needed
+  const dprData = unwrap(row.dpr_data);
+  const dispatchMemo = unwrap(row.dispatch_memos);
+  const grn = unwrap(row.store_grn);
+  const stockItem = unwrap(row.stock_items);
   
   // Get the date based on data source
   let date: string | undefined;

@@ -60,7 +60,7 @@ const StoreHistory: React.FC = () => {
             type: 'normal-grn' as const,
             docNo: grn.doc_no,
             date: grn.date,
-            supplierName: grn.party_name || grn.supplier_name || '',
+            supplierName: grn.supplier_name || '',
             grnType: 'NORMAL',
             createdAt: grn.created_at || grn.date
           }));

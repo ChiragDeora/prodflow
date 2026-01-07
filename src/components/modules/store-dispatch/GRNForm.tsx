@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, Printer, Search, Link, Upload, CheckCircle, Loader2 } from 'lucide-react';
 import { grnAPI, materialIndentSlipAPI, purchaseOrderAPI, MaterialIndentSlip, MaterialIndentSlipItem, PurchaseOrder } from '../../../lib/supabase';
 import PrintHeader from '../../shared/PrintHeader';
-import PartyNameSelect from './PartyNameSelect';
+import CustomerSelect from './CustomerSelect';
 import { useStoreDispatch, GRNItem } from './StoreDispatchContext';
 import { generateDocumentNumber, FORM_CODES } from '../../../utils/formCodeUtils';
 
@@ -189,11 +189,21 @@ const GRNForm: React.FC = () => {
     updateGrnField(field as any, value);
   };
 
-  const handlePartySelect = (party: { id: string; name: string }) => {
+  const handleCustomerSelect = (customer: { 
+    id: string; 
+    name: string;
+    address?: string;
+    state?: string;
+    stateCode?: string;
+    gstNumber?: string;
+  }) => {
     setFormData({
       ...formData,
-      partyId: party.id,
-      partyName: party.name,
+      partyId: customer.id,
+      partyName: customer.name,
+      address: customer.address || '',
+      state: customer.state || '',
+      gstNo: customer.gstNumber || '',
     });
   };
 
@@ -250,6 +260,7 @@ const GRNForm: React.FC = () => {
         po_date: formData.poDate || undefined,
         invoice_no: formData.invoiceNo || undefined,
         invoice_date: formData.invoiceDate || undefined,
+        supplier_name: formData.partyName || undefined,
         party_name: formData.partyName || undefined,
         address: formData.address || undefined,
         state: formData.state || undefined,
@@ -508,11 +519,11 @@ const GRNForm: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Party Name:
               </label>
-              <PartyNameSelect
+              <CustomerSelect
                 value={formData.partyName}
-                partyId={formData.partyId}
-                onChange={handlePartySelect}
-                placeholder="Select or search party..."
+                customerId={formData.partyId}
+                onChange={handleCustomerSelect}
+                placeholder="Select or search customer..."
               />
             </div>
             <div>

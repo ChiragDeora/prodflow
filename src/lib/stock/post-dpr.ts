@@ -156,6 +156,38 @@ export async function postDprToStock(
       );
     }
     
+    // Step 4b: Check for skipped entries (missing BOM mappings) - fail fast
+    // Get unique products from entries
+    const uniqueProducts = [...new Set(entries.map(e => e.product?.trim()).filter(Boolean))];
+    const processedProducts = [...new Set(aggregatedProduction.map(a => a.mold_name))];
+    const skippedProducts = uniqueProducts.filter(p => !processedProducts.includes(p));
+    
+    if (skippedProducts.length > 0) {
+      // Get all available BOM item names to suggest similar matches
+      const { data: allBoms } = await supabase
+        .from('sfg_bom')
+        .select('item_name')
+        .order('item_name');
+      
+      const availableNames = (allBoms || []).map(b => b.item_name).filter(Boolean);
+      
+      // Find similar matches for each skipped product
+      const suggestions = skippedProducts.map(skipped => {
+        const similar = availableNames.filter(name => 
+          name.toLowerCase().includes(skipped.toLowerCase()) || 
+          skipped.toLowerCase().includes(name.toLowerCase())
+        );
+        return similar.length > 0 
+          ? `${skipped} (similar: ${similar.slice(0, 3).join(', ')})`
+          : skipped;
+      });
+      
+      throw new StockPostingError(
+        'BOM_NOT_FOUND',
+        `Missing BOM mappings for: ${suggestions.join(', ')}. Please check product names match BOM Master exactly or add missing BOM entries.`
+      );
+    }
+    
     // Step 5: Process each aggregated SFG
     let entriesCreated = 0;
     const transactionDate = dpr.report_date;
@@ -363,6 +395,14 @@ async function aggregateProductionBySfg(
     }
     
     const sfgCode = sfgBom.sfg_code;
+    
+    // Validate that sfg_code is present and non-empty
+    if (!sfgCode || sfgCode.trim() === '') {
+      const errorMsg = `BOM for mold "${entry.product}" has empty sfg_code. Please update the BOM Master.`;
+      errors.push(errorMsg);
+      console.error('❌ [aggregateProductionBySfg]', errorMsg);
+      continue;
+    }
     console.log(`✅ Found BOM for mold ${entry.product}:`, {
       sfg_code: sfgCode,
       rm_percentages: {

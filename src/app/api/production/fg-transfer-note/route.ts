@@ -9,8 +9,14 @@ import {
   getAllFGTransferNotes, 
   createFGTransferNote 
 } from '@/lib/production/fg-transfer-note';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const data = await getAllFGTransferNotes();
     return NextResponse.json({ success: true, data });
@@ -24,6 +30,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const body = await request.json();
     

@@ -96,21 +96,34 @@ export async function postJobWorkChallanToStock(
     const documentNumber = challan.doc_no || challan.sr_no;
     
     for (const item of items) {
-      // Map the item description to a stock item
-      // Try material_description first, then try direct match
-      let stockItem = await getStockItemByCode(item.material_description);
+      // Map the item to a stock item
+      // Priority: item_code > material_description > mapItemToStockItem
+      let stockItem = null;
       
-      if (!stockItem) {
+      // First try item_code if available
+      if (item.item_code) {
+        stockItem = await getStockItemByCode(item.item_code);
+      }
+      
+      // Fallback to material_description if item_code not found
+      if (!stockItem && item.material_description) {
+        stockItem = await getStockItemByCode(item.material_description);
+      }
+      
+      // Last resort: try mapping
+      if (!stockItem && item.material_description) {
         stockItem = await mapItemToStockItem('job_work_challan', item.material_description);
       }
       
       if (!stockItem) {
-        warnings.push(`Could not map item "${item.material_description}" to stock item. Skipping.`);
+        const itemIdentifier = item.item_code || item.material_description || 'Unknown';
+        warnings.push(`Could not map item "${itemIdentifier}" to stock item. Skipping.`);
         continue;
       }
       
-      // Get quantity - qty is in boxes (not pieces)
-      const quantity = item.qty;
+      // Get quantity - use quantityKg (in kg) for posting
+      // Convert kg to tons if needed, or use as-is based on unit_of_measure
+      const quantity = item.qty; // This is in kg from the form
       if (!quantity || quantity <= 0) {
         warnings.push(`Item "${item.material_description}" has no quantity. Skipping.`);
         continue;

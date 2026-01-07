@@ -26,7 +26,7 @@ const dateDimensions: DimensionDefinition[] = [
   {
     id: 'date_day',
     displayName: 'Date (Daily)',
-    availableFor: ['production', 'dispatch', 'stock', 'procurement', 'maintenance', 'quality'],
+    availableFor: ['production', 'dispatch', 'stock', 'store', 'maintenance', 'quality'],
     column: 'DATE(date)',
     dateFormat: 'YYYY-MM-DD',
     type: 'date',
@@ -36,7 +36,7 @@ const dateDimensions: DimensionDefinition[] = [
   {
     id: 'date_week',
     displayName: 'Date (Weekly)',
-    availableFor: ['production', 'dispatch', 'stock', 'procurement', 'maintenance', 'quality'],
+    availableFor: ['production', 'dispatch', 'stock', 'store', 'maintenance', 'quality'],
     column: "DATE_TRUNC('week', date)",
     dateFormat: 'YYYY-[W]WW',
     type: 'date',
@@ -46,7 +46,7 @@ const dateDimensions: DimensionDefinition[] = [
   {
     id: 'date_month',
     displayName: 'Date (Monthly)',
-    availableFor: ['production', 'dispatch', 'stock', 'procurement', 'maintenance', 'quality'],
+    availableFor: ['production', 'dispatch', 'stock', 'store', 'maintenance', 'quality'],
     column: "DATE_TRUNC('month', date)",
     dateFormat: 'YYYY-MM',
     type: 'date',
@@ -56,7 +56,7 @@ const dateDimensions: DimensionDefinition[] = [
   {
     id: 'date_quarter',
     displayName: 'Date (Quarterly)',
-    availableFor: ['production', 'dispatch', 'stock', 'procurement', 'maintenance', 'quality'],
+    availableFor: ['production', 'dispatch', 'stock', 'store', 'maintenance', 'quality'],
     column: "DATE_TRUNC('quarter', date)",
     dateFormat: 'YYYY-[Q]Q',
     type: 'date',
@@ -66,7 +66,7 @@ const dateDimensions: DimensionDefinition[] = [
   {
     id: 'date_year',
     displayName: 'Date (Yearly)',
-    availableFor: ['production', 'dispatch', 'stock', 'procurement', 'maintenance', 'quality'],
+    availableFor: ['production', 'dispatch', 'stock', 'store', 'maintenance', 'quality'],
     column: "DATE_TRUNC('year', date)",
     dateFormat: 'YYYY',
     type: 'date',
@@ -187,7 +187,7 @@ const procurementDimensions: DimensionDefinition[] = [
   {
     id: 'supplier',
     displayName: 'Supplier',
-    availableFor: ['procurement'],
+    availableFor: ['store'],
     column: 'party_name',
     type: 'categorical',
     sortable: true,
@@ -196,7 +196,7 @@ const procurementDimensions: DimensionDefinition[] = [
   {
     id: 'material_type',
     displayName: 'Material Type',
-    availableFor: ['procurement'],
+    availableFor: ['store'],
     column: 'type_of_material',
     type: 'categorical',
     sortable: true,
@@ -230,7 +230,7 @@ const stockDimensions: DimensionDefinition[] = [
   {
     id: 'item_code',
     displayName: 'Item Code',
-    availableFor: ['stock', 'procurement'],
+    availableFor: ['stock', 'store'],
     column: 'item_code',
     type: 'categorical',
     sortable: true,

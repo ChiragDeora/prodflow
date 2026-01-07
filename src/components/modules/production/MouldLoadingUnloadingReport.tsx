@@ -13,16 +13,16 @@ import { lineAPI } from '../../../lib/supabase';
 
 interface Line {
   line_id: string;
-  line_name: string;
+  line_name?: string; // Optional - may not exist in database
   description?: string;
   im_machine_id?: string;
   robot_machine_id?: string;
   conveyor_machine_id?: string;
   hoist_machine_id?: string;
   status: 'Active' | 'Inactive' | 'Maintenance';
-  unit: string;
-  created_at: string;
-  updated_at: string;
+  unit?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface MouldReport {
@@ -100,7 +100,8 @@ const MouldLoadingUnloadingReport: React.FC = () => {
     try {
       const linesData = await lineAPI.getAll();
       // Show all lines, sorted by line_id to ensure consistent ordering
-      setLines(linesData.sort((a, b) => a.line_id.localeCompare(b.line_id)));
+      // Cast to local Line type which has line_name as optional
+      setLines((linesData as Line[]).sort((a, b) => a.line_id.localeCompare(b.line_id)));
     } catch (error) {
       console.error('Error loading lines:', error);
       setError('Failed to load production lines');

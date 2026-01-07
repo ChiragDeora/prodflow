@@ -67,11 +67,11 @@ const SalesHistory: React.FC = () => {
         const orderForms: SalesForm[] = (orderBooks || []).map(order => ({
           id: order.id,
           type: 'order-book' as const,
-          docNo: order.order_no || order.doc_no || '',
-          date: order.order_date || order.date || order.created_at,
-          poNo: order.po_no || '',
-          partyName: order.customer_name || order.party_name || '',
-          createdAt: order.created_at || order.order_date || order.date
+          docNo: order.doc_no || '',
+          date: order.order_date || order.created_at || '',
+          poNo: order.po_number || '',
+          partyName: order.customer_name || '',
+          createdAt: order.created_at || order.order_date
         }));
 
         const allForms = [...memoForms, ...orderForms];
@@ -192,9 +192,10 @@ const SalesHistory: React.FC = () => {
 
   if (selectedForm) {
     // Prepare document info
+    const dateValue = detailedForm && 'date' in detailedForm ? detailedForm.date : (detailedForm && 'order_date' in detailedForm ? detailedForm.order_date : selectedForm.date || selectedForm.createdAt);
     const documentInfo: Array<{ label: string; value: string | number | null | undefined }> = [
-      { label: 'Document Number', value: detailedForm && 'doc_no' in detailedForm ? detailedForm.doc_no : (detailedForm && 'memo_no' in detailedForm ? detailedForm.memo_no : (detailedForm && 'order_no' in detailedForm ? detailedForm.order_no : selectedForm.docNo)) },
-      { label: 'Date', value: formatDate(detailedForm && 'date' in detailedForm ? detailedForm.date : (detailedForm && 'order_date' in detailedForm ? detailedForm.order_date : selectedForm.date || selectedForm.createdAt)) }
+      { label: 'Document Number', value: detailedForm && 'doc_no' in detailedForm ? detailedForm.doc_no : selectedForm.docNo },
+      { label: 'Date', value: formatDate(dateValue || '') }
     ];
 
     if (selectedForm.type === 'dispatch-memo' && detailedForm) {
@@ -203,8 +204,8 @@ const SalesHistory: React.FC = () => {
       if (memo.memo_no) documentInfo.push({ label: 'Memo Number', value: memo.memo_no });
     } else if (selectedForm.type === 'order-book' && detailedForm) {
       const order = detailedForm as OrderBook;
-      if (order.po_no) documentInfo.push({ label: 'PO Number', value: order.po_no });
-      if (order.customer_name || order.party_name) documentInfo.push({ label: 'Customer', value: order.customer_name || order.party_name });
+      if (order.po_number) documentInfo.push({ label: 'PO Number', value: order.po_number });
+      if (order.customer_name) documentInfo.push({ label: 'Customer', value: order.customer_name });
       if (order.order_date) documentInfo.push({ label: 'Order Date', value: formatDate(order.order_date) });
     }
 

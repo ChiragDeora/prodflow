@@ -30,6 +30,7 @@ import {
   Layers,
   History,
 } from 'lucide-react';
+import { useAccessControl } from '@/lib/useAccessControl';
 
 // Types
 interface StockLedgerEntry {
@@ -129,9 +130,27 @@ const formatDateTime = (dateStr: string) => {
   });
 };
 
+// Tab configuration with permission mapping
+const STOCK_LEDGER_TABS = [
+  { id: 'movements' as const, label: 'Movement Log', resource: 'Movement Log', icon: History },
+  { id: 'balances' as const, label: 'Current Stock', resource: 'Current Stock', icon: Layers },
+  { id: 'analytics' as const, label: 'Analytics', resource: 'Stock Analytics', icon: BarChart3 },
+];
+
 // Main Component
 const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) => {
-  const [activeTab, setActiveTab] = useState<'movements' | 'balances' | 'analytics'>('movements');
+  const { canAccessResource, isRootAdmin } = useAccessControl();
+  
+  // Filter tabs based on permissions
+  const accessibleTabs = useMemo(() => {
+    if (isRootAdmin) return STOCK_LEDGER_TABS;
+    return STOCK_LEDGER_TABS.filter(tab => canAccessResource(tab.resource));
+  }, [canAccessResource, isRootAdmin]);
+
+  const [activeTab, setActiveTab] = useState<'movements' | 'balances' | 'analytics'>(() => {
+    // Default to first accessible tab
+    return accessibleTabs.length > 0 ? accessibleTabs[0].id : 'movements';
+  });
   const [ledgerEntries, setLedgerEntries] = useState<StockLedgerEntry[]>([]);
   const [balances, setBalances] = useState<StockBalance[]>([]);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
@@ -301,44 +320,41 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
     a.click();
   };
 
+  // If user has no access to any tabs, show a message
+  if (accessibleTabs.length === 0) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-8">
+        <div className="text-center">
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">No Access</h3>
+          <p className="text-gray-600">You don't have permission to access any Stock Ledger tabs.</p>
+          <p className="text-sm text-gray-500 mt-2">Please contact your administrator for access.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col bg-gray-50">
-      {/* Tab Navigation */}
+      {/* Tab Navigation - Only shows tabs user has permission for */}
       <div className="border-b border-gray-200 bg-white app-subnav">
         <nav className="flex space-x-8 px-6">
-          <button
-            onClick={() => { setActiveTab('movements'); onSubNavClick?.(); }}
-            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap flex items-center gap-2 ${
-              activeTab === 'movements'
-                ? 'border-slate-700 text-slate-900'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <History className="w-4 h-4" />
-            Movement Log
-          </button>
-          <button
-            onClick={() => { setActiveTab('balances'); onSubNavClick?.(); }}
-            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap flex items-center gap-2 ${
-              activeTab === 'balances'
-                ? 'border-slate-700 text-slate-900'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Layers className="w-4 h-4" />
-            Current Stock
-          </button>
-          <button
-            onClick={() => { setActiveTab('analytics'); onSubNavClick?.(); }}
-            className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap flex items-center gap-2 ${
-              activeTab === 'analytics'
-                ? 'border-slate-700 text-slate-900'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4" />
-            Analytics
-          </button>
+          {accessibleTabs.map(tab => {
+            const IconComponent = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => { setActiveTab(tab.id); onSubNavClick?.(); }}
+                className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap flex items-center gap-2 ${
+                  activeTab === tab.id
+                    ? 'border-slate-700 text-slate-900'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <IconComponent className="w-4 h-4" />
+                {tab.label}
+              </button>
+            );
+          })}
         </nav>
       </div>
 

@@ -597,27 +597,53 @@ export async function createItemMapping(
 /**
  * Get SFG BOM by mold name (item_name)
  * This is the critical mapping for DPR posting
+ * 
+ * Tries multiple matching strategies:
+ * 1. Exact match (trimmed)
+ * 2. Case-insensitive match
+ * 3. Returns null if not found
  */
 export async function getSfgBomByMoldName(
   moldName: string
 ): Promise<SfgBom | null> {
   const supabase = getSupabase();
   
-  const { data, error } = await supabase
-    .from('sfg_bom')
-    .select('*')
-    .eq('item_name', moldName)
-    .single();
-  
-  if (error) {
-    if (error.code === 'PGRST116') {
-      return null;
-    }
-    handleSupabaseError(error, 'getting SFG BOM by mold name');
-    throw error;
+  // Normalize the input: trim whitespace
+  const normalizedName = moldName?.trim() || '';
+  if (!normalizedName) {
+    return null;
   }
   
-  return data;
+  // Try exact match first (trimmed)
+  let { data, error } = await supabase
+    .from('sfg_bom')
+    .select('*')
+    .eq('item_name', normalizedName)
+    .maybeSingle();
+  
+  if (data) {
+    return data;
+  }
+  
+  // If exact match fails, try case-insensitive match
+  // Get all SFG BOMs and find case-insensitive match
+  const { data: allBoms, error: allBomsError } = await supabase
+    .from('sfg_bom')
+    .select('*');
+  
+  if (!allBomsError && allBoms) {
+    const caseInsensitiveMatch = allBoms.find(
+      bom => bom.item_name?.trim().toLowerCase() === normalizedName.toLowerCase()
+    );
+    
+    if (caseInsensitiveMatch) {
+      console.warn(`⚠️ [getSfgBomByMoldName] Case-insensitive match found: "${normalizedName}" matched "${caseInsensitiveMatch.item_name}"`);
+      return caseInsensitiveMatch;
+    }
+  }
+  
+  // No match found
+  return null;
 }
 
 /**

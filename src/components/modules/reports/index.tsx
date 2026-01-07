@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   BarChart3,
   FileText,
@@ -9,13 +9,15 @@ import {
   Lightbulb,
   Star,
   ChevronLeft,
+  Database,
 } from 'lucide-react';
 import ReportsDashboard from '@/components/reports/ReportsDashboard';
-import ReportBuilder from '@/components/reports/ReportBuilder';
+import UnifiedReportBuilder from '@/components/reports/UnifiedReportBuilder';
 import TemplateGallery from '@/components/reports/TemplateGallery';
 import SmartQueryPlaceholder from '@/components/reports/SmartQueryPlaceholder';
 import InsightsPlaceholder from '@/components/reports/InsightsPlaceholder';
 import SavedReportsPage from './SavedReportsPage';
+import { useAccessControl } from '@/lib/useAccessControl';
 
 // ============================================================================
 // TYPES
@@ -32,12 +34,12 @@ interface ReportsModuleProps {
 // ============================================================================
 
 const NAV_ITEMS = [
-  { id: 'dashboard' as ReportPage, label: 'Dashboard', icon: BarChart3 },
-  { id: 'builder' as ReportPage, label: 'Report Builder', icon: Layers },
-  { id: 'templates' as ReportPage, label: 'Templates', icon: FileText },
-  { id: 'saved' as ReportPage, label: 'Saved Reports', icon: Star },
-  { id: 'smart-query' as ReportPage, label: 'Smart Query', icon: MessageSquare, badge: 'AI' },
-  { id: 'insights' as ReportPage, label: 'AI Insights', icon: Lightbulb, badge: 'AI' },
+  { id: 'dashboard' as ReportPage, label: 'Dashboard', icon: BarChart3, resource: 'Reports Dashboard' },
+  { id: 'builder' as ReportPage, label: 'Report Builder', icon: Database, resource: 'Report Builder' },
+  { id: 'templates' as ReportPage, label: 'Templates', icon: FileText, resource: 'Report Templates' },
+  { id: 'saved' as ReportPage, label: 'Saved Reports', icon: Star, resource: 'Saved Reports' },
+  { id: 'smart-query' as ReportPage, label: 'Smart Query', icon: MessageSquare, badge: 'AI', resource: 'Smart Query' },
+  { id: 'insights' as ReportPage, label: 'AI Insights', icon: Lightbulb, badge: 'AI', resource: 'AI Insights' },
 ];
 
 // ============================================================================
@@ -45,7 +47,18 @@ const NAV_ITEMS = [
 // ============================================================================
 
 const ReportsModule: React.FC<ReportsModuleProps> = ({ onSubNavClick }) => {
-  const [activePage, setActivePage] = useState<ReportPage>('dashboard');
+  const { canAccessResource, isRootAdmin } = useAccessControl();
+  
+  // Filter tabs based on permissions
+  const accessibleTabs = useMemo(() => {
+    if (isRootAdmin) return NAV_ITEMS;
+    return NAV_ITEMS.filter(item => canAccessResource(item.resource));
+  }, [canAccessResource, isRootAdmin]);
+
+  const [activePage, setActivePage] = useState<ReportPage>(() => {
+    // Default to first accessible tab
+    return accessibleTabs.length > 0 ? accessibleTabs[0].id : 'dashboard';
+  });
   const [builderConfig, setBuilderConfig] = useState<unknown>(null);
   
   // Handle navigation
@@ -123,7 +136,7 @@ const ReportsModule: React.FC<ReportsModuleProps> = ({ onSubNavClick }) => {
       
       case 'builder':
         return (
-          <ReportBuilder
+          <UnifiedReportBuilder
             initialConfig={builderConfig as Record<string, unknown> | undefined}
             onSave={handleSaveReport}
           />
@@ -166,12 +179,25 @@ const ReportsModule: React.FC<ReportsModuleProps> = ({ onSubNavClick }) => {
     }
   };
   
+  // If user has no access to any tabs, show a message
+  if (accessibleTabs.length === 0) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-8">
+        <div className="text-center">
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">No Access</h3>
+          <p className="text-gray-600">You don't have permission to access any Reports tabs.</p>
+          <p className="text-sm text-gray-500 mt-2">Please contact your administrator for access.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col bg-gray-50">
-      {/* Sub Navigation */}
+      {/* Sub Navigation - Only shows tabs user has permission for */}
       <div className="border-b border-gray-200 bg-white app-subnav">
         <nav className="flex items-center gap-1 px-4 overflow-x-auto">
-          {NAV_ITEMS.map(item => {
+          {accessibleTabs.map(item => {
             const Icon = item.icon;
             const isActive = activePage === item.id;
             

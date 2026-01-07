@@ -3,6 +3,8 @@ export interface VendorRegistration {
   id: string;
   customer_name: string;
   address: string;
+  state?: string;
+  state_code?: string;
   contact_no?: string;
   email_id?: string;
   gst_no?: string;

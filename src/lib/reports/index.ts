@@ -18,6 +18,9 @@ export * from './data-transformer';
 // Chart Configuration
 export * from './chart-config';
 
+// Data Sources
+export * from './data-sources';
+
 // ============================================================================
 // TYPES
 // ============================================================================

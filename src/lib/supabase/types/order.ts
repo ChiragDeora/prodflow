@@ -2,9 +2,13 @@
 export interface OrderBook {
   id: string;
   doc_no: string;
+  order_no?: string; // Alternative to doc_no
   po_number: string;
+  po_no?: string; // Alternative to po_number
   order_date: string;
+  date?: string; // Alternative to order_date
   customer_name: string;
+  party_name?: string; // Alternative to customer_name
   customer_address?: string;
   customer_contact?: string;
   customer_email?: string;

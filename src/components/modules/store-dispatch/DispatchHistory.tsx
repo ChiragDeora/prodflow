@@ -55,9 +55,9 @@ const DispatchHistory: React.FC = () => {
         const challanForms: DispatchForm[] = challans.map(challan => ({
           id: challan.id,
           type: 'delivery-challan' as const,
-          srNo: challan.dc_no || challan.sr_no,
+          srNo: challan.sr_no || challan.doc_no,
           date: challan.date,
-          to: challan.party_name || challan.address || challan.to_address,
+          to: challan.to_address || '',
           vehicleNo: challan.vehicle_no || undefined,
           state: challan.state || undefined,
           createdAt: challan.created_at || challan.date,
@@ -223,7 +223,7 @@ const DispatchHistory: React.FC = () => {
     } else if (selectedForm.type === 'mis' && detailedForm) {
       const mis = detailedForm as MIS;
       if (mis.dept_name) documentInfo.push({ label: 'Department', value: mis.dept_name });
-      if (mis.memo_no) documentInfo.push({ label: 'Memo Number', value: mis.memo_no });
+      if (mis.issue_no) documentInfo.push({ label: 'Issue Number', value: mis.issue_no });
     } else if (selectedForm.type === 'job-work-challan' && detailedForm) {
       const challan = detailedForm as JobWorkChallan;
       if (challan.party_name) documentInfo.push({ label: 'Party Name', value: challan.party_name });

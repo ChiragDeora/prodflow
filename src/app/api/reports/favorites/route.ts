@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 // Create Supabase client
 const supabase = createClient(
@@ -14,6 +15,11 @@ const supabase = createClient(
 
 // GET - List user's favorites
 export async function GET(request: NextRequest) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('user_id');
@@ -68,6 +74,11 @@ export async function GET(request: NextRequest) {
 
 // POST - Add favorite
 export async function POST(request: NextRequest) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const body = await request.json();
     

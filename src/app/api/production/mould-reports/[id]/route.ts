@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,9 +9,15 @@ const supabase = createClient(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
+    const { id } = await params;
     const { data, error } = await supabase
       .from('mould_loading_unloading_reports')
       .select(`
@@ -18,7 +25,7 @@ export async function GET(
         unloading_procedures:mould_unloading_procedures(*),
         loading_procedures:mould_loading_procedures(*)
       `)
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (error) {
@@ -35,9 +42,15 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
+    const { id } = await params;
     const body = await request.json();
     
     // Update main report
@@ -47,7 +60,7 @@ export async function PUT(
         ...body.report,
         updated_at: new Date().toISOString()
       })
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
@@ -98,7 +111,7 @@ export async function PUT(
         unloading_procedures:mould_unloading_procedures(*),
         loading_procedures:mould_loading_procedures(*)
       `)
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (fetchError) {
@@ -115,13 +128,19 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
+    const { id } = await params;
     const { error } = await supabase
       .from('mould_loading_unloading_reports')
       .delete()
-      .eq('id', params.id);
+      .eq('id', id);
 
     if (error) {
       console.error('Error deleting mould report:', error);
@@ -134,4 +153,3 @@ export async function DELETE(
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
   }
 }
-

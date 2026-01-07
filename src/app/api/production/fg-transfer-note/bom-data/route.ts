@@ -3,10 +3,16 @@
 // Gets all BOM data (FG + LOCAL) for FG Code selection modal
 // ============================================================================
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getAllBOMData, getIntWtForSFG } from '@/lib/production/fg-transfer-note';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const bomData = await getAllBOMData();
     

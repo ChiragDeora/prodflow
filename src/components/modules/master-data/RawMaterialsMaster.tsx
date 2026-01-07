@@ -6,6 +6,7 @@ import {
   Package, Upload, Plus, ArrowUp, ArrowDown, Eye, Trash2, Pencil 
 } from 'lucide-react';
 import { Unit } from '../../../lib/supabase';
+import { useAccessControl } from '../../../lib/useAccessControl';
 
 // Raw Material interface based on the new database schema
 interface RawMaterial {
@@ -58,6 +59,14 @@ const RawMaterialsMaster: React.FC<RawMaterialsMasterProps> = ({
   defaultUnit,
   units
 }) => {
+  // Permission checks for Raw Materials Master actions
+  const { canPerformAction, isRootAdmin } = useAccessControl();
+  
+  // Root admin has all permissions; otherwise check specific action permissions
+  const canCreateRawMaterials = isRootAdmin || canPerformAction('create', 'Raw Materials Master');
+  const canEditRawMaterials = isRootAdmin || canPerformAction('update', 'Raw Materials Master');
+  const canDeleteRawMaterials = isRootAdmin || canPerformAction('delete', 'Raw Materials Master');
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -68,21 +77,25 @@ const RawMaterialsMaster: React.FC<RawMaterialsMasterProps> = ({
         <div className="flex space-x-3">
 
           
-          <button 
-            onClick={() => openExcelReader('raw_materials')}
-            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            Import Excel
-          </button>
+          {canCreateRawMaterials && (
+            <button 
+              onClick={() => openExcelReader('raw_materials')}
+              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Import Excel
+            </button>
+          )}
           
-          <button 
-            onClick={() => handleAction('edit', {} as RawMaterial, 'raw_material')}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Raw Material
-          </button>
+          {canCreateRawMaterials && (
+            <button 
+              onClick={() => handleAction('edit', {} as RawMaterial, 'raw_material')}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Raw Material
+            </button>
+          )}
         </div>
       </div>
 
@@ -256,14 +269,18 @@ const RawMaterialsMaster: React.FC<RawMaterialsMasterProps> = ({
                       <Eye className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => handleAction('edit', material, 'raw_material')}
-                      className="text-green-600 hover:text-green-900"
+                      onClick={() => canEditRawMaterials && handleAction('edit', material, 'raw_material')}
+                      className={`${canEditRawMaterials ? 'text-green-600 hover:text-green-900 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`}
+                      title={canEditRawMaterials ? 'Edit Raw Material' : 'No permission to edit'}
+                      disabled={!canEditRawMaterials}
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => handleAction('delete', material, 'raw_material')}
-                      className="text-red-600 hover:text-red-900"
+                      onClick={() => canDeleteRawMaterials && handleAction('delete', material, 'raw_material')}
+                      className={`${canDeleteRawMaterials ? 'text-red-600 hover:text-red-900 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`}
+                      title={canDeleteRawMaterials ? 'Delete Raw Material' : 'No permission to delete'}
+                      disabled={!canDeleteRawMaterials}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

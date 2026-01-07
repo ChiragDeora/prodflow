@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { bomAuditAPI } from '@/lib/supabase';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const tableName = searchParams.get('tableName');

@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,10 +19,15 @@ const supabase = createClient(
 // Returns ALL fields from dpr_data, dpr_machine_entries, and dpr_stoppage_entries
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
-    const { id } = params;
+    const { id } = await params;
     
     // Select ALL fields from all related tables
     // Returns ALL fields from:
@@ -71,10 +77,15 @@ export async function GET(
 // PUT: Update DPR
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     
     // Check if DPR exists
@@ -274,10 +285,15 @@ export async function PUT(
 // DELETE: Delete DPR (only if not posted to stock)
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
-    const { id } = params;
+    const { id } = await params;
     
     // Check if DPR exists and is not posted
     const { data: existing } = await supabase

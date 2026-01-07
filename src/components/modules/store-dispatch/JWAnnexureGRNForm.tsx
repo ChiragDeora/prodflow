@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, Printer, Search, Link, Upload, CheckCircle, Loader2 } from 'lucide-react';
 import { jwAnnexureGRNAPI, materialIndentSlipAPI, MaterialIndentSlip, MaterialIndentSlipItem } from '../../../lib/supabase';
 import PrintHeader from '../../shared/PrintHeader';
+import CustomerSelect from './CustomerSelect';
 import { generateDocumentNumber, FORM_CODES } from '../../../utils/formCodeUtils';
 
 interface JWAnnexureGRNItem {
@@ -403,11 +404,15 @@ const JWAnnexureGRNForm: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Party Name:
               </label>
-              <input
-                type="text"
+              <CustomerSelect
                 value={formData.partyName}
-                onChange={(e) => handleInputChange('partyName', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                onChange={(customer) => {
+                  handleInputChange('partyName', customer.name);
+                  if (customer.address) handleInputChange('address', customer.address);
+                  if (customer.state) handleInputChange('state', customer.state);
+                  if (customer.gstNumber) handleInputChange('gstNo', customer.gstNumber);
+                }}
+                placeholder="Select or search customer..."
               />
             </div>
             <div>

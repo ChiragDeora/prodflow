@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { bomVersionAPI } from '@/lib/supabase';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const { id } = await params;
     const data = await bomVersionAPI.getById(id);
@@ -30,6 +36,11 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const { id } = await params;
     const body = await request.json();

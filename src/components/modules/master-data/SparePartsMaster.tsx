@@ -60,15 +60,24 @@ interface SparePartFormData {
   reorder_qty: string;
 }
 
-interface SparePartsMasterProps {
-  machines?: { id: string; machine_id: string }[];
-  molds?: { id: string; mold_id: string }[];
+interface SparePartsMasterProps {}
+
+interface Machine {
+  id: string;
+  machine_id: string;
 }
 
-const SparePartsMaster: React.FC<SparePartsMasterProps> = ({ machines = [], molds = [] }) => {
+interface Mold {
+  id: string;
+  mold_id: string;
+}
+
+const SparePartsMaster: React.FC<SparePartsMasterProps> = () => {
   // State
   const [spareParts, setSpareParts] = useState<SparePart[]>([]);
   const [stockBalances, setStockBalances] = useState<Record<string, number>>({});
+  const [machines, setMachines] = useState<Machine[]>([]);
+  const [molds, setMolds] = useState<Mold[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
@@ -142,8 +151,49 @@ const SparePartsMaster: React.FC<SparePartsMasterProps> = ({ machines = [], mold
     }
   };
 
+  // Fetch machines and molds for dropdowns
+  const fetchMachinesAndMolds = async () => {
+    try {
+      // Fetch machines using Supabase client
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
+      // Fetch machines
+      const { data: machinesData, error: machinesError } = await supabase
+        .from('machines')
+        .select('id, machine_id')
+        .order('machine_id');
+
+      if (!machinesError && machinesData) {
+        setMachines(machinesData.map((m: any) => ({ 
+          id: m.id || '', 
+          machine_id: m.machine_id || '' 
+        })));
+      }
+
+      // Fetch molds
+      const { data: moldsData, error: moldsError } = await supabase
+        .from('molds')
+        .select('id, mold_id')
+        .order('mold_id');
+
+      if (!moldsError && moldsData) {
+        setMolds(moldsData.map((m: any) => ({ 
+          id: m.id || '', 
+          mold_id: m.mold_id || '' 
+        })));
+      }
+    } catch (err) {
+      console.error('Error fetching machines and molds:', err);
+    }
+  };
+
   useEffect(() => {
     fetchSpareParts();
+    fetchMachinesAndMolds();
   }, [categoryFilter]);
 
   // Filter spare parts
@@ -393,7 +443,7 @@ const SparePartsMaster: React.FC<SparePartsMasterProps> = ({ machines = [], mold
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-gray-900">{part.item_name}</span>
                           {lowStock && (
-                            <AlertTriangle className="w-4 h-4 text-red-500" title="Low Stock" />
+                            <AlertTriangle className="w-4 h-4 text-red-500" aria-label="Low Stock" />
                           )}
                         </div>
                       </td>

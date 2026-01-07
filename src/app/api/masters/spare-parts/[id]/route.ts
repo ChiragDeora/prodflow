@@ -7,11 +7,17 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase, handleSupabaseError } from '@/lib/supabase/utils';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const supabase = getSupabase();
     const { id } = await params;
@@ -51,6 +57,11 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const supabase = getSupabase();
     const { id } = await params;
@@ -134,6 +145,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const supabase = getSupabase();
     const { id } = await params;

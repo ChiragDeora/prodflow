@@ -73,8 +73,11 @@ export const jobWorkChallanAPI = {
         const itemsToInsert = items.map((item, index) => ({
           challan_id: newChallan.id,
           sr_no: index + 1,
-          material_description: item.material_description,
+          item_code: item.item_code || null,
+          item_name: item.item_name || null,
+          material_description: item.material_description || item.item_name || '',
           qty: item.qty ? parseFloat(item.qty.toString()) : null,
+          qty_pcs: item.qty_pcs ? parseFloat(item.qty_pcs.toString()) : null,
           uom: item.uom || null,
           remarks: item.remarks || null
         }));
@@ -121,8 +124,11 @@ export const jobWorkChallanAPI = {
           const itemsToInsert = items.map((item, index) => ({
             challan_id: id,
             sr_no: index + 1,
-            material_description: item.material_description,
+            item_code: item.item_code || null,
+            item_name: item.item_name || null,
+            material_description: item.material_description || item.item_name || '',
             qty: item.qty ? parseFloat(item.qty.toString()) : null,
+            qty_pcs: item.qty_pcs ? parseFloat(item.qty_pcs.toString()) : null,
             uom: item.uom || null,
             remarks: item.remarks || null
           }));

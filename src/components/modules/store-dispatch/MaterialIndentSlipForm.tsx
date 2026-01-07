@@ -5,7 +5,7 @@ import { Plus, Trash2, Save, Printer } from 'lucide-react';
 import { materialIndentSlipAPI, rawMaterialAPI, packingMaterialAPI } from '../../../lib/supabase';
 import type { RawMaterial, PackingMaterial } from '../../../lib/supabase/types';
 import PrintHeader from '../../shared/PrintHeader';
-import PartyNameSelect from './PartyNameSelect';
+import CustomerSelect from './CustomerSelect';
 import { useStoreDispatch, MaterialIndentItem } from './StoreDispatchContext';
 import { generateDocumentNumber, FORM_CODES } from '../../../utils/formCodeUtils';
 
@@ -87,11 +87,19 @@ const MaterialIndentSlipForm: React.FC = () => {
     updateMaterialIndentField(field as any, value);
   };
 
-  const handlePartySelect = (party: { id: string; name: string }) => {
+  const handleCustomerSelect = (customer: { 
+    id: string; 
+    name: string;
+    address?: string;
+    state?: string;
+    stateCode?: string;
+    gstNumber?: string;
+  }) => {
     setFormData({
       ...formData,
-      partyId: party.id,
-      partyName: party.name,
+      partyId: customer.id,
+      partyName: customer.name,
+      state: customer.state || '',
     });
   };
 
@@ -250,11 +258,11 @@ const MaterialIndentSlipForm: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1 print:font-semibold">
                 Party Name:
               </label>
-              <PartyNameSelect
+              <CustomerSelect
                 value={formData.partyName}
-                partyId={formData.partyId}
-                onChange={handlePartySelect}
-                placeholder="Select or search party..."
+                customerId={formData.partyId}
+                onChange={handleCustomerSelect}
+                placeholder="Select or search customer..."
               />
             </div>
             <div>

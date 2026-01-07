@@ -45,11 +45,14 @@ const MachineMaster: React.FC<MachineMasterProps> = ({
   setViewingNameplate,
   InfoButton
 }) => {
-  // Temporarily disable permission checks - will be re-enabled later
-  const canCreateMachines = true;
-  const canEditMachines = true;
-  const canDeleteMachines = true;
-  const canViewMachines = true;
+  // Permission checks for Machine Master actions
+  const { canPerformAction, isRootAdmin } = useAccessControl();
+  
+  // Root admin has all permissions; otherwise check specific action permissions
+  const canCreateMachines = isRootAdmin || canPerformAction('create', 'Machine Master');
+  const canEditMachines = isRootAdmin || canPerformAction('update', 'Machine Master');
+  const canDeleteMachines = isRootAdmin || canPerformAction('delete', 'Machine Master');
+  const canViewMachines = true; // View is always allowed if they can see this tab
 
   return (
     <div>
@@ -318,16 +321,18 @@ const MachineMaster: React.FC<MachineMasterProps> = ({
                       <Eye className="w-4 h-4" />
                     </button>
                     <button 
-                      onClick={() => handleAction('edit', machine, 'machine')}
-                      className="text-green-600 hover:text-green-900"
-                      title="Edit Machine"
+                      onClick={() => canEditMachines && handleAction('edit', machine, 'machine')}
+                      className={`${canEditMachines ? 'text-green-600 hover:text-green-900 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`}
+                      title={canEditMachines ? 'Edit Machine' : 'No permission to edit'}
+                      disabled={!canEditMachines}
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
                     <button 
-                      onClick={() => handleAction('delete', machine, 'machine')}
-                      className="text-red-600 hover:text-red-900"
-                      title="Delete Machine"
+                      onClick={() => canDeleteMachines && handleAction('delete', machine, 'machine')}
+                      className={`${canDeleteMachines ? 'text-red-600 hover:text-red-900 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`}
+                      title={canDeleteMachines ? 'Delete Machine' : 'No permission to delete'}
+                      disabled={!canDeleteMachines}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

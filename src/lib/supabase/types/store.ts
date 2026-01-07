@@ -3,7 +3,8 @@ export interface GRN {
   id: string;
   doc_no: string;
   date: string;
-  supplier_name: string;
+  supplier_name?: string;
+  party_name?: string; // Alternative to supplier_name
   po_no?: string;
   po_date?: string;
   invoice_no?: string;
@@ -15,9 +16,17 @@ export interface GRN {
   verified_by?: string;
   indent_slip_id?: string; // Link to Material Indent Slip
   grn_type?: 'NORMAL' | 'JW_ANNEXURE'; // GRN Type
+  lr_no?: string;
+  vehicle_no?: string;
+  lr_date?: string;
+  lr_vehicle_no?: string;
+  dc_no?: string;
+  dc_date?: string;
+  remarks?: string;
   created_by?: string;
   created_at?: string;
   updated_at?: string;
+  stock_status?: string;
 }
 
 export interface GRNItem {
@@ -36,6 +45,7 @@ export interface GRNItem {
 export interface MIS {
   id: string;
   doc_no: string;
+  memo_no?: string;
   date: string;
   dept_name: string;
   issue_no: string;
@@ -46,6 +56,7 @@ export interface MIS {
   created_by?: string;
   created_at?: string;
   updated_at?: string;
+  stock_status?: string;
 }
 
 export interface MISItem {
@@ -53,6 +64,7 @@ export interface MISItem {
   mis_id: string;
   sr_no: number;
   description_of_material: string;
+  item_code?: string;
   uom?: string;
   required_qty?: number;
   issue_qty?: number;
@@ -101,7 +113,9 @@ export interface JobWorkChallan {
   party_address?: string;
   gst_no?: string;
   vehicle_no?: string;
-  lr_no?: string;
+  lr_no?: string; // Kept for backward compatibility (was Dispatch Doc No)
+  e_way_bill_no?: string; // E-Way Bill Number
+  place_of_supply?: string; // Place of Supply
   challan_no?: string;
   challan_date?: string;
   total_qty?: number;
@@ -120,8 +134,11 @@ export interface JobWorkChallanItem {
   id: string;
   challan_id: string;
   sr_no: number;
-  material_description: string;
+  item_code?: string; // Links to stock_items.item_code (FG stock)
+  item_name?: string; // Item name (replaces material_description in UI)
+  material_description: string; // Kept for backward compatibility
   qty?: number;
+  qty_pcs?: number; // Quantity in pieces (Pcs)
   uom?: string;
   remarks?: string;
   created_at?: string;

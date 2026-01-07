@@ -3,7 +3,7 @@
 // ============================================================================
 // Defines all available metrics for the report builder
 
-export type MetricCategory = 'production' | 'store' | 'dispatch' | 'stock' | 'job-work' | 'maintenance' | 'quality' | 'masters' | 'general';
+export type MetricCategory = 'production' | 'store' | 'dispatch' | 'stock' | 'procurement' | 'job-work' | 'maintenance' | 'quality' | 'masters' | 'general';
 
 export interface MetricDefinition {
   id: string;

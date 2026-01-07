@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,6 +17,11 @@ const supabase = createClient(
 // GET: List DPR entries with optional filters
 // Returns ALL fields from dpr_data and ALL fields from dpr_machine_entries
 export async function GET(request: NextRequest) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const entryType = searchParams.get('entry_type'); // 'CREATE' or 'EXCEL_UPLOAD'
@@ -92,6 +98,11 @@ export async function GET(request: NextRequest) {
 
 // POST: Create new DPR entry (CREATE mode - can be posted to stock)
 export async function POST(request: NextRequest) {
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
     const body = await request.json();
     const {

@@ -60,6 +60,7 @@ export type DocumentType =
   | 'CUSTOMER_RETURN' 
   | 'ADJUSTMENT'
   | 'OPENING_BALANCE'
+  | 'JOB_WORK_CHALLAN'
   | 'GRN_CANCEL'
   | 'JW_GRN_CANCEL'
   | 'MIS_CANCEL'
@@ -68,7 +69,8 @@ export type DocumentType =
   | 'DISPATCH_CANCEL'
   | 'CUSTOMER_RETURN_CANCEL'
   | 'ADJUSTMENT_CANCEL'
-  | 'OPENING_BALANCE_CANCEL';
+  | 'OPENING_BALANCE_CANCEL'
+  | 'JOB_WORK_CHALLAN_CANCEL';
 
 export interface StockLedgerEntry {
   id: number;

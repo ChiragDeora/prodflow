@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cancelStockPosting, canCancelDocument } from '@/lib/stock';
 import type { DocumentType } from '@/lib/supabase/types/stock';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 // Valid document types for cancellation
 const VALID_DOCUMENT_TYPES = [
@@ -22,10 +23,16 @@ const VALID_DOCUMENT_TYPES = [
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { documentType: string; id: string } }
+  { params }: { params: Promise<{ documentType: string; id: string }> }
 ) {
+  // Verify authentication
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
-    const { documentType, id } = params;
+    const { documentType, id } = await params;
     
     if (!documentType || !id) {
       return NextResponse.json(
@@ -66,8 +73,8 @@ export async function POST(
       );
     }
     
-    const body = await request.json().catch(() => ({}));
-    const cancelledBy = body.cancelled_by || 'system';
+    // Get user from authenticated session
+    const cancelledBy = auth.user?.username || 'system';
     
     const result = await cancelStockPosting(normalizedDocType, id, cancelledBy);
     
@@ -94,10 +101,16 @@ export async function POST(
 // GET endpoint to check if document can be cancelled
 export async function GET(
   request: NextRequest,
-  { params }: { params: { documentType: string; id: string } }
+  { params }: { params: Promise<{ documentType: string; id: string }> }
 ) {
+  // Verify authentication
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   try {
-    const { documentType, id } = params;
+    const { documentType, id } = await params;
     
     if (!documentType || !id) {
       return NextResponse.json(
@@ -126,5 +139,3 @@ export async function GET(
     );
   }
 }
-
-

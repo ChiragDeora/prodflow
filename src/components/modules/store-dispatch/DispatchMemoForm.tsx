@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, Printer, Upload, CheckCircle, Loader2 } from 'lucide-react';
 import { dispatchMemoAPI } from '../../../lib/supabase';
-import PartyNameSelect from './PartyNameSelect';
+import CustomerSelect from './CustomerSelect';
 import { useStoreDispatch, DispatchItem } from './StoreDispatchContext';
 import { generateDispatchMemoNumber } from '../../../utils/formCodeUtils';
 
@@ -46,11 +46,18 @@ const DispatchMemoForm: React.FC = () => {
     updateDispatchMemoField(field as any, value);
   };
 
-  const handlePartySelect = (party: { id: string; name: string }) => {
+  const handleCustomerSelect = (customer: { 
+    id: string; 
+    name: string;
+    address?: string;
+    state?: string;
+    stateCode?: string;
+    gstNumber?: string;
+  }) => {
     setFormData({
       ...formData,
-      partyId: party.id,
-      partyName: party.name,
+      partyId: customer.id,
+      partyName: customer.name,
     });
   };
 
@@ -231,11 +238,11 @@ const DispatchMemoForm: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Party Name :-
             </label>
-            <PartyNameSelect
+            <CustomerSelect
               value={formData.partyName}
-              partyId={formData.partyId}
-              onChange={handlePartySelect}
-              placeholder="Select or search party..."
+              customerId={formData.partyId}
+              onChange={handleCustomerSelect}
+              placeholder="Select or search customer..."
               required
             />
           </div>

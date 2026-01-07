@@ -66,7 +66,9 @@ const MODULE_SORT_ORDER: Record<string, number> = {
   'productionPlanner': 6,
   'production': 7,
   'quality': 8,
-  'maintenance': 9
+  'maintenance': 9,
+  'stockLedger': 10,
+  'reports': 11
 };
 
 const getSupabase = () => createClient();

@@ -34,9 +34,11 @@ export async function middleware(request: NextRequest) {
   // CORS headers for API routes
   if (request.nextUrl.pathname.startsWith('/api/')) {
     const origin = request.headers.get('origin');
+    // Get allowed origins from environment variable or use defaults
+    const productionDomain = process.env.PRODUCTION_DOMAIN;
     const allowedOrigins = [
       'http://localhost:3000',
-      'https://your-production-domain.com' // Replace with actual production domain
+      ...(productionDomain ? [productionDomain] : [])
     ];
 
     if (origin && allowedOrigins.includes(origin)) {

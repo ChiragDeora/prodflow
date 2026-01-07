@@ -26,12 +26,18 @@ export interface DispatchMemoItem {
 export interface DeliveryChallan {
   id: string;
   doc_no: string;
-  sr_no: string;
+  sr_no?: string;
   date: string;
+  dc_no?: string;
+  dc_date?: string;
+  po_no?: string;
   vehicle_no?: string;
   lr_no?: string;
   returnable: boolean;
-  to_address: string;
+  party_name?: string;
+  address?: string;
+  to_address?: string;
+  gst_no?: string;
   state?: string;
   total_qty?: number;
   received_by?: string;
@@ -41,4 +47,5 @@ export interface DeliveryChallan {
   created_by?: string;
   created_at?: string;
   updated_at?: string;
+  stock_status?: string;
 }

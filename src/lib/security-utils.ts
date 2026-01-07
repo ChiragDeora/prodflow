@@ -20,7 +20,7 @@ export async function secureEndpoint(
 ): Promise<{ sessionData?: any; error?: NextResponse }> {
   const {
     requireAuth = true,
-    requireCSRF = false,
+    requireCSRF: shouldRequireCSRF = false,
     rateLimit,
     allowedMethods = ['GET', 'POST', 'PUT', 'DELETE']
   } = config;
@@ -70,7 +70,7 @@ export async function secureEndpoint(
     }
 
     // Check CSRF protection
-    if (requireCSRF) {
+    if (shouldRequireCSRF) {
       const csrfValid = requireCSRF(request, sessionData.user.id);
       if (!csrfValid) {
         return {
