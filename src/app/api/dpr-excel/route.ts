@@ -6,13 +6,25 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Lazy initialization to avoid build-time errors
+let supabase: SupabaseClient | null = null;
+
+function getSupabase(): SupabaseClient {
+  if (!supabase) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (!url || !key) {
+      throw new Error('Supabase environment variables not configured');
+    }
+    
+    supabase = createClient(url, key);
+  }
+  return supabase;
+}
 
 // GET: List Excel DPR entries with optional filters
 export async function GET(request: NextRequest) {
@@ -28,7 +40,7 @@ export async function GET(request: NextRequest) {
     const shift = searchParams.get('shift');
     const uploadId = searchParams.get('upload_id');
     
-    let query = supabase
+    let query = getSupabase()
       .from('dpr_excel_data')
       .select(`
         *,
@@ -111,7 +123,7 @@ export async function POST(request: NextRequest) {
     
     // Check if Excel DPR already exists for this date/shift/upload
     if (excel_upload_id) {
-      const { data: existing } = await supabase
+      const { data: existing } = await getSupabase()
         .from('dpr_excel_data')
         .select('id')
         .eq('report_date', report_date)
@@ -128,7 +140,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Create Excel DPR header
-    const { data: dprData, error: dprError } = await supabase
+    const { data: dprData, error: dprError } = await getSupabase()
       .from('dpr_excel_data')
       .insert([{
         report_date,
@@ -253,14 +265,14 @@ export async function POST(request: NextRequest) {
       });
       
       if (machineEntriesToInsert.length > 0) {
-        const { error: machineError } = await supabase
+        const { error: machineError } = await getSupabase()
           .from('dpr_excel_machine_entries')
           .insert(machineEntriesToInsert);
         
         if (machineError) {
           console.error('Error creating Excel machine entries:', machineError);
           // Rollback DPR creation
-          await supabase.from('dpr_excel_data').delete().eq('id', dprData.id);
+          await getSupabase().from('dpr_excel_data').delete().eq('id', dprData.id);
           return NextResponse.json(
             { success: false, error: machineError.message },
             { status: 500 }
@@ -270,7 +282,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Fetch complete DPR with machine entries
-    const { data: completeDpr } = await supabase
+    const { data: completeDpr } = await getSupabase()
       .from('dpr_excel_data')
       .select(`
         *,
