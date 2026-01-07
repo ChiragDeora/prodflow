@@ -102,6 +102,9 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ['lucide-react'],
   },
 
+  // Turbopack configuration (Next.js 16+ uses Turbopack by default)
+  turbopack: {},
+
   // Redirects for security
   async redirects() {
     return [
