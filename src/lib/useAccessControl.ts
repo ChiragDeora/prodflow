@@ -80,6 +80,23 @@ const MODULE_KEY_MAP: Record<string, string> = {
   'Maintenance History': 'maintenance',
   'Daily Readings': 'maintenance',
   'Maintenance Report': 'maintenance',
+  
+  // Stock Ledger
+  'Stock Ledger': 'stockLedger',
+  'stockLedger': 'stockLedger',
+  'Movement Log': 'stockLedger',
+  'Current Stock': 'stockLedger',
+  'Stock Analytics': 'stockLedger',
+  
+  // Reports
+  'Reports': 'reports',
+  'reports': 'reports',
+  'Reports Dashboard': 'reports',
+  'Report Builder': 'reports',
+  'Report Templates': 'reports',
+  'Saved Reports': 'reports',
+  'Smart Query': 'reports',
+  'AI Insights': 'reports',
 };
 
 // Resource key mapping - maps resource names to their permission keys

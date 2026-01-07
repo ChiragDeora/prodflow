@@ -126,22 +126,23 @@ export async function PUT(
     };
 
     if (body.fullName !== undefined) {
-      updateData.full_name = body.fullName;
+      updateData.full_name = body.fullName || null;
     }
-    if (body.email !== undefined) {
+    if (body.email !== undefined && body.email) {
       updateData.email = body.email;
     }
     if (body.phone !== undefined) {
-      updateData.phone = body.phone;
+      updateData.phone = body.phone || null;
     }
-    if (body.status !== undefined) {
+    if (body.status !== undefined && body.status) {
       updateData.status = body.status;
     }
     if (body.department !== undefined) {
-      updateData.department = body.department;
+      // Convert empty string to null for enum field
+      updateData.department = body.department || null;
     }
     if (body.jobTitle !== undefined) {
-      updateData.job_title = body.jobTitle;
+      updateData.job_title = body.jobTitle || null;
     }
     if (body.accessScope !== undefined) {
       // Root admin must always be UNIVERSAL - enforce this rule

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const response = NextResponse.next();
 
   // Security headers
@@ -75,7 +75,7 @@ export async function middleware(request: NextRequest) {
     // Trigger session refresh in background (non-blocking)
     // This allows Supabase to refresh session cookies without blocking the request
     supabase.auth.getUser().catch(() => {
-      // Silently fail - session refresh is not critical for middleware
+      // Silently fail - session refresh is not critical for proxy
     });
   }
 
@@ -93,3 +93,4 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };
+
