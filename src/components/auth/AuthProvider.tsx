@@ -193,13 +193,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser({ ...data.user, permissions });
         setError(null);
         
-        // Clear console errors after successful login
+        // Log login success (console.clear disabled for debugging)
         if (typeof window !== 'undefined') {
-          console.clear();
+          // console.clear(); // DISABLED for debugging
           console.log('✅ Login successful');
           console.log('👤 User:', data.user.username);
           console.log('🔐 Role:', data.user.isRootAdmin ? 'Root Admin' : 'User');
           console.log('🔑 Permissions loaded:', Object.keys(permissions).length, 'permissions');
+          // Log all permission names for debugging
+          console.log('📋 Permission names:', Object.keys(permissions));
         }
         
         return { 

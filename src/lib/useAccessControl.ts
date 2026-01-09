@@ -15,6 +15,7 @@ const MODULE_KEY_MAP: Record<string, string> = {
   'BOM Master': 'masterData',
   'Commercial Master': 'masterData',
   'Others': 'masterData',
+  'Spare Parts': 'masterData',
   
   // Store Purchase
   'Store Purchase': 'storePurchase',
@@ -294,14 +295,29 @@ export const useAccessControl = (): AccessControlState => {
     const resourceKey = RESOURCE_KEY_MAP[resource] || resource;
     
     if (!moduleKey) {
-      console.warn(`Unknown module for resource: ${resource}`);
+      console.warn(`[AccessControl] Unknown module for resource: ${resource}`);
       return false;
     }
     
     // Check if user has any permission for this resource (read/view at minimum)
     const permissionName = `${moduleKey}.${resourceKey}.read`;
+    const hasAccess = permissions[permissionName] === true;
     
-    return permissions[permissionName] === true;
+    // Debug logging for Stock Ledger and Reports
+    if (moduleKey === 'stockLedger' || moduleKey === 'reports') {
+      console.log(`[AccessControl] Checking: ${resource}`);
+      console.log(`  → Permission needed: ${permissionName}`);
+      console.log(`  → Has permission: ${hasAccess}`);
+      console.log(`  → User permissions count: ${Object.keys(permissions).length}`);
+      if (!hasAccess) {
+        const stockPerms = Object.keys(permissions).filter(p => p.startsWith('stockLedger.'));
+        const reportPerms = Object.keys(permissions).filter(p => p.startsWith('reports.'));
+        console.log(`  → User's stockLedger permissions: ${stockPerms.length > 0 ? stockPerms.join(', ') : 'NONE'}`);
+        console.log(`  → User's reports permissions: ${reportPerms.length > 0 ? reportPerms.join(', ') : 'NONE'}`);
+      }
+    }
+    
+    return hasAccess;
   };
 
   /**

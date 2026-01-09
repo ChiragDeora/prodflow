@@ -18,6 +18,20 @@ export async function GET(request: NextRequest) {
     const userId = sessionData.user.id;
     const isRootAdmin = sessionData.user.isRootAdmin;
 
+    // Debug: Check if Stock Ledger permissions exist in the database at all
+    const { data: stockLedgerCheck } = await supabase
+      .from('auth_permissions')
+      .select('name')
+      .like('name', 'stockLedger.%')
+      .limit(5);
+    
+    if (!stockLedgerCheck || stockLedgerCheck.length === 0) {
+      console.error('[Permissions] ⚠️ NO Stock Ledger permissions found in auth_permissions table!');
+      console.error('[Permissions] ⚠️ Run the migration: 20260109000001_fix_stock_ledger_reports_permissions.sql');
+    } else {
+      console.log(`[Permissions] ✅ Found ${stockLedgerCheck.length} Stock Ledger permissions in database`);
+    }
+
     // Root admin has all permissions
     if (isRootAdmin) {
       // Fetch all available permissions to return for root admin
@@ -55,6 +69,9 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Debug: Log what we found
+    console.log(`[Permissions] User ${userId} has ${directPermissions?.length || 0} direct permission assignments`);
+
     // Get permission names for direct permissions
     let permissionNames: string[] = [];
     if (directPermissions && directPermissions.length > 0) {
@@ -64,14 +81,27 @@ export async function GET(request: NextRequest) {
       );
       
       const permissionIds = validPermissions.map(dp => dp.permission_id);
+      console.log(`[Permissions] Valid permission IDs: ${permissionIds.join(', ')}`);
       
       if (permissionIds.length > 0) {
-        const { data: permissions } = await supabase
+        const { data: permissions, error: permLookupError } = await supabase
           .from('auth_permissions')
-          .select('name')
+          .select('id, name')
           .in('id', permissionIds);
 
+        if (permLookupError) {
+          console.error('[Permissions] Error looking up permission names:', permLookupError);
+        }
+
+        // Debug: Log the permission lookup results
+        console.log(`[Permissions] Found ${permissions?.length || 0} permission names from auth_permissions`);
+        if (permissions && permissions.length < permissionIds.length) {
+          console.warn(`[Permissions] WARNING: Some permission IDs not found in auth_permissions table!`);
+          console.warn(`[Permissions] Requested: ${permissionIds.length}, Found: ${permissions.length}`);
+        }
+
         permissionNames = permissions?.map(p => p.name) || [];
+        console.log(`[Permissions] Permission names: ${permissionNames.join(', ')}`);
       }
     }
 
@@ -114,9 +144,23 @@ export async function GET(request: NextRequest) {
       permissionsMap[name] = true;
     });
 
+    // Debug: Log final permissions
+    const stockLedgerPerms = permissionNames.filter(n => n.startsWith('stockLedger.'));
+    const reportsPerms = permissionNames.filter(n => n.startsWith('reports.'));
+    console.log(`[Permissions] Final count: ${permissionNames.length} total, ${stockLedgerPerms.length} stockLedger, ${reportsPerms.length} reports`);
+    if (stockLedgerPerms.length > 0) {
+      console.log(`[Permissions] Stock Ledger permissions: ${stockLedgerPerms.join(', ')}`);
+    }
+
     return NextResponse.json({
       permissions: permissionsMap,
-      isRootAdmin: false
+      isRootAdmin: false,
+      _debug: {
+        totalPermissions: permissionNames.length,
+        directPermissionCount: directPermissions?.length || 0,
+        stockLedgerCount: stockLedgerPerms.length,
+        reportsCount: reportsPerms.length
+      }
     });
 
   } catch (error) {

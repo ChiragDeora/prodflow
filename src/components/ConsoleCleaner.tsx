@@ -1,68 +1,81 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useAuth } from './auth/AuthProvider';
-import { usePathname } from 'next/navigation';
+
+// Store original console methods
+const originalConsoleLog = typeof console !== 'undefined' ? console.log : () => {};
+const originalConsoleDebug = typeof console !== 'undefined' ? console.debug : () => {};
+const originalConsoleInfo = typeof console !== 'undefined' ? console.info : () => {};
+
+// Flag to track if console has been suppressed
+let isConsoleSuppressed = false;
 
 /**
- * ConsoleCleaner component that automatically cleans console errors
- * after successful login and when navigating to main application pages
+ * Suppress console.log, console.debug, and console.info in production
+ * Keeps console.error and console.warn for critical issues
+ */
+function suppressConsoleInProduction() {
+  if (typeof console === 'undefined') return;
+  
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  if (isProduction && !isConsoleSuppressed) {
+    // Replace console methods with no-op functions in production
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    console.log = () => {};
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    console.debug = () => {};
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    console.info = () => {};
+    
+    isConsoleSuppressed = true;
+    
+    // Log once that console is suppressed (using error so it still shows)
+    console.warn('🔇 Console logging suppressed for production environment');
+  }
+}
+
+/**
+ * Restore original console methods (useful for debugging)
+ */
+export function restoreConsole() {
+  if (typeof console === 'undefined') return;
+  
+  console.log = originalConsoleLog;
+  console.debug = originalConsoleDebug;
+  console.info = originalConsoleInfo;
+  isConsoleSuppressed = false;
+}
+
+/**
+ * ConsoleCleaner component - Suppresses console.log in production
+ * 
+ * This component automatically suppresses console.log, console.debug, and console.info
+ * in production builds to keep the browser console clean.
+ * 
+ * console.error and console.warn are preserved for critical issues.
+ * 
+ * To temporarily restore console in production for debugging:
+ * - Open browser console and run: window.__restoreConsole()
  */
 export default function ConsoleCleaner() {
-  const { user } = useAuth();
-  const pathname = usePathname();
-
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    // Only clean console when user is authenticated and on main app pages
-    // AND only in production environment (not in development)
-    if (user && !pathname.startsWith('/auth') && !pathname.startsWith('/setup') && process.env.NODE_ENV === 'production') {
-      // Clear console on main app pages
-      console.clear();
-      
-      // Log clean state
-      console.log('🧹 Console cleaned for production use');
-      console.log('👤 Welcome back,', user.username);
-      console.log('📍 Current page:', pathname);
-      console.log('🚀 Ready for production scheduling');
-      
-      // Set console to production mode (less verbose)
-      console.log = console.log.bind(console);
-      console.info = console.info.bind(console);
-      console.warn = console.warn.bind(console);
-      console.error = console.error.bind(console);
-      
-      // Add a custom method to clear extension errors
-      (window as any).clearExtensionErrors = () => {
-        console.clear();
-        console.log('🧹 Extension errors cleared');
-        console.log('✅ Console ready for production use');
+    // Suppress console in production
+    suppressConsoleInProduction();
+    
+    // Expose restore function globally for debugging purposes
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
+      (window as Window & { __restoreConsole?: () => void }).__restoreConsole = () => {
+        restoreConsole();
+        console.log('✅ Console logging restored for debugging');
       };
-      
-      // Auto-clear extension errors every 5 seconds for the first minute
-      let clearCount = 0;
-      const intervalId = setInterval(() => {
-        if (clearCount < 12) { // 12 * 5 seconds = 1 minute
-          console.clear();
-          console.log('🧹 Auto-clearing console for clean production environment');
-          clearCount++;
-        } else {
-          clearInterval(intervalId);
-        }
-      }, 5000);
-      
-      // Cleanup function
-      return () => {
-        clearInterval(intervalId);
-      };
-    } else if (process.env.NODE_ENV === 'development') {
-      // In development, just log that console cleaner is disabled
-      console.log('🔧 Console cleaner disabled in development mode');
-      console.log('🐛 All errors and logs will be visible for debugging');
     }
-  }, [user, pathname]);
+  }, []);
 
-  // This component doesn't render anything
   return null;
+}
+
+// Also run immediately on module load for server-side and early client execution
+if (typeof window !== 'undefined') {
+  suppressConsoleInProduction();
 }
