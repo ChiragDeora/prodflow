@@ -66,30 +66,6 @@ const nextConfig: NextConfig = {
     CUSTOM_KEY: process.env.CUSTOM_KEY,
   },
 
-  // Webpack configuration for security and performance
-  webpack: (config, { isServer }) => {
-    // Remove console.log in production
-    if (!isServer && process.env.NODE_ENV === 'production') {
-      config.optimization.minimizer = config.optimization.minimizer || [];
-    }
-    
-    // Optimize for large files - improve compilation performance
-    config.optimization = {
-      ...config.optimization,
-      moduleIds: 'deterministic',
-    };
-    
-    // Increase performance for large TypeScript files
-    if (!isServer) {
-      config.resolve = {
-        ...config.resolve,
-        extensions: ['.tsx', '.ts', '.jsx', '.js', '.json'],
-      };
-    }
-    
-    return config;
-  },
-
   // TypeScript configuration for faster compilation
   typescript: {
     // We'll handle type checking separately if needed
