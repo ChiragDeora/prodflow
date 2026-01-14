@@ -4103,6 +4103,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           data = rows.map(item => ([
             item.sl_no ?? '',
             item.item_code ?? '',
+            item.item_name ?? '',
             item.party_name ?? '',
             item.pack_size ?? '',
             item.sfg_1 ?? '',
@@ -4126,6 +4127,7 @@ const ExcelFileReader = ({ onDataImported, onClose, defaultDataType = 'machines'
           data = rows.map(item => ([
             item.sl_no ?? '',
             item.item_code ?? '',
+            item.item_name ?? '',
             item.pack_size ?? '',
             item.sfg_1 ?? '',
             item.sfg_1_qty ?? '',
