@@ -99,7 +99,9 @@ const MaterialIndentSlipForm: React.FC = () => {
       ...formData,
       partyId: customer.id,
       partyName: customer.name,
+      address: customer.address || '',
       state: customer.state || '',
+      gstNo: customer.gstNumber || '',
     });
   };
 
@@ -153,15 +155,23 @@ const MaterialIndentSlipForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // Debug log to verify address is being sent
+      console.log('Saving Material Indent Slip - form data:', {
+        address: formData.address,
+        state: formData.state,
+        gstNo: formData.gstNo
+      });
+      
       const slipData = {
         ident_no: formData.identNo,
         date: new Date().toISOString().split('T')[0],
         indent_date: formData.indentDate,
         tentative_required_date: formData.tentativeDate || undefined,
         party_name: formData.partyName || undefined,
-        address: formData.address || undefined,
-        state: formData.state || undefined,
-        gst_no: formData.gstNo || undefined,
+        // Always include these fields - use the value or empty string, then convert empty to undefined
+        address: formData.address?.trim() || undefined,
+        state: formData.state?.trim() || undefined,
+        gst_no: formData.gstNo?.trim() || undefined,
         dept_head_sign: formData.deptHeadSign || undefined,
         store_inch_sign: formData.storeInchSign || undefined,
         plant_head_sign: formData.plantHeadSign || undefined
@@ -170,14 +180,14 @@ const MaterialIndentSlipForm: React.FC = () => {
       const itemsData = formData.items
         .filter(item => item.itemName.trim() !== '' || item.itemCode.trim() !== '')
         .map(item => ({
-          item_code: item.itemCode || undefined,
-          item_name: item.itemName || undefined,
-          dimension: item.dimension || undefined,
-          pack_size: item.packSize || undefined,
+          item_code: item.itemCode?.trim() || undefined,
+          item_name: item.itemName?.trim() || undefined,
+          dimension: item.dimension?.trim() || undefined,
+          pack_size: item.packSize?.trim() || undefined,
           qty: item.qty ? parseFloat(item.qty) : undefined,
-          uom: item.uom || undefined,
-          party_name: item.partyName || undefined,
-          color_remarks: item.colorRemarks || undefined
+          uom: item.uom?.trim() || undefined,
+          party_name: item.partyName?.trim() || undefined,
+          color_remarks: item.colorRemarks?.trim() || undefined
         }));
 
       await materialIndentSlipAPI.create(slipData, itemsData);

@@ -770,7 +770,7 @@ export async function consumeRmFifo(
       document_number: documentNumber,
       movement_type: 'OUT',
       posted_by: postedBy,
-      remarks: `RM consumption: ${rmType}`,
+      remarks: `RM Consumption - ${item.item_name || item.item_code} (${roundQuantity(qtyToDeduct)} ${item.unit_of_measure || 'Kgs'}), Type: ${rmType}, Doc: ${documentNumber || documentId}`,
     });
     
     entries.push(entry);
@@ -828,7 +828,7 @@ export async function consumeRmFifo(
         document_number: documentNumber,
         movement_type: 'OUT',
         posted_by: postedBy,
-        remarks: `RM consumption: ${rmType} (negative balance)`,
+        remarks: `RM Consumption - ${targetItem.item_name || targetItem.item_code} (${roundQuantity(remainingQty)} ${targetItem.unit_of_measure || 'Kgs'}), Type: ${rmType}, Doc: ${documentNumber || documentId} [NEGATIVE BALANCE]`,
       });
       
       entries.push(entry);

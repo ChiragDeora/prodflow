@@ -325,7 +325,7 @@ const StoreDispatchContent: React.FC<StoreDispatchModuleProps> = ({ onSubNavClic
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {/* MIS Card */}
+                  {/* Issue Slip Card */}
                   <div 
                     className="bg-white rounded-lg border border-orange-200 p-6 hover:shadow-md transition-shadow cursor-pointer"
                     onClick={() => setOutwardSubTab('mis')}
@@ -335,15 +335,15 @@ const StoreDispatchContent: React.FC<StoreDispatchModuleProps> = ({ onSubNavClic
                         <FileText className="w-6 h-6 text-blue-600" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-semibold text-gray-900">MIS</h3>
-                        <p className="text-sm text-gray-500">Material Issue Slip</p>
+                        <h3 className="text-lg font-semibold text-gray-900">Issue Slip</h3>
+                        <p className="text-sm text-gray-500">Issue materials to departments</p>
                       </div>
                     </div>
                     <p className="text-sm text-gray-600 mb-4">
                       Issue materials from store to production departments.
                     </p>
                     <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
-                      Create MIS
+                      Create Issue Slip
                     </button>
                   </div>
 

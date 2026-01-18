@@ -35,7 +35,7 @@ const MODULE_KEY_MAP: Record<string, string> = {
   // Store Outward
   'Store Outward': 'storeOutward',
   'storeOutward': 'storeOutward',
-  'MIS': 'storeOutward',
+  'Issue Slip': 'storeOutward',
   'Job Work Challan': 'storeOutward',
   'Delivery Challan': 'storeOutward',
   'Outward History': 'storeOutward',
@@ -120,7 +120,7 @@ const RESOURCE_KEY_MAP: Record<string, string> = {
   'Normal GRN': 'normalGrn',
   'JW Annexure GRN': 'jwAnnexureGrn',
   'Inward History': 'inwardHistory',
-  'MIS': 'mis',
+  'Issue Slip': 'mis',
   'Job Work Challan': 'jobWorkChallan',
   'Delivery Challan': 'deliveryChallan',
   'Outward History': 'outwardHistory',

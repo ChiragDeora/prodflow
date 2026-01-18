@@ -127,7 +127,7 @@ export async function postGrnToStock(
         document_number: documentNumber,
         movement_type: 'IN',
         posted_by: postedBy,
-        remarks: `GRN from ${grn.supplier_name}`,
+        remarks: `GRN from ${grn.supplier_name || 'Supplier'} - ${stockItem.item_name || stockItem.item_code} (${roundQuantity(quantity)} ${stockItem.unit_of_measure || 'units'})${grn.po_no ? `, PO: ${grn.po_no}` : ''}${grn.invoice_no ? `, Inv: ${grn.invoice_no}` : ''}`,
       });
       
       // Update balance cache

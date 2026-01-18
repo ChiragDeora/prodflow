@@ -263,7 +263,7 @@ export async function postDprToStock(
           document_number: documentNumber,
           movement_type: 'IN',
           posted_by: postedBy,
-          remarks: `Production from mold: ${aggProd.mold_name}`,
+          remarks: `SFG Production - ${sfgItem.item_name || sfgItem.item_code} (${aggProd.total_pieces} pcs) from Mold: ${aggProd.mold_name}, Shift: ${dpr.shift || 'N/A'}, Lines: ${aggProd.line_ids.join(', ') || 'N/A'}`,
         });
         
         await updateBalance(
@@ -297,7 +297,7 @@ export async function postDprToStock(
           document_number: documentNumber,
           movement_type: 'IN',
           posted_by: postedBy,
-          remarks: `Regrind from ${aggProd.mold_name} rejection`,
+          remarks: `Regrind from ${aggProd.mold_name} rejection (${roundQuantity(aggProd.total_rej_kgs)} ${regrindItem.unit_of_measure || 'Kgs'}), Shift: ${dpr.shift || 'N/A'}`,
         });
         
         await updateBalance(

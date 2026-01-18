@@ -246,7 +246,7 @@ Addition:
 | sl_no | INTEGER | Serial number |
 | fg_code | VARCHAR | Selected FG code |
 | bom_type | VARCHAR | FG or LOCAL |
-| party | VARCHAR | Party name from BOM |
+| party | VARCHAR | selected Party name |
 | color | VARCHAR | Selected color |
 | qty_boxes | INTEGER | Number of boxes |
 | pack_size | INTEGER | Pack size from BOM |
@@ -337,7 +337,7 @@ Also includes posted_at and posted_by fields to track when and who posted.
 |------|--------|
 | Table columns | Replace old columns with: SL, FG Code, Party, Color, Qty (boxes), Total Qty (pcs), Total Qty (ton), QC Check, Remarks, Action |
 | FG Code selection | Add modal with search and filters instead of simple dropdown |
-| Party field | Auto-fill from BOM (readonly) |
+| Party field | fetched from party master  |
 | Color field | New dropdown from color_label_master |
 | Calculations | Add Total Qty (pcs) and Total Qty (ton) auto-calculations |
 | Stock posting | Deduct SFG from FG_STORE, deduct PM from STORE, add FG to FG_STORE |
@@ -350,7 +350,8 @@ Also includes posted_at and posted_by fields to track when and who posted.
 - [ ] FG Code modal opens on click
 - [ ] Modal search filters FG codes correctly
 - [ ] Modal BOM type filter works (FG/LOCAL/All)
-- [ ] Selecting FG Code populates row and auto-fills Party
+- [ ] Selecting FG Code populates row 
+        Party should be fetch from partymaster 
 - [ ] Color dropdown shows all colors from color_label_master
 - [ ] Qty (boxes) input accepts only positive numbers
 - [ ] Total Qty (pcs) calculates correctly: pack_size × boxes

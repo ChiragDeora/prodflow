@@ -31,7 +31,7 @@ const MISForm: React.FC = () => {
   const [formData, setFormData] = useState<MISFormData>({
     issueNo: '',
     issueDate: new Date().toISOString().split('T')[0],
-    department: '',
+    department: 'Production',
     typeOfIssue: '',
     items: [
       { id: '1', itemCode: '', itemDescription: '', uom: '', currentStock: '', issueQty: '', remarks: '' }
@@ -40,6 +40,10 @@ const MISForm: React.FC = () => {
 
   const [docNo, setDocNo] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Department selection state
+  const [deptType, setDeptType] = useState<'Production' | 'Custom'>('Production');
+  const [customDept, setCustomDept] = useState('');
 
   // Stock posting state
   const [savedDocumentId, setSavedDocumentId] = useState<string | null>(null);
@@ -64,17 +68,23 @@ const MISForm: React.FC = () => {
   const [stockItemsByType, setStockItemsByType] = useState<Record<string, any[]>>({});
   const [stockBalancesByType, setStockBalancesByType] = useState<Record<string, Record<string, number>>>({});
 
-  // Generate document number
+  // Function to generate document number
+  const generateDocNo = async (dateValue: string) => {
+    try {
+      // Generate doc_no using the standard format: FORM_CODE + YEAR + FORM_NO (e.g., 50025260001)
+      const newDocNo = await generateDocumentNumber(FORM_CODES.MIS, dateValue);
+      setDocNo(newDocNo);
+      
+      // Issue No uses the same generated document number for consistency
+      setFormData(prev => ({ ...prev, issueNo: newDocNo }));
+    } catch (error) {
+      console.error('Error generating document number:', error);
+    }
+  };
+
+  // Generate document number on initial load and when date changes
   useEffect(() => {
-    const generateDocNo = async () => {
-      try {
-        const docNo = await generateDocumentNumber(FORM_CODES.MIS, date);
-        setDocNo(docNo);
-      } catch (error) {
-        console.error('Error generating document number:', error);
-      }
-    };
-    generateDocNo();
+    generateDocNo(date);
   }, [date]);
 
   const handleInputChange = (field: keyof Omit<MISFormData, 'items'>, value: string) => {
@@ -115,8 +125,8 @@ const MISForm: React.FC = () => {
           setRawMaterials(rmData);
         }
         
-        // Use batch API to get all RM balances at once
-        const balanceResponse = await fetch(`/api/stock/balance?item_type=RM`);
+        // Use batch API to get all RM balances at STORE location
+        const balanceResponse = await fetch(`/api/stock/balance?item_type=RM&location=STORE`);
         const balanceResult = await balanceResponse.json();
         
         if (balanceResult.success && balanceResult.data) {
@@ -232,6 +242,76 @@ const MISForm: React.FC = () => {
     }
   };
 
+  // Refresh stock data after posting - updates current stock values in the form
+  const refreshStockData = async (type: 'RM' | 'PM' | 'SPARE') => {
+    try {
+      // Fetch updated balances from STORE location (not total across all locations)
+      const balanceResponse = await fetch(`/api/stock/balance?item_type=${type}&location=STORE`);
+      const balanceResult = await balanceResponse.json();
+      
+      if (balanceResult.success && balanceResult.data) {
+        // Create updated balance map
+        const newBalanceMap: Record<string, number> = {};
+        balanceResult.data.forEach((b: any) => {
+          newBalanceMap[b.item_code] = (newBalanceMap[b.item_code] || 0) + (b.current_balance || 0);
+        });
+        
+        // Update stock balances state
+        setStockBalancesByType(prev => ({ ...prev, [type]: newBalanceMap }));
+        
+        // Update current stock values in form items
+        setFormData(prev => ({
+          ...prev,
+          items: prev.items.map(item => {
+            if (item.itemCode && newBalanceMap[item.itemCode] !== undefined) {
+              return {
+                ...item,
+                currentStock: String(newBalanceMap[item.itemCode])
+              };
+            }
+            return item;
+          })
+        }));
+        
+        // Also update sub-types stock display
+        if (type === 'RM') {
+          const subTypeGroups: Record<string, number> = {};
+          balanceResult.data.forEach((balance: any) => {
+            let rmType = balance.sub_category || 'Other';
+            if (rmType.startsWith('RM-')) {
+              rmType = rmType.replace('RM-', '');
+            }
+            if (!subTypeGroups[rmType]) {
+              subTypeGroups[rmType] = 0;
+            }
+            subTypeGroups[rmType] += balance.current_balance || 0;
+          });
+          
+          setSubTypesWithStock(prev => 
+            prev.map(st => ({
+              ...st,
+              stock: subTypeGroups[st.type] || 0
+            }))
+          );
+        }
+        
+        // Update items in itemsForSubType with new stock values
+        setItemsForSubType(prev => {
+          const updated: Record<string, Array<{ itemCode: string; grade: string; stock: number; supplier?: string }>> = {};
+          Object.entries(prev).forEach(([itemId, items]) => {
+            updated[itemId] = items.map(item => ({
+              ...item,
+              stock: newBalanceMap[item.itemCode] || 0
+            }));
+          });
+          return updated;
+        });
+      }
+    } catch (error) {
+      console.error('Error refreshing stock data:', error);
+    }
+  };
+
   // Handle sub-type selection for a specific row (RM Type, PM Category, or Spares Category)
   const handleSubTypeSelect = async (itemId: string, subType: string) => {
     setSelectedSubType(prev => ({ ...prev, [itemId]: subType }));
@@ -247,7 +327,7 @@ const MISForm: React.FC = () => {
         // Fetch stock items and balances for RM
         const [stockItemsRes, balanceRes] = await Promise.all([
           fetch(`/api/admin/stock-items?item_type=RM`),
-          fetch(`/api/stock/balance?item_type=RM`)
+          fetch(`/api/stock/balance?item_type=RM&location=STORE`)
         ]);
         
         const stockItemsResult = await stockItemsRes.json();
@@ -387,9 +467,13 @@ const MISForm: React.FC = () => {
     }
     
     try {
-      const response = await fetch(`/api/stock/balance?item_code=${itemCode}&total=true`);
+      // Fetch balance from STORE location specifically (not total across all locations)
+      const response = await fetch(`/api/stock/balance?item_code=${itemCode}&location=STORE`);
       const result = await response.json();
-      const balance = result.total_balance || 0;
+      // Sum up all balances for this item code at STORE
+      const balance = result.success && result.data 
+        ? result.data.reduce((sum: number, b: any) => sum + (b.current_balance || 0), 0)
+        : 0;
       
       handleItemChange(itemId, 'currentStock', balance.toString());
     } catch (error) {
@@ -490,11 +574,11 @@ const MISForm: React.FC = () => {
         setSavedDocumentId(newMIS.id);
         setStockStatus('SAVED');
         setStockMessage('');
-        alert('MIS saved successfully! Click "Post to Stock" to update inventory.');
+        alert('Issue Slip saved successfully! Click "Post to Stock" to update inventory.');
       }
     } catch (error) {
-      console.error('Error saving MIS:', error);
-      alert('Error saving MIS. Please try again.');
+      console.error('Error saving Issue Slip:', error);
+      alert('Error saving Issue Slip. Please try again.');
     }
   };
 
@@ -524,6 +608,11 @@ const MISForm: React.FC = () => {
         }
         setStockMessage(message);
         alert(message);
+        
+        // Refresh stock data to show updated current stock values
+        if (formData.typeOfIssue) {
+          await refreshStockData(formData.typeOfIssue);
+        }
       } else {
         setStockStatus('ERROR');
         const errorMsg = stockResult.error?.message || 'Unknown error';
@@ -538,15 +627,18 @@ const MISForm: React.FC = () => {
     }
   };
 
-  const handleNewForm = () => {
+  const handleNewForm = async () => {
+    const newDate = new Date().toISOString().split('T')[0];
     setFormData({
       issueNo: '',
-      issueDate: new Date().toISOString().split('T')[0],
-      department: '',
+      issueDate: newDate,
+      department: 'Production',
       typeOfIssue: '',
       items: [{ id: '1', itemCode: '', itemDescription: '', uom: '', currentStock: '', issueQty: '', remarks: '' }]
     });
-    setDate(new Date().toISOString().split('T')[0]);
+    setDeptType('Production');
+    setCustomDept('');
+    setDate(newDate);
     setSavedDocumentId(null);
     setStockStatus('NOT_SAVED');
     setStockMessage('');
@@ -558,6 +650,9 @@ const MISForm: React.FC = () => {
     setRawMaterials([]);
     setPackingMaterials([]);
     setLoadingStock({});
+    
+    // Regenerate document number for the new form
+    await generateDocNo(newDate);
   };
 
   const handlePrint = () => {
@@ -605,17 +700,40 @@ const MISForm: React.FC = () => {
           </div>
 
           {/* Right: Department */}
-          <div>
+          <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Department :-
             </label>
-            <input
-              type="text"
-              value={formData.department}
-              onChange={(e) => handleInputChange('department', e.target.value)}
+            <select
+              value={deptType}
+              onChange={(e) => {
+                const newType = e.target.value as 'Production' | 'Custom';
+                setDeptType(newType);
+                if (newType === 'Production') {
+                  setFormData(prev => ({ ...prev, department: 'Production' }));
+                  setCustomDept('');
+                } else {
+                  setFormData(prev => ({ ...prev, department: customDept }));
+                }
+              }}
               className="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
+            >
+              <option value="Production">Production</option>
+              <option value="Custom">Custom</option>
+            </select>
+            {deptType === 'Custom' && (
+              <input
+                type="text"
+                value={customDept}
+                onChange={(e) => {
+                  setCustomDept(e.target.value);
+                  setFormData(prev => ({ ...prev, department: e.target.value }));
+                }}
+                placeholder="Enter custom department name"
+                className="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+            )}
           </div>
         </div>
 

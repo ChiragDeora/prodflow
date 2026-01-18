@@ -7,7 +7,7 @@
 //   Material Indent → Purchase Order (PO) → GRN → Stock (Store)
 //
 // PRODUCTION FLOW:
-//   MIS (Store→Production) → DPR (makes SFG) → FG Transfer (SFG→FG) → Dispatch
+//   Issue Slip (Store→Production) → DPR (makes SFG) → FG Transfer (SFG→FG) → Dispatch
 //
 // SPARE PARTS FLOW:
 //   PO → GRN → Store → Issue Slip (MIS) → Maintenance/Production
@@ -162,7 +162,7 @@ export const DATA_SOURCES: Record<DataSourceId, DataSource> = {
   },
 
   // =========================================================================
-  // 5. MIS (Material Issue Slip) - RM/PM from Store to Production
+  // 5. Issue Slip (Material Issue Slip) - RM/PM from Store to Production
   // =========================================================================
   mis: {
     id: 'mis',

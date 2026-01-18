@@ -58,6 +58,12 @@ export const materialIndentSlipAPI = {
   async create(slip: Omit<MaterialIndentSlip, 'id' | 'created_at' | 'updated_at'>, items: Omit<MaterialIndentSlipItem, 'id' | 'indent_slip_id' | 'created_at' | 'sr_no'>[]): Promise<MaterialIndentSlip | null> {
     const supabase = getSupabase();
     try {
+      console.log('[MaterialIndentSlipAPI] Creating slip with:', {
+        address: slip.address,
+        state: slip.state,
+        gst_no: slip.gst_no
+      });
+      
       const { data: newSlip, error: slipError } = await supabase
         .from('purchase_material_indent_slip')
         .insert([slip])

@@ -1,6 +1,6 @@
 // ============================================================================
 // POST /api/stock/post/mis/[id]
-// Posts a MIS to stock ledger
+// Posts an Issue Slip to stock ledger
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -22,7 +22,7 @@ export async function POST(
     
     if (!id) {
       return NextResponse.json(
-        { success: false, error: { code: 'VALIDATION_ERROR', message: 'MIS ID is required' } },
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Issue Slip ID is required' } },
         { status: 400 }
       );
     }
@@ -38,7 +38,7 @@ export async function POST(
       return NextResponse.json(result, { status: 400 });
     }
   } catch (error) {
-    console.error('Error posting MIS to stock:', error);
+    console.error('Error posting Issue Slip to stock:', error);
     return NextResponse.json(
       {
         success: false,

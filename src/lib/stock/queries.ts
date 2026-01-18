@@ -253,7 +253,9 @@ export async function getStockLedger(
       *,
       stock_items (
         item_name,
-        item_type
+        item_type,
+        sub_category,
+        category
       )
     `);
   

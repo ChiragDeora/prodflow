@@ -1,7 +1,7 @@
 // ============================================================================
-// MIS (MATERIAL ISSUE SLIP) STOCK POSTING
+// ISSUE SLIP (MATERIAL ISSUE SLIP) STOCK POSTING
 // ============================================================================
-// Posts MIS to stock ledger:
+// Posts Issue Slip to stock ledger:
 // - Removes items from STORE location (OUT movement)
 // - Adds items to PRODUCTION location (IN movement)
 // ============================================================================
@@ -20,17 +20,17 @@ import {
 } from './helpers';
 
 // ============================================================================
-// MIS POSTING LOGIC
+// ISSUE SLIP POSTING LOGIC
 // ============================================================================
 
 /**
- * Post MIS to stock ledger
+ * Post Issue Slip to stock ledger
  * 
  * Stock Effect:
  * - Removes items from STORE location (OUT)
  * - Adds items to PRODUCTION location (IN)
  * 
- * @param misId - UUID of the MIS to post
+ * @param misId - UUID of the Issue Slip to post
  * @param postedBy - Username of the user posting
  * @returns PostingResult with success status and details
  */
@@ -42,7 +42,7 @@ export async function postMisToStock(
   const warnings: string[] = [];
   
   try {
-    // Step 1: Get the MIS
+    // Step 1: Get the Issue Slip
     const { data: mis, error: misError } = await supabase
       .from('store_mis')
       .select('*')
@@ -52,7 +52,7 @@ export async function postMisToStock(
     if (misError || !mis) {
       throw new StockPostingError(
         'DOCUMENT_NOT_FOUND',
-        `MIS with ID ${misId} not found`
+        `Issue Slip with ID ${misId} not found`
       );
     }
     
@@ -60,7 +60,7 @@ export async function postMisToStock(
     if (mis.stock_status === 'POSTED') {
       throw new StockPostingError(
         'ALREADY_POSTED',
-        'MIS has already been posted to stock'
+        'Issue Slip has already been posted to stock'
       );
     }
     
@@ -69,11 +69,11 @@ export async function postMisToStock(
     if (alreadyPosted) {
       throw new StockPostingError(
         'ALREADY_POSTED',
-        'MIS has existing ledger entries'
+        'Issue Slip has existing ledger entries'
       );
     }
     
-    // Step 3: Get MIS items
+    // Step 3: Get Issue Slip items
     const { data: items, error: itemsError } = await supabase
       .from('store_mis_items')
       .select('*')
@@ -81,14 +81,14 @@ export async function postMisToStock(
       .order('sr_no', { ascending: true });
     
     if (itemsError) {
-      handleSupabaseError(itemsError, 'fetching MIS items');
+      handleSupabaseError(itemsError, 'fetching Issue Slip items');
       throw itemsError;
     }
     
     if (!items || items.length === 0) {
       throw new StockPostingError(
         'VALIDATION_ERROR',
-        'MIS has no items to post'
+        'Issue Slip has no items to post'
       );
     }
     
@@ -141,7 +141,7 @@ export async function postMisToStock(
         movement_type: 'OUT',
         counterpart_location: 'PRODUCTION',
         posted_by: postedBy,
-        remarks: `Issue to ${mis.dept_name}`,
+        remarks: `Issue to ${mis.dept_name || 'Production'} - ${stockItem.item_name || stockItem.item_code} (${roundQuantity(quantity)} ${stockItem.unit_of_measure || 'units'})${mis.issued_to ? `, Issued to: ${mis.issued_to}` : ''}${mis.purpose ? `, Purpose: ${mis.purpose}` : ''}`,
       });
       
       // Update STORE balance cache
@@ -172,7 +172,7 @@ export async function postMisToStock(
         movement_type: 'IN',
         counterpart_location: 'STORE',
         posted_by: postedBy,
-        remarks: `Received from STORE for ${mis.dept_name}`,
+        remarks: `Received from STORE - ${stockItem.item_name || stockItem.item_code} (${roundQuantity(quantity)} ${stockItem.unit_of_measure || 'units'}) for ${mis.dept_name || 'Production'}${mis.issued_to ? `, Issued to: ${mis.issued_to}` : ''}`,
       });
       
       // Update PRODUCTION balance cache
@@ -195,7 +195,7 @@ export async function postMisToStock(
       );
     }
     
-    // Step 5: Update MIS status to POSTED
+    // Step 5: Update Issue Slip status to POSTED
     await updateDocumentStockStatus('store_mis', misId, 'POSTED', postedBy);
     
     return {

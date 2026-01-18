@@ -15,6 +15,7 @@ interface JWAnnexureGRNItem {
   rcdQty: string;
   rate: string;
   netValue: string;
+  uom: string;
 }
 
 interface JWAnnexureGRNFormData {
@@ -46,7 +47,7 @@ const JWAnnexureGRNForm: React.FC = () => {
     gstNo: '',
     totalValue: '',
     items: [
-      { id: '1', itemCode: '', itemName: '', indentQty: '', rcdQty: '', rate: '', netValue: '' }
+      { id: '1', itemCode: '', itemName: '', indentQty: '', rcdQty: '', rate: '', netValue: '', uom: '' }
     ]
   });
 
@@ -64,12 +65,21 @@ const JWAnnexureGRNForm: React.FC = () => {
   const [stockStatus, setStockStatus] = useState<'NOT_SAVED' | 'SAVED' | 'POSTING' | 'POSTED' | 'ERROR'>('NOT_SAVED');
   const [stockMessage, setStockMessage] = useState<string>('');
 
-  // Generate document number
+  // Generate document number and JW No
   useEffect(() => {
     const generateDocNo = async () => {
       try {
-        const docNo = await generateDocumentNumber(FORM_CODES.JW_ANNEXURE_GRN, date);
-        setDocNo(docNo);
+        const generatedDocNo = await generateDocumentNumber(FORM_CODES.JW_ANNEXURE_GRN, date);
+        setDocNo(generatedDocNo);
+        
+        // Auto-generate JW No - same as doc_no (full number)
+        // e.g., 40025260002
+        if (generatedDocNo) {
+          setFormData(prev => ({
+            ...prev,
+            jwNo: generatedDocNo
+          }));
+        }
       } catch (error) {
         console.error('Error generating document number:', error);
       }
@@ -95,20 +105,23 @@ const JWAnnexureGRNForm: React.FC = () => {
     try {
       setSelectedIndentSlip(indentSlip);
       
-      // Fetch indent slip details with items
+      // Fetch indent slip details with items (this has all fields including address)
       const indentDetails = await materialIndentSlipAPI.getById(indentSlip.id);
       if (indentDetails) {
         setIndentItems(indentDetails.items);
         
-        // Auto-fill form data from indent slip
+        // Use the fetched slip data (indentDetails.slip) which has all fields
+        const slip = indentDetails.slip;
+        
+        // Auto-fill form data from the fetched indent slip (not the list item)
         setFormData(prev => ({
           ...prev,
-          indentNo: indentSlip.ident_no || indentSlip.doc_no || '',
-          indentDate: indentSlip.indent_date || '',
-          partyName: indentSlip.party_name || prev.partyName,
-          address: indentSlip.address || prev.address,
-          state: indentSlip.state || prev.state,
-          gstNo: indentSlip.gst_no || prev.gstNo,
+          indentNo: slip.ident_no || slip.doc_no || '',
+          indentDate: slip.indent_date || '',
+          partyName: slip.party_name || prev.partyName,
+          address: slip.address || slip.to_address || prev.address, // Try both address fields
+          state: slip.state || prev.state,
+          gstNo: slip.gst_no || prev.gstNo,
           items: indentDetails.items.map((item, index) => ({
             id: (index + 1).toString(),
             itemCode: item.item_code || '',
@@ -116,7 +129,8 @@ const JWAnnexureGRNForm: React.FC = () => {
             indentQty: item.qty?.toString() || '',
             rcdQty: '',
             rate: '',
-            netValue: ''
+            netValue: '',
+            uom: item.uom || 'Kgs' // Default to Kgs if not specified
           }))
         }));
       }
@@ -181,7 +195,8 @@ const JWAnnexureGRNForm: React.FC = () => {
       indentQty: '',
       rcdQty: '',
       rate: '',
-      netValue: ''
+      netValue: '',
+      uom: 'Kgs'
     };
     setFormData(prev => ({
       ...prev,
@@ -226,7 +241,8 @@ const JWAnnexureGRNForm: React.FC = () => {
           indent_qty: item.indentQty ? parseFloat(item.indentQty) : undefined,
           rcd_qty: item.rcdQty ? parseFloat(item.rcdQty) : undefined,
           rate: item.rate ? parseFloat(item.rate) : undefined,
-          net_value: item.netValue ? parseFloat(item.netValue) : undefined
+          net_value: item.netValue ? parseFloat(item.netValue) : undefined,
+          uom: item.uom || 'Kgs'
         }));
 
       // Create the JW Annexure GRN
@@ -284,23 +300,48 @@ const JWAnnexureGRNForm: React.FC = () => {
     }
   };
 
-  const handleNewForm = () => {
+  const handleNewForm = async () => {
     // Reset form for a new entry
-    setFormData({
-      jwNo: '',
-      jwDate: new Date().toISOString().split('T')[0],
-      indentNo: '',
-      indentDate: '',
-      challanNo: '',
-      challanDate: '',
-      partyName: '',
-      address: '',
-      state: '',
-      gstNo: '',
-      totalValue: '',
-      items: [{ id: '1', itemCode: '', itemName: '', indentQty: '', rcdQty: '', rate: '', netValue: '' }]
-    });
-    setDate(new Date().toISOString().split('T')[0]);
+    const newDate = new Date().toISOString().split('T')[0];
+    
+    // Force regenerate document number for new form
+    try {
+      const newDocNo = await generateDocumentNumber(FORM_CODES.JW_ANNEXURE_GRN, newDate);
+      setDocNo(newDocNo);
+      
+      setFormData({
+        jwNo: newDocNo || '', // JW No is same as doc_no
+        jwDate: newDate,
+        indentNo: '',
+        indentDate: '',
+        challanNo: '',
+        challanDate: '',
+        partyName: '',
+        address: '',
+        state: '',
+        gstNo: '',
+        totalValue: '',
+        items: [{ id: '1', itemCode: '', itemName: '', indentQty: '', rcdQty: '', rate: '', netValue: '', uom: 'Kgs' }]
+      });
+    } catch (error) {
+      console.error('Error generating new document number:', error);
+      setFormData({
+        jwNo: '',
+        jwDate: newDate,
+        indentNo: '',
+        indentDate: '',
+        challanNo: '',
+        challanDate: '',
+        partyName: '',
+        address: '',
+        state: '',
+        gstNo: '',
+        totalValue: '',
+        items: [{ id: '1', itemCode: '', itemName: '', indentQty: '', rcdQty: '', rate: '', netValue: '', uom: 'Kgs' }]
+      });
+    }
+    
+    setDate(newDate);
     setSelectedIndentSlip(null);
     setIndentItems([]);
     setSavedDocumentId(null);
@@ -532,6 +573,7 @@ const JWAnnexureGRNForm: React.FC = () => {
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-12">Sl.</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Item Code</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Item Name</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-20">UOM</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-24">Indent Qty.</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-24">Rcd. Qty.</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Rate</th>
@@ -564,6 +606,14 @@ const JWAnnexureGRNForm: React.FC = () => {
                         selectedIndentSlip ? 'bg-gray-50 cursor-not-allowed' : ''
                       }`}
                       required
+                    />
+                  </td>
+                  <td className="border border-gray-300 px-2 py-2">
+                    <input
+                      type="text"
+                      value={item.uom || 'Kgs'}
+                      onChange={(e) => handleItemChange(item.id, 'uom', e.target.value)}
+                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
                     />
                   </td>
                   <td className="border border-gray-300 px-2 py-2">

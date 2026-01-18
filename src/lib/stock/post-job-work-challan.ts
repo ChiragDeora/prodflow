@@ -156,7 +156,7 @@ export async function postJobWorkChallanToStock(
         document_number: documentNumber,
         movement_type: 'OUT',
         posted_by: postedBy,
-        remarks: `Job Work Challan to ${challan.party_name || 'Job Worker'}`,
+        remarks: `JW Challan to ${challan.party_name || 'Job Worker'} - ${stockItem.item_name || stockItem.item_code} (${roundQuantity(quantity)} ${stockItem.unit_of_measure || 'units'})${challan.job_work_type ? `, Type: ${challan.job_work_type}` : ''}${challan.vehicle_no ? `, Vehicle: ${challan.vehicle_no}` : ''}`,
       });
       
       // Update balance cache

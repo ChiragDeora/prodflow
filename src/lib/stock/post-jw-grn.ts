@@ -92,7 +92,9 @@ export async function postJwGrnToStock(
     // Step 4: Process each item
     let entriesCreated = 0;
     const transactionDate = jwGrn.date;
-    const documentNumber = jwGrn.jw_no || jwGrn.doc_no;
+    // Use doc_no as primary document number (proper format like 40025260001)
+    // Include jw_no in remarks if available
+    const documentNumber = jwGrn.doc_no || jwGrn.jw_no;
     
     // Debug: Check if stock_items table has any items
     const { count: stockItemsCount, error: countError } = await supabase
@@ -155,6 +157,26 @@ export async function postJwGrnToStock(
       const currentBalance = await getBalance(stockItem.item_code, 'STORE');
       const newBalance = roundQuantity(currentBalance + quantity);
       
+      // Build detailed remarks including material info, doc_no, JW No, and party
+      const remarksParts: string[] = [];
+      remarksParts.push(`JW GRN from ${jwGrn.party_name || 'Job Worker'}`);
+      // Always include doc_no if available for display purposes
+      if (jwGrn.doc_no) {
+        remarksParts.push(`Doc No: ${jwGrn.doc_no}`);
+      }
+      if (jwGrn.jw_no && jwGrn.jw_no !== documentNumber) {
+        remarksParts.push(`JW No: ${jwGrn.jw_no}`);
+      }
+      if (item.item_name && item.item_name !== stockItem.item_code) {
+        remarksParts.push(`Material: ${item.item_name}`);
+      }
+      if (item.item_code && item.item_code !== item.item_name && item.item_code !== stockItem.item_code) {
+        remarksParts.push(`Grade: ${item.item_code}`);
+      }
+      if (jwGrn.indent_no) {
+        remarksParts.push(`Indent: ${jwGrn.indent_no}`);
+      }
+      
       // Create ledger entry - IN at STORE
       await createLedgerEntry({
         item_id: stockItem.id,
@@ -169,7 +191,7 @@ export async function postJwGrnToStock(
         document_number: documentNumber,
         movement_type: 'IN',
         posted_by: postedBy,
-        remarks: `JW GRN from ${jwGrn.party_name || 'Job Worker'}`,
+        remarks: remarksParts.join(' | '),
       });
       
       // Update balance cache

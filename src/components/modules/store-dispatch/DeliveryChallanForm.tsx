@@ -85,6 +85,24 @@ const DeliveryChallanForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate that at least one item has a description
+    const validItems = formData.items.filter(item => 
+      item.itemDescription.trim() !== '' || item.itemCode.trim() !== ''
+    );
+    
+    if (validItems.length === 0) {
+      alert('Please add at least one item with a description before saving.');
+      return;
+    }
+    
+    // Validate each item has material_description (required)
+    const itemsWithoutDescription = validItems.filter(item => !item.itemDescription.trim());
+    if (itemsWithoutDescription.length > 0) {
+      alert('Please ensure all items have an Item Description filled in.');
+      return;
+    }
+    
     try {
       const challanData = {
         doc_no: docNo,
@@ -103,24 +121,27 @@ const DeliveryChallanForm: React.FC = () => {
         gst_no: formData.gstNo || undefined
       };
 
-      const itemsData = formData.items
-        .filter(item => item.itemDescription.trim() !== '' || item.itemCode.trim() !== '')
-        .map(item => ({
-          material_description: item.itemDescription, // Required field
-          qty: item.noOfPcs ? parseFloat(item.noOfPcs) : undefined,
-          uom: item.uom || undefined,
-          remarks: item.hsnCode ? `HSN: ${item.hsnCode}` : undefined
-        }));
+      const itemsData = validItems.map(item => ({
+        material_description: item.itemDescription.trim(), // Required field
+        qty: item.noOfPcs ? parseFloat(item.noOfPcs) : undefined,
+        uom: item.uom || undefined,
+        remarks: item.hsnCode ? `HSN: ${item.hsnCode}` : undefined
+      }));
 
       await deliveryChallanAPI.create(challanData, itemsData);
       alert('Delivery Challan saved successfully!');
       
-      // Reset form
+      // Reset form and regenerate document number
       resetDeliveryChallanForm();
-      setDate(new Date().toISOString().split('T')[0]);
-    } catch (error) {
+      const newDate = new Date().toISOString().split('T')[0];
+      setDate(newDate);
+      // Force regenerate doc number with new date
+      const newDocNo = await generateDocumentNumber(FORM_CODES.DELIVERY_CHALLAN, newDate);
+      setDocNo(newDocNo);
+    } catch (error: any) {
       console.error('Error saving delivery challan:', error);
-      alert('Error saving delivery challan. Please try again.');
+      const errorMessage = error?.message || 'Unknown error occurred';
+      alert(`Error saving delivery challan: ${errorMessage}\n\nPlease check that all required fields are filled and try again.`);
     }
   };
 

@@ -1,7 +1,7 @@
 import { getSupabase, handleSupabaseError } from '../utils';
 import type { MIS, MISItem } from '../types';
 export const misAPI = {
-  // Get all MIS
+  // Get all Issue Slips
   async getAll(): Promise<MIS[]> {
     try {
       const supabase = getSupabase();
@@ -11,17 +11,17 @@ export const misAPI = {
         .order('date', { ascending: false });
       
       if (error) {
-        handleSupabaseError(error, 'fetching MIS');
+        handleSupabaseError(error, 'fetching Issue Slips');
         throw error;
       }
       return data || [];
     } catch (error) {
-      console.error('❌ Failed to fetch MIS:', error);
+      console.error('❌ Failed to fetch Issue Slips:', error);
       throw error;
     }
   },
 
-  // Get MIS by ID with items
+  // Get Issue Slip by ID with items
   async getById(id: string): Promise<{ mis: MIS; items: MISItem[] } | null> {
     try {
       const supabase = getSupabase();
@@ -32,7 +32,7 @@ export const misAPI = {
         .single();
       
       if (misError) {
-        handleSupabaseError(misError, 'fetching MIS');
+        handleSupabaseError(misError, 'fetching Issue Slip');
         return null;
       }
 
@@ -43,18 +43,18 @@ export const misAPI = {
         .order('sr_no', { ascending: true });
       
       if (itemsError) {
-        handleSupabaseError(itemsError, 'fetching MIS items');
+        handleSupabaseError(itemsError, 'fetching Issue Slip items');
         return null;
       }
 
       return { mis, items: items || [] };
     } catch (error) {
-      console.error('❌ Failed to fetch MIS:', error);
+      console.error('❌ Failed to fetch Issue Slip:', error);
       return null;
     }
   },
 
-  // Create MIS with items
+  // Create Issue Slip with items
   async create(mis: Omit<MIS, 'id' | 'created_at' | 'updated_at'>, items: Omit<MISItem, 'id' | 'mis_id' | 'created_at' | 'sr_no'>[]): Promise<MIS | null> {
     try {
       const supabase = getSupabase();
@@ -65,7 +65,7 @@ export const misAPI = {
         .single();
       
       if (misError) {
-        handleSupabaseError(misError, 'creating MIS');
+        handleSupabaseError(misError, 'creating Issue Slip');
         throw misError;
       }
 
@@ -86,21 +86,21 @@ export const misAPI = {
           .insert(itemsToInsert);
         
         if (itemsError) {
-          handleSupabaseError(itemsError, 'creating MIS items');
+          handleSupabaseError(itemsError, 'creating Issue Slip items');
           await supabase.from('store_mis').delete().eq('id', newMIS.id);
           throw itemsError;
         }
       }
 
-      console.log('✅ Successfully created MIS:', newMIS.id);
+      console.log('✅ Successfully created Issue Slip:', newMIS.id);
       return newMIS;
     } catch (error) {
-      console.error('❌ Failed to create MIS:', error);
+      console.error('❌ Failed to create Issue Slip:', error);
       throw error;
     }
   },
 
-  // Update MIS
+  // Update Issue Slip
   async update(id: string, updates: Partial<MIS>, items?: Omit<MISItem, 'id' | 'mis_id' | 'created_at' | 'sr_no'>[]): Promise<MIS | null> {
     try {
       const supabase = getSupabase();
@@ -112,7 +112,7 @@ export const misAPI = {
         .single();
       
       if (error) {
-        handleSupabaseError(error, 'updating MIS');
+        handleSupabaseError(error, 'updating Issue Slip');
         throw error;
       }
 
@@ -136,7 +136,7 @@ export const misAPI = {
             .insert(itemsToInsert);
           
           if (itemsError) {
-            handleSupabaseError(itemsError, 'updating MIS items');
+            handleSupabaseError(itemsError, 'updating Issue Slip items');
             throw itemsError;
           }
         }
@@ -144,12 +144,12 @@ export const misAPI = {
 
       return data;
     } catch (error) {
-      console.error('❌ Failed to update MIS:', error);
+      console.error('❌ Failed to update Issue Slip:', error);
       throw error;
     }
   },
 
-  // Delete MIS
+  // Delete Issue Slip
   async delete(id: string): Promise<void> {
     try {
       const supabase = getSupabase();
@@ -159,11 +159,11 @@ export const misAPI = {
         .eq('id', id);
       
       if (error) {
-        handleSupabaseError(error, 'deleting MIS');
+        handleSupabaseError(error, 'deleting Issue Slip');
         throw error;
       }
     } catch (error) {
-      console.error('❌ Failed to delete MIS:', error);
+      console.error('❌ Failed to delete Issue Slip:', error);
       throw error;
     }
   }

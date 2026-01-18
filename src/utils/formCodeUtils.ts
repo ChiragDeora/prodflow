@@ -13,7 +13,7 @@ export const FORM_CODES = {
   PURCHASE_ORDER: '200',
   GRN: '300',
   JW_ANNEXURE_GRN: '400',
-  MIS: '500', // Material Issue Slip
+  MIS: '500', // Issue Slip (Material Issue Slip)
   DELIVERY_CHALLAN: '600',
   FG_TRANSFER_NOTE: '700',
   JOB_WORK_CHALLAN: '800',

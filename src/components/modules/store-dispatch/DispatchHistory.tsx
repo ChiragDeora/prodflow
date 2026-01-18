@@ -195,7 +195,7 @@ const DispatchHistory: React.FC = () => {
     if (form.type === 'delivery-challan') {
       return `Delivery Challan - ${form.srNo || form.docNo || 'N/A'}`;
     } else if (form.type === 'mis') {
-      return `MIS - ${form.docNo || 'N/A'}`;
+      return `Issue Slip - ${form.docNo || 'N/A'}`;
     } else if (form.type === 'job-work-challan') {
       return `Job Work Challan - ${form.docNo || 'N/A'}`;
     }
@@ -243,8 +243,11 @@ const DispatchHistory: React.FC = () => {
       : selectedForm.type === 'mis'
       ? [
           { key: 'sr_no', label: 'Sr. No.' },
-          { key: 'item_name', label: 'Item Name' },
-          { key: 'no_box', label: 'No. Box' },
+          { key: 'item_code', label: 'Item Code' },
+          { key: 'description_of_material', label: 'Description' },
+          { key: 'uom', label: 'UOM' },
+          { key: 'required_qty', label: 'Current Stock', format: (v: any) => v ? Number(v).toFixed(2) : '-' },
+          { key: 'issue_qty', label: 'Issue Qty', format: (v: any) => v ? Number(v).toFixed(2) : '-' },
           { key: 'remarks', label: 'Remarks', format: (v: any) => v || '-' }
         ]
       : [
@@ -329,7 +332,7 @@ const DispatchHistory: React.FC = () => {
               className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="all">All Types</option>
-              <option value="mis">MIS</option>
+              <option value="mis">Issue Slip</option>
               <option value="job-work-challan">Job Work Challan</option>
               <option value="delivery-challan">Delivery Challan</option>
             </select>
@@ -360,7 +363,7 @@ const DispatchHistory: React.FC = () => {
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
             <FileText className="w-5 h-5 text-blue-600" />
-            <h3 className="text-lg font-semibold text-gray-800">MIS ({misForms.length})</h3>
+            <h3 className="text-lg font-semibold text-gray-800">Issue Slips ({misForms.length})</h3>
           </div>
           {misForms.length > 0 ? (
             <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -383,7 +386,7 @@ const DispatchHistory: React.FC = () => {
                     <div className="grid grid-cols-12 gap-4 items-center text-sm">
                       <div className="col-span-1 flex items-center gap-2">
                         <FileText className="w-4 h-4 text-blue-600" />
-                        <span className="text-gray-800">MIS</span>
+                        <span className="text-gray-800">Issue Slip</span>
                       </div>
                       <div className="col-span-2 text-gray-700 font-medium">{form.docNo || 'N/A'}</div>
                       <div className="col-span-2 text-gray-600">{formatDate(form.date || form.createdAt)}</div>
@@ -407,7 +410,7 @@ const DispatchHistory: React.FC = () => {
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500">
-              No MIS found
+              No Issue Slips found
             </div>
           )}
         </div>

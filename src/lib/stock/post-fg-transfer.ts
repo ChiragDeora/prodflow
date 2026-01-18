@@ -262,9 +262,7 @@ export async function postFgTransferToStock(
       const currentBalance = await getBalance(fgItem.item_code, 'FG_STORE');
       const newBalance = roundQuantity(currentBalance + boxes);
       
-      const remarks = qcHold 
-        ? `Packed FG (QC_HOLD)`
-        : `Packed FG`;
+      const qcStatus = qcHold ? ' [QC_HOLD]' : '';
       
       await createLedgerEntry({
         item_id: fgItem.id,
@@ -279,7 +277,7 @@ export async function postFgTransferToStock(
         document_number: documentNumber,
         movement_type: 'IN',
         posted_by: postedBy,
-        remarks: remarks,
+        remarks: `Packed FG - ${fgItem.item_name || fgItem.item_code} (${roundQuantity(boxes)} ${fgItem.unit_of_measure || 'boxes'})${qcStatus}${fgBom ? `, Pack: ${fgBom.pack_size || 'N/A'}pcs/box` : ''}`,
       });
       
       await updateBalance(
@@ -480,6 +478,9 @@ async function consumeComponent(
     warnings.push(`${itemCode} at ${location} will go negative: ${newBalance}`);
   }
   
+  // Enhanced remarks with item details
+  const detailedRemarks = `${remarks} - ${stockItem.item_name || stockItem.item_code} (${roundQuantity(quantity)} ${stockItem.unit_of_measure || 'units'})`;
+  
   await createLedgerEntry({
     item_id: stockItem.id,
     item_code: stockItem.item_code,
@@ -493,7 +494,7 @@ async function consumeComponent(
     document_number: documentNumber,
     movement_type: 'OUT',
     posted_by: postedBy,
-    remarks: remarks,
+    remarks: detailedRemarks,
   });
   
   await updateBalance(

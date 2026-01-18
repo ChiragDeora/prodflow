@@ -85,7 +85,8 @@ export const jwAnnexureGRNAPI = {
           indent_qty: item.indent_qty || null,
           rcd_qty: item.rcd_qty || null,
           rate: item.rate || null,
-          net_value: item.net_value || null
+          net_value: item.net_value || null,
+          uom: (item as any).uom || null
         }));
 
         const { error: itemsError } = await supabase
@@ -141,7 +142,8 @@ export const jwAnnexureGRNAPI = {
             indent_qty: item.indent_qty || null,
             rcd_qty: item.rcd_qty || null,
             rate: item.rate || null,
-            net_value: item.net_value || null
+            net_value: item.net_value || null,
+            uom: (item as any).uom || null
           }));
 
           const { error: itemsError } = await supabase

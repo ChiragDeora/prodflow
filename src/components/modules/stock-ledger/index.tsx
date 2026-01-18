@@ -31,6 +31,7 @@ import {
   History,
 } from 'lucide-react';
 import { useAccessControl } from '@/lib/useAccessControl';
+import { jwAnnexureGRNAPI, grnAPI, misAPI } from '@/lib/supabase';
 
 // Types
 interface StockLedgerEntry {
@@ -51,6 +52,13 @@ interface StockLedgerEntry {
   remarks?: string;
   batch_number?: string;
   reference_number?: string;
+  counterpart_location?: string;
+  // Joined data from stock_items
+  stock_items?: {
+    item_name?: string;
+    item_type?: string;
+    sub_category?: string;
+  };
 }
 
 interface StockBalance {
@@ -104,7 +112,7 @@ const LOCATION_COLORS: Record<string, string> = {
 const DOCUMENT_TYPE_INFO: Record<string, { label: string; color: string; icon: any }> = {
   GRN: { label: 'Goods Receipt', color: 'bg-green-100 text-green-800', icon: ArrowDownCircle },
   JW_GRN: { label: 'Job Work GRN', color: 'bg-teal-100 text-teal-800', icon: ArrowDownCircle },
-  MIS: { label: 'Material Issue', color: 'bg-orange-100 text-orange-800', icon: ArrowRightCircle },
+  MIS: { label: 'Issue Slip', color: 'bg-orange-100 text-orange-800', icon: ArrowRightCircle },
   DPR: { label: 'Production', color: 'bg-purple-100 text-purple-800', icon: Package },
   FG_TRANSFER: { label: 'FG Transfer', color: 'bg-indigo-100 text-indigo-800', icon: Boxes },
   DISPATCH: { label: 'Dispatch', color: 'bg-red-100 text-red-800', icon: ArrowUpCircle },
@@ -640,6 +648,27 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
   );
 };
 
+// Helper function to parse remarks for displaying in list view
+const parseRemarksForList = (remarks?: string): { grade?: string; material?: string; jwNo?: string; docNo?: string } => {
+  if (!remarks) return {};
+  const result: { grade?: string; material?: string; jwNo?: string; docNo?: string } = {};
+  
+  const parts = remarks.split(' | ');
+  for (const part of parts) {
+    const colonIndex = part.indexOf(':');
+    if (colonIndex > 0) {
+      const key = part.substring(0, colonIndex).trim().toLowerCase();
+      const value = part.substring(colonIndex + 1).trim();
+      if (key === 'grade') result.grade = value;
+      if (key === 'material') result.material = value;
+      if (key === 'jw no') result.jwNo = value;
+      if (key === 'doc no') result.docNo = value;
+    }
+  }
+  
+  return result;
+};
+
 // Movements List Component
 const MovementsList: React.FC<{
   groupedEntries: [string, StockLedgerEntry[]][];
@@ -678,6 +707,27 @@ const MovementsList: React.FC<{
               const docInfo = DOCUMENT_TYPE_INFO[entry.document_type] || { label: entry.document_type, color: 'bg-gray-100 text-gray-800', icon: FileText };
               const DocIcon = docInfo.icon;
               
+              // Parse remarks to get original item code (Grade) and other details
+              const parsedInfo = parseRemarksForList(entry.remarks);
+              
+              // Better display logic for item code:
+              // 1. Try Grade from remarks (original form item code)
+              // 2. Try Material from remarks (often has descriptive name)
+              // 3. Try stock_items.item_name (from joined table)
+              // 4. Fall back to item_code only if it's not a generic category code
+              let displayItemCode = parsedInfo.grade;
+              if (!displayItemCode) {
+                // If item_code is a generic category like "RM-XXX", prefer item_name
+                const isGenericCode = entry.item_code.match(/^(RM|PM|SFG|FG|SPARE)-[A-Z]{2,4}$/);
+                if (isGenericCode && entry.stock_items?.item_name) {
+                  displayItemCode = entry.stock_items.item_name;
+                } else if (parsedInfo.material) {
+                  displayItemCode = parsedInfo.material;
+                } else {
+                  displayItemCode = entry.stock_items?.item_name || entry.item_code;
+                }
+              }
+              
               return (
                 <div
                   key={entry.id}
@@ -711,17 +761,44 @@ const MovementsList: React.FC<{
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="font-semibold text-gray-900">{entry.item_code}</span>
+                            {/* Show original item code (Grade) prominently */}
+                            <span className="font-semibold text-gray-900">{displayItemCode}</span>
+                            {entry.stock_items?.item_type && (
+                              <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${
+                                entry.stock_items.item_type === 'RM' ? 'bg-orange-100 text-orange-800' :
+                                entry.stock_items.item_type === 'PM' ? 'bg-purple-100 text-purple-800' :
+                                entry.stock_items.item_type === 'SFG' ? 'bg-blue-100 text-blue-800' :
+                                entry.stock_items.item_type === 'FG' ? 'bg-green-100 text-green-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {entry.stock_items.item_type}
+                              </span>
+                            )}
                             <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${LOCATION_COLORS[entry.location_code] || 'bg-gray-100 text-gray-700'}`}>
                               {entry.location_code.replace('_', ' ')}
                             </span>
+                          </div>
+                          {/* Show secondary info: stock item code and additional details */}
+                          <div className="text-sm text-gray-600 mb-1">
+                            {/* Show item_code if different from displayItemCode, or material info */}
+                            {displayItemCode !== entry.item_code && (
+                              <span className="text-gray-500">{entry.item_code}</span>
+                            )}
+                            {parsedInfo.material && parsedInfo.material !== displayItemCode && (
+                              <span className="text-gray-400 ml-2">{parsedInfo.material}</span>
+                            )}
+                            {/* If no secondary info, show item name if available and different */}
+                            {displayItemCode === entry.item_code && entry.stock_items?.item_name && entry.stock_items.item_name !== displayItemCode && (
+                              <span className="text-gray-500">{entry.stock_items.item_name}</span>
+                          )}
                           </div>
                           <div className="flex items-center gap-3 text-sm text-gray-500">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded ${docInfo.color}`}>
                               <DocIcon className="w-3 h-3" />
                               {docInfo.label}
                             </span>
-                            <span>{entry.document_number}</span>
+                            {/* Show Doc No from remarks if available (more accurate), else fall back to stored document_number */}
+                            <span className="font-mono">{parsedInfo.docNo || entry.document_number || '-'}</span>
                           </div>
                         </div>
                         
@@ -740,10 +817,10 @@ const MovementsList: React.FC<{
                         </div>
                       </div>
 
-                      {/* Remarks */}
+                      {/* Transaction source from remarks */}
                       {entry.remarks && (
                         <p className="mt-2 text-sm text-gray-500 truncate">
-                          {entry.remarks}
+                          {entry.remarks.split(' | ')[0]}
                         </p>
                       )}
                     </div>
@@ -1144,12 +1221,163 @@ const BalancesGrid: React.FC<{
   );
 };
 
+// Helper function to parse remarks into structured data
+const parseRemarks = (remarks?: string): Record<string, string> => {
+  if (!remarks) return {};
+  const parsed: Record<string, string> = {};
+  
+  // Split by pipe delimiter and parse each part
+  const parts = remarks.split(' | ');
+  for (const part of parts) {
+    const colonIndex = part.indexOf(':');
+    if (colonIndex > 0) {
+      const key = part.substring(0, colonIndex).trim();
+      const value = part.substring(colonIndex + 1).trim();
+      parsed[key] = value;
+    } else {
+      // First part is usually the main description (e.g., "JW GRN from Party Name")
+      if (!parsed['Source']) {
+        parsed['Source'] = part.trim();
+      }
+    }
+  }
+  
+  return parsed;
+};
+
+// Document table mapping for fetching source documents
+const DOCUMENT_TABLE_MAP: Record<string, { table: string; docNoField: string }> = {
+  'JW_GRN': { table: 'store_jw_annexure_grn', docNoField: 'doc_no' },
+  'GRN': { table: 'store_grn', docNoField: 'grn_no' },
+  'MIS': { table: 'store_mis', docNoField: 'issue_no' },
+  'DPR': { table: 'dpr_data', docNoField: 'report_date' }, // DPR uses date-shift format
+  'JOB_WORK_CHALLAN': { table: 'store_job_work_challan', docNoField: 'doc_no' },
+  'FG_TRANSFER': { table: 'store_fgn', docNoField: 'transfer_no' },
+  'DISPATCH': { table: 'dispatch_delivery_challan', docNoField: 'sr_no' },
+};
+
+// URL mapping for viewing source documents
+const DOCUMENT_VIEW_URLS: Record<string, string> = {
+  'JW_GRN': '/api/store/jw-annexure-grn',
+  'GRN': '/api/store/grn',
+  'MIS': '/api/store/mis',
+  'JOB_WORK_CHALLAN': '/api/store/job-work-challan',
+  'FG_TRANSFER': '/api/store/fg-transfer',
+  'DISPATCH': '/api/dispatch',
+  'DPR': '/api/dpr',
+};
+
 // Detail Panel Component
 const DetailPanel: React.FC<{
   entry: StockLedgerEntry;
   onClose: () => void;
 }> = ({ entry, onClose }) => {
+  const [sourceDocNo, setSourceDocNo] = useState<string | null>(null);
+  const [loadingDoc, setLoadingDoc] = useState(false);
+  const [showSourceDoc, setShowSourceDoc] = useState(false);
+  const [sourceDocData, setSourceDocData] = useState<any>(null);
+  const [sourceDocItems, setSourceDocItems] = useState<any[]>([]);
+  const [loadingSourceDoc, setLoadingSourceDoc] = useState(false);
+  
   const docInfo = DOCUMENT_TYPE_INFO[entry.document_type] || { label: entry.document_type, color: 'bg-gray-100', icon: FileText };
+  const DocIcon = docInfo.icon;
+  
+  // Parse remarks to extract detailed info
+  const parsedRemarks = parseRemarks(entry.remarks);
+  
+  // Get item details from joined data
+  const itemName = entry.stock_items?.item_name;
+  const itemType = entry.stock_items?.item_type;
+  const subCategory = entry.stock_items?.sub_category;
+  
+  // Fetch the correct document number from source document
+  useEffect(() => {
+    const fetchSourceDocNo = async () => {
+      const docConfig = DOCUMENT_TABLE_MAP[entry.document_type];
+      if (!docConfig || !entry.document_id) return;
+      
+      setLoadingDoc(true);
+      try {
+        const response = await fetch(`/api/stock/source-doc?table=${docConfig.table}&id=${entry.document_id}&field=${docConfig.docNoField}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.doc_no) {
+            setSourceDocNo(data.doc_no);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching source doc:', error);
+      } finally {
+        setLoadingDoc(false);
+      }
+    };
+    
+    fetchSourceDocNo();
+  }, [entry.document_id, entry.document_type]);
+  
+  // Use fetched doc_no, then Doc No from remarks, then stored document_number
+  const displayDocNo = sourceDocNo || parsedRemarks['Doc No'] || entry.document_number || '-';
+
+  // Fetch and view source document
+  const handleViewSourceDocument = async () => {
+    if (!entry.document_id) return;
+    
+    setLoadingSourceDoc(true);
+    setShowSourceDoc(true);
+    
+    try {
+      // Fetch based on document type using Supabase API functions
+      if (entry.document_type === 'JW_GRN') {
+        const data = await jwAnnexureGRNAPI.getById(entry.document_id);
+        if (data) {
+          setSourceDocData(data.grn);
+          setSourceDocItems(data.items || []);
+        }
+      } else if (entry.document_type === 'GRN') {
+        const data = await grnAPI.getById(entry.document_id);
+        if (data) {
+          setSourceDocData(data.grn);
+          setSourceDocItems(data.items || []);
+        }
+      } else if (entry.document_type === 'MIS') {
+        const data = await misAPI.getById(entry.document_id);
+        if (data) {
+          setSourceDocData(data.mis);
+          setSourceDocItems(data.items || []);
+        }
+      } else {
+        // For other document types, try to fetch from API endpoint
+        let apiUrl = '';
+        if (entry.document_type === 'JOB_WORK_CHALLAN') {
+          apiUrl = `/api/store/job-work-challan/${entry.document_id}`;
+        } else if (entry.document_type === 'FG_TRANSFER') {
+          apiUrl = `/api/production/fg-transfer-note/${entry.document_id}`;
+        } else {
+          console.warn('Unsupported document type for viewing:', entry.document_type);
+          setLoadingSourceDoc(false);
+          return;
+        }
+        
+        const response = await fetch(apiUrl);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.data) {
+            setSourceDocData(data.data);
+            setSourceDocItems(data.items || data.data?.items || []);
+          } else {
+            setSourceDocData(data);
+            setSourceDocItems(data.items || []);
+          }
+        } else {
+          console.error('Failed to fetch source document');
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching source document:', error);
+    } finally {
+      setLoadingSourceDoc(false);
+    }
+  };
 
   return (
     <div className="w-96 bg-white border-l border-gray-200 flex flex-col">
@@ -1182,7 +1410,7 @@ const DetailPanel: React.FC<{
             <div>
               <div className="text-2xl font-bold text-gray-900">
                 {entry.movement_type === 'IN' ? '+' : entry.movement_type === 'OUT' ? '-' : ''}
-                {Math.abs(entry.quantity).toFixed(4)} {entry.unit_of_measure}
+                {Math.abs(entry.quantity).toFixed(2)} {entry.unit_of_measure}
               </div>
               <div className="text-sm text-gray-600">
                 {entry.movement_type === 'IN' ? 'Received' : entry.movement_type === 'OUT' ? 'Issued' : 'Transferred'}
@@ -1190,24 +1418,52 @@ const DetailPanel: React.FC<{
             </div>
           </div>
           <div className="text-sm text-gray-600">
-            Balance after: <span className="font-semibold text-gray-900">{entry.balance_after.toFixed(4)}</span>
+            Balance after: <span className="font-semibold text-gray-900">{entry.balance_after.toFixed(2)}</span>
           </div>
         </div>
 
-        {/* Item Info */}
+        {/* Item Information */}
         <div>
           <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">Item Information</h4>
           <div className="space-y-3">
-            <div className="flex justify-between">
+            <div className="flex justify-between items-start">
               <span className="text-gray-500">Item Code</span>
-              <span className="font-medium text-gray-900">{entry.item_code}</span>
+              <span className="font-mono font-medium text-gray-900 bg-gray-100 px-2 py-0.5 rounded">{entry.item_code}</span>
             </div>
-            <div className="flex justify-between">
+            {itemName && (
+              <div className="flex justify-between items-start">
+                <span className="text-gray-500">Item Name</span>
+                <span className="font-medium text-gray-900 text-right max-w-[180px]">{itemName}</span>
+              </div>
+            )}
+            {itemType && (
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Item Type</span>
+                <span className={`px-2 py-0.5 rounded text-xs font-semibold ${ITEM_TYPE_COLORS[itemType] || 'bg-gray-100 text-gray-800'}`}>
+                  {itemType}
+                </span>
+              </div>
+            )}
+            {subCategory && (
+              <div className="flex justify-between items-start">
+                <span className="text-gray-500">Category</span>
+                <span className="font-medium text-gray-900">{subCategory.replace('RM-', '')}</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center">
               <span className="text-gray-500">Location</span>
-              <span className={`px-2 py-0.5 rounded text-xs font-medium ${LOCATION_COLORS[entry.location_code]}`}>
+              <span className={`px-2 py-0.5 rounded text-xs font-medium border ${LOCATION_COLORS[entry.location_code] || 'bg-gray-100 text-gray-700'}`}>
                 {entry.location_code.replace('_', ' ')}
               </span>
             </div>
+            {entry.counterpart_location && (
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Transfer To/From</span>
+                <span className={`px-2 py-0.5 rounded text-xs font-medium border ${LOCATION_COLORS[entry.counterpart_location] || 'bg-gray-100 text-gray-700'}`}>
+                  {entry.counterpart_location.replace('_', ' ')}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-gray-500">Unit</span>
               <span className="font-medium text-gray-900">{entry.unit_of_measure}</span>
@@ -1215,19 +1471,22 @@ const DetailPanel: React.FC<{
           </div>
         </div>
 
-        {/* Document Info */}
+        {/* Source Document */}
         <div>
           <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">Source Document</h4>
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-gray-500">Document Type</span>
-              <span className={`px-2 py-1 rounded text-xs font-medium ${docInfo.color}`}>
+              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${docInfo.color}`}>
+                <DocIcon className="w-3 h-3" />
                 {docInfo.label}
               </span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-start">
               <span className="text-gray-500">Document No.</span>
-              <span className="font-medium text-gray-900">{entry.document_number}</span>
+              <span className="font-mono font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                {loadingDoc ? '...' : displayDocNo}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">Transaction Date</span>
@@ -1236,17 +1495,79 @@ const DetailPanel: React.FC<{
           </div>
         </div>
 
-        {/* Audit Info */}
+        {/* Parsed Details from Remarks */}
+        {Object.keys(parsedRemarks).length > 0 && (
+          <div>
+            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">Transaction Details</h4>
+            <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+              {parsedRemarks['Source'] && (
+                <div className="pb-2 border-b border-gray-200">
+                  <span className="text-sm font-medium text-gray-900">{parsedRemarks['Source']}</span>
+                </div>
+              )}
+              {parsedRemarks['JW No'] && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">JW No</span>
+                  <span className="font-medium text-gray-900">{parsedRemarks['JW No']}</span>
+                </div>
+              )}
+              {parsedRemarks['Material'] && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Material</span>
+                  <span className="font-medium text-gray-900">{parsedRemarks['Material']}</span>
+                </div>
+              )}
+              {parsedRemarks['Grade'] && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Grade</span>
+                  <span className="font-medium text-gray-900">{parsedRemarks['Grade']}</span>
+                </div>
+              )}
+              {parsedRemarks['Indent'] && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Indent No</span>
+                  <span className="font-medium text-gray-900">{parsedRemarks['Indent']}</span>
+                </div>
+              )}
+              {parsedRemarks['Party'] && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Party</span>
+                  <span className="font-medium text-gray-900 text-right max-w-[150px]">{parsedRemarks['Party']}</span>
+                </div>
+              )}
+              {parsedRemarks['Mold'] && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Mold</span>
+                  <span className="font-medium text-gray-900">{parsedRemarks['Mold']}</span>
+                </div>
+              )}
+              {parsedRemarks['Shift'] && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Shift</span>
+                  <span className="font-medium text-gray-900">{parsedRemarks['Shift']}</span>
+                </div>
+              )}
+              {parsedRemarks['Line'] && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Line</span>
+                  <span className="font-medium text-gray-900">{parsedRemarks['Line']}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Audit Trail */}
         <div>
           <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">Audit Trail</h4>
           <div className="space-y-3">
             <div className="flex justify-between">
               <span className="text-gray-500">Posted By</span>
-              <span className="font-medium text-gray-900">{entry.posted_by}</span>
+              <span className="font-medium text-gray-900">{entry.posted_by || '-'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">Posted At</span>
-              <span className="font-medium text-gray-900">{formatDateTime(entry.posted_at)}</span>
+              <span className="font-medium text-gray-900">{entry.posted_at ? formatDateTime(entry.posted_at) : '-'}</span>
             </div>
             {entry.batch_number && (
               <div className="flex justify-between">
@@ -1254,11 +1575,17 @@ const DetailPanel: React.FC<{
                 <span className="font-medium text-gray-900">{entry.batch_number}</span>
               </div>
             )}
+            {entry.reference_number && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">Reference</span>
+                <span className="font-medium text-gray-900">{entry.reference_number}</span>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Remarks */}
-        {entry.remarks && (
+        {/* Raw Remarks (for anything not parsed) */}
+        {entry.remarks && !Object.keys(parsedRemarks).length && (
           <div>
             <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Remarks</h4>
             <p className="text-gray-700 text-sm bg-gray-50 rounded-lg p-3">{entry.remarks}</p>
@@ -1268,11 +1595,194 @@ const DetailPanel: React.FC<{
 
       {/* Footer Actions */}
       <div className="px-6 py-4 border-t border-gray-200">
-        <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+        <button 
+          onClick={handleViewSourceDocument}
+          disabled={!entry.document_id}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
           <ExternalLink className="w-4 h-4" />
           View Source Document
         </button>
       </div>
+
+      {/* Source Document Modal */}
+      {showSourceDoc && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowSourceDoc(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-slate-600 to-slate-700 text-white px-6 py-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold">{docInfo.label}</h3>
+                <p className="text-slate-200 text-sm">Document No: {displayDocNo}</p>
+              </div>
+              <button
+                onClick={() => setShowSourceDoc(false)}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {loadingSourceDoc ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-600"></div>
+                  <p className="mt-4 text-gray-600">Loading document...</p>
+                </div>
+              ) : sourceDocData ? (
+                <div className="space-y-6">
+                  {/* Document Information */}
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Document Information
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {sourceDocData.doc_no && (
+                        <div>
+                          <label className="text-xs text-gray-500">Document Number</label>
+                          <p className="font-semibold text-gray-900">{sourceDocData.doc_no}</p>
+                        </div>
+                      )}
+                      {sourceDocData.jw_no && (
+                        <div>
+                          <label className="text-xs text-gray-500">JW Number</label>
+                          <p className="font-semibold text-gray-900">{sourceDocData.jw_no}</p>
+                        </div>
+                      )}
+                      {sourceDocData.date && (
+                        <div>
+                          <label className="text-xs text-gray-500">Date</label>
+                          <p className="font-semibold text-gray-900">{formatDate(sourceDocData.date)}</p>
+                        </div>
+                      )}
+                      {sourceDocData.party_name && (
+                        <div>
+                          <label className="text-xs text-gray-500">Party Name</label>
+                          <p className="font-semibold text-gray-900">{sourceDocData.party_name}</p>
+                        </div>
+                      )}
+                      {sourceDocData.indent_no && (
+                        <div>
+                          <label className="text-xs text-gray-500">Indent Number</label>
+                          <p className="font-semibold text-gray-900">{sourceDocData.indent_no}</p>
+                        </div>
+                      )}
+                      {sourceDocData.challan_no && (
+                        <div>
+                          <label className="text-xs text-gray-500">Challan Number</label>
+                          <p className="font-semibold text-gray-900">{sourceDocData.challan_no}</p>
+                        </div>
+                      )}
+                      {sourceDocData.gst_no && (
+                        <div>
+                          <label className="text-xs text-gray-500">GST Number</label>
+                          <p className="font-semibold text-gray-900">{sourceDocData.gst_no}</p>
+                        </div>
+                      )}
+                      {/* Issue Slip specific fields */}
+                      {sourceDocData.dept_name && (
+                        <div>
+                          <label className="text-xs text-gray-500">Department</label>
+                          <p className="font-semibold text-gray-900">{sourceDocData.dept_name}</p>
+                        </div>
+                      )}
+                      {sourceDocData.issue_no && (
+                        <div>
+                          <label className="text-xs text-gray-500">Issue Number</label>
+                          <p className="font-semibold text-gray-900">{sourceDocData.issue_no}</p>
+                        </div>
+                      )}
+                      {sourceDocData.total_value && (
+                        <div>
+                          <label className="text-xs text-gray-500">Total Value</label>
+                          <p className="font-semibold text-gray-900">₹{Number(sourceDocData.total_value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                        </div>
+                      )}
+                      {sourceDocData.stock_status && (
+                        <div>
+                          <label className="text-xs text-gray-500">Stock Status</label>
+                          <span className={`inline-flex px-2 py-0.5 rounded text-xs font-semibold ${
+                            sourceDocData.stock_status === 'POSTED' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {sourceDocData.stock_status}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Items Table */}
+                  {sourceDocItems.length > 0 && (
+                    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                        <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                          <Package className="w-4 h-4" />
+                          Items ({sourceDocItems.length})
+                        </h4>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Sr.</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Item Code</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">UOM</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                {entry.document_type === 'MIS' ? 'Store Stock' : 'Req/Indent Qty'}
+                              </th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                {entry.document_type === 'MIS' ? 'Issued Stock' : 'Issue/Rcd Qty'}
+                              </th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Rate</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Net Value</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {sourceDocItems.map((item, index) => (
+                              <tr key={item.id || index} className="hover:bg-gray-50">
+                                <td className="px-4 py-2 text-sm text-gray-600">{item.sr_no || index + 1}</td>
+                                <td className="px-4 py-2 text-sm font-mono text-gray-900">{item.item_code || '-'}</td>
+                                <td className="px-4 py-2 text-sm text-gray-900">{item.item_name || item.description_of_material || '-'}</td>
+                                <td className="px-4 py-2 text-sm text-gray-600">{item.uom || '-'}</td>
+                                <td className="px-4 py-2 text-sm text-right text-gray-900">{item.indent_qty || item.required_qty || '-'}</td>
+                                <td className="px-4 py-2 text-sm text-right font-semibold text-gray-900">{item.rcd_qty || item.issue_qty || item.qty || '-'}</td>
+                                <td className="px-4 py-2 text-sm text-right text-gray-900">
+                                  {item.rate ? `₹${Number(item.rate).toFixed(2)}` : '-'}
+                                </td>
+                                <td className="px-4 py-2 text-sm text-right font-semibold text-gray-900">
+                                  {item.net_value ? `₹${Number(item.net_value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                  <p>Could not load document details</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => setShowSourceDoc(false)}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

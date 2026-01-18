@@ -142,7 +142,7 @@ export async function postDispatchToStock(
         document_number: documentNumber,
         movement_type: 'OUT',
         posted_by: postedBy,
-        remarks: `Dispatch to ${dispatch.to_address || 'Customer'}`,
+        remarks: `Dispatch - ${stockItem.item_name || stockItem.item_code} (${roundQuantity(quantity)} ${stockItem.unit_of_measure || 'units'}) to ${dispatch.party_name || dispatch.to_address || 'Customer'}${dispatch.vehicle_no ? `, Vehicle: ${dispatch.vehicle_no}` : ''}${dispatch.lr_no ? `, LR: ${dispatch.lr_no}` : ''}`,
       });
       
       // Update balance cache
