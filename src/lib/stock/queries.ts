@@ -38,7 +38,11 @@ export async function getStockBalances(
     .select('*');
   
   // Apply filters
-  if (query.item_code) {
+  if (query.search) {
+    // Use ilike for partial matching on both item_code and item_name
+    queryBuilder = queryBuilder.or(`item_code.ilike.%${query.search}%,item_name.ilike.%${query.search}%`);
+  } else if (query.item_code) {
+    // Exact match for item_code when search is not provided
     queryBuilder = queryBuilder.eq('item_code', query.item_code);
   }
   
@@ -75,64 +79,66 @@ export async function getStockBalances(
       location_code: query.location_code as LocationCode,
       current_balance: getBalanceForLocation(item, query.location_code as LocationCode),
       unit_of_measure: item.unit_of_measure,
-    })).filter(item => item.current_balance !== 0);
+    }));
+    // Include items with 0 balance - they should still be shown if uploaded
     
     console.log(`📊 [getStockBalances] After filtering by location ${query.location_code}:`, {
       totalItems: data.length,
-      itemsWithBalance: filtered.length,
+      itemsIncludingZero: filtered.length,
       sample: filtered.slice(0, 3)
     });
     
     return filtered;
   }
   
-  // Return all locations with balances
+  // Return all locations with balances (including 0 balance items)
+  // Show items at all locations so uploaded items with 0 balance are visible
   const results: StockBalanceResult[] = [];
   
   for (const item of data) {
     const baseId = item.id as string;
+    const storeBalance = item.store_balance || 0;
+    const productionBalance = item.production_balance || 0;
+    const fgStoreBalance = item.fg_store_balance || 0;
     
-    // Add STORE balance if not zero
-    if (item.store_balance && item.store_balance !== 0) {
-      results.push({
-        id: `${baseId}-STORE`,
-        item_code: item.item_code,
-        item_name: item.item_name,
-        item_type: item.item_type as ItemType,
-        sub_category: item.sub_category,
-        location_code: 'STORE',
-        current_balance: item.store_balance,
-        unit_of_measure: item.unit_of_measure,
-      });
-    }
+    // Show item at all locations (including 0 balance) so uploaded items are visible
+    // Users can filter by location or use "Zero Stock" quick filter if needed
     
-    // Add PRODUCTION balance if not zero
-    if (item.production_balance && item.production_balance !== 0) {
-      results.push({
-        id: `${baseId}-PRODUCTION`,
-        item_code: item.item_code,
-        item_name: item.item_name,
-        item_type: item.item_type as ItemType,
-        sub_category: item.sub_category,
-        location_code: 'PRODUCTION',
-        current_balance: item.production_balance,
-        unit_of_measure: item.unit_of_measure,
-      });
-    }
+    // Add STORE balance
+    results.push({
+      id: `${baseId}-STORE`,
+      item_code: item.item_code,
+      item_name: item.item_name,
+      item_type: item.item_type as ItemType,
+      sub_category: item.sub_category,
+      location_code: 'STORE',
+      current_balance: storeBalance,
+      unit_of_measure: item.unit_of_measure,
+    });
     
-    // Add FG_STORE balance if not zero
-    if (item.fg_store_balance && item.fg_store_balance !== 0) {
-      results.push({
-        id: `${baseId}-FG_STORE`,
-        item_code: item.item_code,
-        item_name: item.item_name,
-        item_type: item.item_type as ItemType,
-        sub_category: item.sub_category,
-        location_code: 'FG_STORE',
-        current_balance: item.fg_store_balance,
-        unit_of_measure: item.unit_of_measure,
-      });
-    }
+    // Add PRODUCTION balance
+    results.push({
+      id: `${baseId}-PRODUCTION`,
+      item_code: item.item_code,
+      item_name: item.item_name,
+      item_type: item.item_type as ItemType,
+      sub_category: item.sub_category,
+      location_code: 'PRODUCTION',
+      current_balance: productionBalance,
+      unit_of_measure: item.unit_of_measure,
+    });
+    
+    // Add FG_STORE balance
+    results.push({
+      id: `${baseId}-FG_STORE`,
+      item_code: item.item_code,
+      item_name: item.item_name,
+      item_type: item.item_type as ItemType,
+      sub_category: item.sub_category,
+      location_code: 'FG_STORE',
+      current_balance: fgStoreBalance,
+      unit_of_measure: item.unit_of_measure,
+    });
   }
   
   console.log('📊 [getStockBalances] Final results:', {
@@ -267,6 +273,10 @@ export async function getStockLedger(
   if (query.location_code) {
     queryBuilder = queryBuilder.eq('location_code', query.location_code);
   }
+  
+  // Note: item_type filter needs to be applied after fetching because
+  // Supabase doesn't support filtering on joined tables directly
+  // We'll filter in the API route after getting results
   
   if (query.document_type) {
     queryBuilder = queryBuilder.eq('document_type', query.document_type);

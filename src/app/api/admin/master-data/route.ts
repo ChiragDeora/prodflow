@@ -15,6 +15,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const supabase = getSupabase();
+    const { searchParams } = new URL(request.url);
+    const type = searchParams.get('type'); // 'rm', 'pm', 'sfg', or null for all
     
     // Fetch SFG BOM data
     const { data: sfgBom, error: sfgError } = await supabase
@@ -96,6 +98,29 @@ export async function GET(request: NextRequest) {
       { item_code: 'REGRIND', item_name: 'Regrind Material', item_type: 'RM', unit_of_measure: 'KG', category: 'REGRIND', sub_category: null },
     ];
     
+    // If type filter is specified, return only that type
+    if (type === 'rm') {
+      return NextResponse.json({
+        success: true,
+        data: [...formattedRm, ...standardRmTypes]
+      });
+    }
+    
+    if (type === 'pm') {
+      return NextResponse.json({
+        success: true,
+        data: packingMaterials || []
+      });
+    }
+    
+    if (type === 'sfg') {
+      return NextResponse.json({
+        success: true,
+        data: formattedSfg
+      });
+    }
+    
+    // Return all data if no type filter
     return NextResponse.json({
       success: true,
       data: {

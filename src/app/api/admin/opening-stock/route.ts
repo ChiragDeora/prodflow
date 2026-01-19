@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase, handleSupabaseError } from '@/lib/supabase/utils';
 import { verifyAuth, unauthorized } from '@/lib/api-auth';
+import { randomUUID } from 'crypto';
 
 interface OpeningStockEntry {
   item_code: string;
@@ -65,15 +66,18 @@ export async function POST(request: NextRequest) {
       }
       
       const transactionDate = new Date().toISOString().split('T')[0];
-      const documentNumber = `OPENING-${transactionDate}-${item_code}`;
+      // Simplified document number format: OPEN-YYYYMMDD-ITEMCODE
+      const dateStr = transactionDate.replace(/-/g, '');
+      const documentNumber = `OPEN-${dateStr}-${item_code}`;
+      const documentId = randomUUID(); // Generate proper UUID
       
-      // Check if balance already exists
+      // Check if balance already exists - use maybeSingle to avoid error
       const { data: existingBalance, error: balanceCheckError } = await supabase
         .from('stock_balances')
         .select('*')
         .eq('item_code', item_code)
         .eq('location_code', location_code)
-        .single();
+        .maybeSingle();
       
       if (balanceCheckError && balanceCheckError.code !== 'PGRST116') {
         results.errors.push(`Error checking balance for ${item_code}: ${balanceCheckError.message}`);
@@ -95,11 +99,11 @@ export async function POST(request: NextRequest) {
           balance_after: newBalance,
           transaction_date: transactionDate,
           document_type: 'OPENING',
-          document_id: null,
+          document_id: documentId,
           document_number: documentNumber,
           movement_type: quantity >= 0 ? 'IN' : 'OUT',
-          posted_by: posted_by || 'SYSTEM',
-          remarks: remarks || `Opening stock entry for ${stockItem.item_name}`
+          posted_by: posted_by || 'yogesh',
+          remarks: remarks || `Opening stock entry for ${stockItem.item_name} - added by yogesh`
         });
       
       if (ledgerError) {

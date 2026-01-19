@@ -8,6 +8,7 @@ import {
   RefreshCw,
   Download,
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   ArrowUpCircle,
   ArrowDownCircle,
@@ -177,6 +178,11 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
     toDate: '',
   });
 
+  // Sort and filter state for Current Stock view
+  const [balancesSortBy, setBalancesSortBy] = useState<'code' | 'name' | 'balance' | 'type'>('code');
+  const [balancesSortOrder, setBalancesSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [balancesStockFilter, setBalancesStockFilter] = useState<'all' | 'zero' | 'negative'>('all');
+
   // Fetch ledger entries
   const fetchLedgerEntries = useCallback(async () => {
     setLoading(true);
@@ -184,15 +190,25 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
       const params = new URLSearchParams();
       if (filters.searchTerm) params.append('item_code', filters.searchTerm);
       if (filters.location !== 'ALL') params.append('location', filters.location);
+      if (filters.itemType !== 'ALL') params.append('item_type', filters.itemType);
       if (filters.documentType !== 'ALL') params.append('document_type', filters.documentType);
       if (filters.fromDate) params.append('from', filters.fromDate);
       if (filters.toDate) params.append('to', filters.toDate);
       
-      const response = await fetch(`/api/stock/ledger?${params.toString()}`);
+      const response = await fetch(`/api/stock/ledger?${params.toString()}`, {
+        credentials: 'include'
+      });
       if (response.ok) {
         const data = await response.json();
         // API returns { success: true, count: number, data: StockLedgerEntry[] }
-        setLedgerEntries(data.data || []);
+        let entries = data.data || [];
+        
+        // Apply movement type filter on client side (API doesn't support it directly)
+        if (filters.movementType !== 'ALL') {
+          entries = entries.filter((e: StockLedgerEntry) => e.movement_type === filters.movementType);
+        }
+        
+        setLedgerEntries(entries);
       } else {
         console.error('Failed to fetch ledger entries:', response.status, response.statusText);
         setLedgerEntries([]);
@@ -209,7 +225,7 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (filters.searchTerm) params.append('item_code', filters.searchTerm);
+      if (filters.searchTerm) params.append('search', filters.searchTerm);
       if (filters.location !== 'ALL') {
         // Ensure location code matches API expectations (FG_STORE not FG STORE)
         const locationCode = filters.location === 'FG STORE' ? 'FG_STORE' : filters.location;
@@ -218,7 +234,9 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
       if (filters.itemType !== 'ALL') params.append('item_type', filters.itemType);
       
       console.log('📊 Fetching stock balances with params:', params.toString());
-      const response = await fetch(`/api/stock/balance?${params.toString()}`);
+      const response = await fetch(`/api/stock/balance?${params.toString()}`, {
+        credentials: 'include'
+      });
       
       if (response.ok) {
         const data = await response.json();
@@ -258,6 +276,15 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
     const uniqueItems = new Set(ledgerEntries.map(e => e.item_code)).size;
     const negativeBalances = balances.filter(b => b.current_balance < 0).length;
     
+    // Additional comprehensive stats
+    const itemsWithStock = balances.filter(b => b.current_balance > 0).length;
+    const zeroStock = balances.filter(b => b.current_balance === 0).length;
+    const totalStockValue = balances.reduce((sum, b) => sum + b.current_balance, 0);
+    
+    // Movement stats (all time, not just today)
+    const allIn = ledgerEntries.filter(e => e.movement_type === 'IN').reduce((sum, e) => sum + Math.abs(e.quantity), 0);
+    const allOut = ledgerEntries.filter(e => e.movement_type === 'OUT').reduce((sum, e) => sum + Math.abs(e.quantity), 0);
+    
     return {
       todayMovements: todayEntries.length,
       todayIn: totalIn,
@@ -265,6 +292,12 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
       uniqueItems,
       negativeBalances,
       totalEntries: ledgerEntries.length,
+      // Additional stats
+      itemsWithStock,
+      zeroStock,
+      totalStockValue,
+      allTimeIn: allIn,
+      allTimeOut: allOut,
     };
   }, [ledgerEntries, balances]);
 
@@ -342,7 +375,7 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
   }
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
       {/* Tab Navigation - Only shows tabs user has permission for */}
       <div className="border-b border-gray-200 bg-white app-subnav">
         <nav className="flex space-x-8 px-6">
@@ -390,14 +423,16 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
                 </button>
               </div>
               
-              {/* Search */}
+              {/* Search - Works for both tabs */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search item code..."
+                  placeholder={activeTab === 'balances' ? "Search item code or name..." : "Search item code..."}
                   value={filters.searchTerm}
-                  onChange={(e) => setFilters(prev => ({ ...prev, searchTerm: e.target.value }))}
+                  onChange={(e) => {
+                    setFilters(prev => ({ ...prev, searchTerm: e.target.value }));
+                  }}
                   className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-transparent"
                 />
               </div>
@@ -411,7 +446,12 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
                   {LOCATIONS.map(loc => (
                     <button
                       key={loc}
-                      onClick={() => setFilters(prev => ({ ...prev, location: loc }))}
+                      onClick={() => {
+                        setFilters(prev => ({ ...prev, location: loc }));
+                        if (activeTab === 'balances') {
+                          // Location filter is applied client-side, no need to refetch
+                        }
+                      }}
                       className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                         filters.location === loc
                           ? 'bg-slate-100 text-slate-900 font-medium'
@@ -446,6 +486,67 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
                   ))}
                 </div>
               </div>
+
+              {/* Sort and Quick Filters for Current Stock */}
+              {activeTab === 'balances' && (
+                <>
+                  {/* Sort */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">Sort By</label>
+                    <div className="space-y-2">
+                      <select
+                        value={balancesSortBy}
+                        onChange={(e) => setBalancesSortBy(e.target.value as 'code' | 'name' | 'balance' | 'type')}
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-slate-500"
+                      >
+                        <option value="code">Item Code</option>
+                        <option value="name">Item Name</option>
+                        <option value="balance">Balance</option>
+                        <option value="type">Item Type</option>
+                      </select>
+                      <button
+                        onClick={() => setBalancesSortOrder(balancesSortOrder === 'asc' ? 'desc' : 'asc')}
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                        title={balancesSortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
+                      >
+                        {balancesSortOrder === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        {balancesSortOrder === 'asc' ? 'Ascending' : 'Descending'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Quick Filters */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">Quick Filters</label>
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => setBalancesStockFilter('all')}
+                        className={`w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left ${
+                          balancesStockFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        All Items
+                      </button>
+                      <button
+                        onClick={() => setBalancesStockFilter('zero')}
+                        className={`w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left ${
+                          balancesStockFilter === 'zero' ? 'bg-yellow-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        Zero Stock
+                      </button>
+                      <button
+                        onClick={() => setBalancesStockFilter('negative')}
+                        className={`w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left ${
+                          balancesStockFilter === 'negative' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        Negative Stock
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Document Type Filter */}
               {activeTab === 'movements' && (
@@ -546,14 +647,14 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
                 </button>
                 
                 {/* Quick Stats */}
-                <div className="flex items-center gap-6 text-sm">
+                <div className="flex items-center gap-4 text-sm flex-wrap">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
                       <ArrowDownCircle className="w-4 h-4 text-green-600" />
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500">Today In</div>
-                      <div className="font-semibold text-gray-900">{summaryStats.todayIn.toFixed(2)}</div>
+                      <div className="text-xs text-gray-500">Stock Received Today</div>
+                      <div className="font-semibold text-gray-900">{summaryStats.todayIn.toFixed(2)} units</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -561,8 +662,8 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
                       <ArrowUpCircle className="w-4 h-4 text-red-600" />
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500">Today Out</div>
-                      <div className="font-semibold text-gray-900">{summaryStats.todayOut.toFixed(2)}</div>
+                      <div className="text-xs text-gray-500">Stock Issued Today</div>
+                      <div className="font-semibold text-gray-900">{summaryStats.todayOut.toFixed(2)} units</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -570,8 +671,26 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
                       <Package className="w-4 h-4 text-amber-600" />
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500">Movements</div>
-                      <div className="font-semibold text-gray-900">{summaryStats.todayMovements}</div>
+                      <div className="text-xs text-gray-500">Total Movements Today</div>
+                      <div className="font-semibold text-gray-900">{summaryStats.todayMovements} entries</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                      <Box className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">Items with Stock</div>
+                      <div className="font-semibold text-gray-900">{summaryStats.itemsWithStock} items</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                      <Layers className="w-4 h-4 text-purple-600" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">Unique Items</div>
+                      <div className="font-semibold text-gray-900">{summaryStats.uniqueItems} types</div>
                     </div>
                   </div>
                   {summaryStats.negativeBalances > 0 && (
@@ -605,9 +724,9 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-hidden flex">
+          <div className="flex-1 overflow-hidden flex flex-row min-h-0">
             {/* Main List */}
-            <div className={`flex-1 overflow-y-auto ${selectedEntry ? 'w-2/3' : 'w-full'}`}>
+            <div className={`flex-1 overflow-hidden flex flex-col min-h-0 ${selectedEntry ? 'w-2/3' : 'w-full'} transition-all duration-200`}>
               {loading ? (
                 <div className="flex items-center justify-center h-64">
                   <div className="loader"></div>
@@ -628,6 +747,12 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
                     setActiveTab('movements');
                     fetchLedgerEntries();
                   }}
+                  filters={filters}
+                  sortBy={balancesSortBy}
+                  sortOrder={balancesSortOrder}
+                  stockFilter={balancesStockFilter}
+                  setSortBy={setBalancesSortBy}
+                  setSortOrder={setBalancesSortOrder}
                 />
               ) : (
                 <AnalyticsView entries={ledgerEntries} balances={balances} />
@@ -686,11 +811,11 @@ const MovementsList: React.FC<{
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="flex-1 overflow-y-auto min-h-0 p-6">
       {groupedEntries.map(([date, entries]) => (
-        <div key={date}>
+        <div key={date} className="mb-6">
           {/* Date Header */}
-          <div className="sticky top-0 bg-gray-50 z-10 py-2 mb-3">
+          <div className="sticky top-0 bg-gray-50 z-10 py-2">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-gray-200 shadow-sm">
                 <Calendar className="w-4 h-4 text-gray-500" />
@@ -701,7 +826,7 @@ const MovementsList: React.FC<{
             </div>
           </div>
 
-          {/* Entries */}
+          {/* Entries - directly connected to date header */}
           <div className="space-y-2">
             {entries.map(entry => {
               const docInfo = DOCUMENT_TYPE_INFO[entry.document_type] || { label: entry.document_type, color: 'bg-gray-100 text-gray-800', icon: FileText };
@@ -982,20 +1107,83 @@ const BalancesGrid: React.FC<{
   expandedItems: Set<string>;
   onToggleExpand: (itemCode: string) => void;
   onViewHistory: (itemCode: string) => void;
-}> = ({ balances, expandedItems, onToggleExpand, onViewHistory }) => {
+  filters: FilterState;
+  sortBy: 'code' | 'name' | 'balance' | 'type';
+  sortOrder: 'asc' | 'desc';
+  stockFilter: 'all' | 'zero' | 'negative';
+  setSortBy: (sortBy: 'code' | 'name' | 'balance' | 'type') => void;
+  setSortOrder: (sortOrder: 'asc' | 'desc') => void;
+}> = ({ balances, expandedItems, onToggleExpand, onViewHistory, filters, sortBy, sortOrder, stockFilter, setSortBy, setSortOrder }) => {
   const [selectedItem, setSelectedItem] = useState<StockBalance | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  // Filter and sort balances
+  const filteredAndSortedBalances = useMemo(() => {
+    let filtered = balances;
+
+    // Apply search filter from main filters
+    if (filters.searchTerm && filters.searchTerm.trim()) {
+      const term = filters.searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(item => {
+        const codeMatch = item.item_code?.toLowerCase().includes(term) || false;
+        const nameMatch = item.item_name?.toLowerCase().includes(term) || false;
+        return codeMatch || nameMatch;
+      });
+    }
+
+    // Apply location filter
+    if (filters.location !== 'ALL') {
+      const locationCode = filters.location === 'FG STORE' ? 'FG_STORE' : filters.location;
+      filtered = filtered.filter(item => item.location_code === locationCode);
+    }
+
+    // Apply item type filter
+    if (filters.itemType !== 'ALL') {
+      filtered = filtered.filter(item => item.item_type === filters.itemType);
+    }
+
+    // Apply stock filter (removed 'with_stock' as requested)
+    if (stockFilter === 'zero') {
+      filtered = filtered.filter(item => item.current_balance === 0);
+    } else if (stockFilter === 'negative') {
+      filtered = filtered.filter(item => item.current_balance < 0);
+    }
+
+    // Apply sorting
+    const sorted = [...filtered].sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortBy) {
+        case 'code':
+          comparison = a.item_code.localeCompare(b.item_code);
+          break;
+        case 'name':
+          comparison = (a.item_name || a.item_code).localeCompare(b.item_name || b.item_code);
+          break;
+        case 'balance':
+          comparison = a.current_balance - b.current_balance;
+          break;
+        case 'type':
+          comparison = (a.item_type || '').localeCompare(b.item_type || '');
+          break;
+      }
+      
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+
+    return sorted;
+  }, [balances, filters.searchTerm, filters.location, filters.itemType, sortBy, sortOrder, stockFilter]);
 
   // Group by location
   const groupedByLocation = useMemo(() => {
     const groups: Record<string, StockBalance[]> = { STORE: [], PRODUCTION: [], FG_STORE: [] };
-    balances.forEach(b => {
+    filteredAndSortedBalances.forEach(b => {
       if (groups[b.location_code]) {
         groups[b.location_code].push(b);
       }
     });
     return groups;
-  }, [balances]);
+  }, [filteredAndSortedBalances]);
 
   // Calculate totals per location
   const locationTotals = useMemo(() => {
@@ -1020,11 +1208,12 @@ const BalancesGrid: React.FC<{
   }
 
   return (
-    <div className="p-6">
+    <div className="p-6 flex flex-col h-full min-h-0">
       {/* View Mode Toggle */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div className="text-sm text-gray-600">
-          Showing <span className="font-semibold">{balances.length}</span> items across all locations
+          Showing <span className="font-semibold">{filteredAndSortedBalances.length}</span> of <span className="font-semibold">{balances.length}</span> items
+          {filters.searchTerm && <span className="text-gray-500"> matching "{filters.searchTerm}"</span>}
         </div>
         <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
           <button
@@ -1047,11 +1236,11 @@ const BalancesGrid: React.FC<{
       </div>
 
       {viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0 overflow-hidden">
           {Object.entries(groupedByLocation).map(([location, items]) => (
-            <div key={location} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+            <div key={location} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm flex flex-col h-full">
               {/* Location Header */}
-              <div className={`px-4 py-3 border-b ${
+              <div className={`px-4 py-3 border-b flex-shrink-0 ${
                 location === 'STORE' ? 'bg-blue-50 border-blue-100' :
                 location === 'PRODUCTION' ? 'bg-amber-50 border-amber-100' :
                 'bg-emerald-50 border-emerald-100'
@@ -1075,7 +1264,7 @@ const BalancesGrid: React.FC<{
               </div>
 
               {/* Items List */}
-              <div className="max-h-[500px] overflow-y-auto">
+              <div className="flex-1 overflow-y-auto min-h-0">
                 {items.length === 0 ? (
                   <div className="p-4 text-center text-gray-400 text-sm">No items</div>
                 ) : (
@@ -1144,22 +1333,56 @@ const BalancesGrid: React.FC<{
         </div>
       ) : (
         /* List View */
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex-1 min-h-0 flex flex-col">
+            <div className="overflow-y-auto flex-1 min-h-0">
+              <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Type</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Item Code</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Item Name</th>
+                <th 
+                  className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => { setSortBy('type'); setSortOrder(sortBy === 'type' && sortOrder === 'asc' ? 'desc' : 'asc'); }}
+                >
+                  <div className="flex items-center gap-1">
+                    Type
+                    {sortBy === 'type' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                  </div>
+                </th>
+                <th 
+                  className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => { setSortBy('code'); setSortOrder(sortBy === 'code' && sortOrder === 'asc' ? 'desc' : 'asc'); }}
+                >
+                  <div className="flex items-center gap-1">
+                    Item Code
+                    {sortBy === 'code' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                  </div>
+                </th>
+                <th 
+                  className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => { setSortBy('name'); setSortOrder(sortBy === 'name' && sortOrder === 'asc' ? 'desc' : 'asc'); }}
+                >
+                  <div className="flex items-center gap-1">
+                    Item Name
+                    {sortBy === 'name' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                  </div>
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Location</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Balance</th>
+                <th 
+                  className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => { setSortBy('balance'); setSortOrder(sortBy === 'balance' && sortOrder === 'asc' ? 'desc' : 'asc'); }}
+                >
+                  <div className="flex items-center justify-end gap-1">
+                    Balance
+                    {sortBy === 'balance' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                  </div>
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">UOM</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Last Movement</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {balances.map(item => (
+              {filteredAndSortedBalances.map(item => (
                 <tr key={item.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedItem(item)}>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${ITEM_TYPE_COLORS[item.item_type || 'RM']}`}>
@@ -1208,6 +1431,8 @@ const BalancesGrid: React.FC<{
               ))}
             </tbody>
           </table>
+            </div>
+          </div>
         </div>
       )}
 

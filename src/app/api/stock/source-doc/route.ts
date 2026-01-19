@@ -55,7 +55,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Return the document number (prefer doc_no if available)
-    const docNo = data?.doc_no || data?.[field] || null;
+    // Type assertion needed because Supabase returns a generic type
+    const record = data as Record<string, any> | null;
+    const docNo = record?.doc_no || (field ? record?.[field] : null) || null;
 
     return NextResponse.json({ doc_no: docNo });
   } catch (error) {

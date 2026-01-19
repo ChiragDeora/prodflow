@@ -305,6 +305,7 @@ export interface CancellationResult {
 
 export interface StockBalanceQuery {
   item_code?: string;
+  search?: string; // Partial search on item_code and item_name
   location_code?: LocationCode;
   item_type?: ItemType;
 }
@@ -312,6 +313,7 @@ export interface StockBalanceQuery {
 export interface StockLedgerQuery {
   item_code?: string;
   location_code?: LocationCode;
+  item_type?: ItemType;
   document_type?: DocumentType;
   from_date?: string;
   to_date?: string;

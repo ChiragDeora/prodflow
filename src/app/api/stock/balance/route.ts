@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     
     const itemCode = searchParams.get('item_code') || undefined;
+    const search = searchParams.get('search') || undefined;
     const locationCode = searchParams.get('location') as LocationCode | undefined;
     const itemType = searchParams.get('item_type') as ItemType | undefined;
     const summary = searchParams.get('summary') === 'true';
@@ -39,12 +40,14 @@ export async function GET(request: NextRequest) {
     // Otherwise, return balances with filters
     console.log('📊 [API /stock/balance] Fetching balances with filters:', {
       item_code: itemCode,
+      search: search,
       location_code: locationCode,
       item_type: itemType
     });
     
     const result = await getStockBalances({
       item_code: itemCode,
+      search: search,
       location_code: locationCode,
       item_type: itemType,
     });

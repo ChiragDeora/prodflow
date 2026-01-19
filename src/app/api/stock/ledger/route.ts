@@ -5,8 +5,18 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getStockLedger, getItemLedgerWithBalance, getDocumentHistory } from '@/lib/stock';
-import type { LocationCode, DocumentType } from '@/lib/supabase/types/stock';
+import type { LocationCode, DocumentType, ItemType, StockLedgerEntry } from '@/lib/supabase/types/stock';
 import { verifyAuth, unauthorized } from '@/lib/api-auth';
+
+// Extended type for ledger entries with joined stock_items data
+type StockLedgerEntryWithItem = StockLedgerEntry & {
+  stock_items?: {
+    item_name?: string;
+    item_type?: ItemType;
+    sub_category?: string;
+    category?: string;
+  } | null;
+};
 
 export async function GET(request: NextRequest) {
   // Verify authentication
@@ -20,6 +30,7 @@ export async function GET(request: NextRequest) {
     
     const itemCode = searchParams.get('item_code') || undefined;
     const locationCode = searchParams.get('location') as LocationCode | undefined;
+    const itemType = searchParams.get('item_type') as ItemType | undefined;
     const documentType = searchParams.get('document_type') as DocumentType | undefined;
     const fromDate = searchParams.get('from') || undefined;
     const toDate = searchParams.get('to') || undefined;
@@ -54,7 +65,7 @@ export async function GET(request: NextRequest) {
     }
     
     // Otherwise, return ledger entries with filters
-    const result = await getStockLedger({
+    let result = await getStockLedger({
       item_code: itemCode,
       location_code: locationCode,
       document_type: documentType,
@@ -62,7 +73,12 @@ export async function GET(request: NextRequest) {
       to_date: toDate,
       limit,
       offset,
-    });
+    }) as StockLedgerEntryWithItem[];
+    
+    // Filter by item_type if provided (must be done after fetching because of join)
+    if (itemType) {
+      result = result.filter(entry => entry.stock_items?.item_type === itemType);
+    }
     
     return NextResponse.json({
       success: true,

@@ -59,7 +59,7 @@ const MISForm: React.FC = () => {
   // Selected sub-type per row (itemId -> subType)
   const [selectedSubType, setSelectedSubType] = useState<Record<string, string>>({});
   // Items/grades for sub-type per row (itemId -> items[])
-  const [itemsForSubType, setItemsForSubType] = useState<Record<string, Array<{ itemCode: string; grade: string; stock: number; supplier?: string }>>>({});
+  const [itemsForSubType, setItemsForSubType] = useState<Record<string, Array<{ itemCode: string; grade: string; stock: number; uom?: string; supplier?: string }>>>({});
   // Raw materials master data
   const [rawMaterials, setRawMaterials] = useState<any[]>([]);
   // Packing materials master data
@@ -126,7 +126,9 @@ const MISForm: React.FC = () => {
         }
         
         // Use batch API to get all RM balances at STORE location
-        const balanceResponse = await fetch(`/api/stock/balance?item_type=RM&location=STORE`);
+        const balanceResponse = await fetch(`/api/stock/balance?item_type=RM&location=STORE`, {
+          credentials: 'include'
+        });
         const balanceResult = await balanceResponse.json();
         
         if (balanceResult.success && balanceResult.data) {
@@ -167,25 +169,36 @@ const MISForm: React.FC = () => {
           setPackingMaterials(pmData);
         }
         
-        // Fetch only stock items (not balances) to get categories quickly
-        const stockItemsResponse = await fetch(`/api/admin/stock-items?item_type=PM`);
+        // Fetch stock items and balances together to show actual stock per category
+        const [stockItemsResponse, balanceResponse] = await Promise.all([
+          fetch(`/api/admin/stock-items?item_type=PM`, { credentials: 'include' }),
+          fetch(`/api/stock/balance?item_type=PM&location=STORE`, { credentials: 'include' })
+        ]);
+        
         const stockItemsResult = await stockItemsResponse.json();
+        const balanceResult = await balanceResponse.json();
         
         if (stockItemsResult.success && stockItemsResult.data) {
-          // Group by category from stock items
+          // Create balance map
+          const balanceMap: Record<string, number> = {};
+          if (balanceResult.success && balanceResult.data) {
+            balanceResult.data.forEach((b: any) => {
+              balanceMap[b.item_code] = (balanceMap[b.item_code] || 0) + (b.current_balance || 0);
+            });
+          }
+          
+          // Group by category from stock items and sum up stock
           const subTypeGroups: Record<string, number> = {};
           
-          // Get unique categories from stock items
-          const categories = new Set<string>();
+          // Get unique categories from stock items and calculate total stock per category
           stockItemsResult.data.forEach((item: any) => {
             if (item.category) {
-              categories.add(item.category);
+              if (!subTypeGroups[item.category]) {
+                subTypeGroups[item.category] = 0;
+              }
+              // Add stock for this item to the category total
+              subTypeGroups[item.category] += balanceMap[item.item_code] || 0;
             }
-          });
-          
-          // Initialize all categories with 0 stock (we'll fetch balances on-demand)
-          categories.forEach(cat => {
-            subTypeGroups[cat] = 0;
           });
           
           // Also add categories from packing_materials that might not have stock yet
@@ -196,41 +209,58 @@ const MISForm: React.FC = () => {
             }
           });
           
-          // Convert to array - show all categories
+          // Convert to array - show all categories with their stock totals
           const subTypesWithStockArray = Object.entries(subTypeGroups)
             .map(([type, stock]) => ({ type, stock }))
             .sort((a, b) => a.type.localeCompare(b.type)); // Sort alphabetically
           
           setSubTypesWithStock(subTypesWithStockArray);
+          
+          // Store balances for later use
+          setStockBalancesByType(prev => ({ ...prev, [type]: balanceMap }));
         }
       } else if (type === 'SPARE') {
-        // For SPARE, fetch only stock items to get categories quickly
-        const stockItemsResponse = await fetch(`/api/admin/stock-items?item_type=SPARE`);
+        // For SPARE, fetch stock items and balances together to show actual stock per category
+        const [stockItemsResponse, balanceResponse] = await Promise.all([
+          fetch(`/api/admin/stock-items?item_type=SPARE`, { credentials: 'include' }),
+          fetch(`/api/stock/balance?item_type=SPARE&location=STORE`, { credentials: 'include' })
+        ]);
+        
         const stockItemsResult = await stockItemsResponse.json();
+        const balanceResult = await balanceResponse.json();
         
         if (stockItemsResult.success && stockItemsResult.data) {
-          // Group by category from stock items
+          // Create balance map
+          const balanceMap: Record<string, number> = {};
+          if (balanceResult.success && balanceResult.data) {
+            balanceResult.data.forEach((b: any) => {
+              balanceMap[b.item_code] = (balanceMap[b.item_code] || 0) + (b.current_balance || 0);
+            });
+          }
+          
+          // Group by category from stock items and sum up stock
           const subTypeGroups: Record<string, number> = {};
           
-          // Get unique categories from stock items
-          const categories = new Set<string>();
+          // Get unique categories from stock items and calculate total stock per category
           stockItemsResult.data.forEach((item: any) => {
             if (item.category) {
-              categories.add(item.category);
+              if (!subTypeGroups[item.category]) {
+                subTypeGroups[item.category] = 0;
+              }
+              // Add stock for this item to the category total
+              subTypeGroups[item.category] += balanceMap[item.item_code] || 0;
             }
           });
           
-          // Initialize all categories with 0 stock (we'll fetch balances on-demand)
-          categories.forEach(cat => {
-            subTypeGroups[cat] = 0;
-          });
-          
-          // Convert to array - show all categories
+          // Convert to array - show all categories with their stock totals
           const subTypesWithStockArray = Object.entries(subTypeGroups)
             .map(([type, stock]) => ({ type, stock }))
             .sort((a, b) => a.type.localeCompare(b.type)); // Sort alphabetically
           
           setSubTypesWithStock(subTypesWithStockArray);
+          
+          // Store balances for later use
+          setStockBalancesByType(prev => ({ ...prev, [type]: balanceMap }));
         }
       }
     } catch (error) {
@@ -246,7 +276,9 @@ const MISForm: React.FC = () => {
   const refreshStockData = async (type: 'RM' | 'PM' | 'SPARE') => {
     try {
       // Fetch updated balances from STORE location (not total across all locations)
-      const balanceResponse = await fetch(`/api/stock/balance?item_type=${type}&location=STORE`);
+      const balanceResponse = await fetch(`/api/stock/balance?item_type=${type}&location=STORE`, {
+        credentials: 'include'
+      });
       const balanceResult = await balanceResponse.json();
       
       if (balanceResult.success && balanceResult.data) {
@@ -295,13 +327,14 @@ const MISForm: React.FC = () => {
           );
         }
         
-        // Update items in itemsForSubType with new stock values
+        // Update items in itemsForSubType with new stock values (preserve UOM)
         setItemsForSubType(prev => {
-          const updated: Record<string, Array<{ itemCode: string; grade: string; stock: number; supplier?: string }>> = {};
+          const updated: Record<string, Array<{ itemCode: string; grade: string; stock: number; uom?: string; supplier?: string }>> = {};
           Object.entries(prev).forEach(([itemId, items]) => {
             updated[itemId] = items.map(item => ({
               ...item,
               stock: newBalanceMap[item.itemCode] || 0
+              // UOM is preserved automatically
             }));
           });
           return updated;
@@ -326,8 +359,8 @@ const MISForm: React.FC = () => {
       if (mainType === 'RM') {
         // Fetch stock items and balances for RM
         const [stockItemsRes, balanceRes] = await Promise.all([
-          fetch(`/api/admin/stock-items?item_type=RM`),
-          fetch(`/api/stock/balance?item_type=RM&location=STORE`)
+          fetch(`/api/admin/stock-items?item_type=RM`, { credentials: 'include' }),
+          fetch(`/api/stock/balance?item_type=RM&location=STORE`, { credentials: 'include' })
         ]);
         
         const stockItemsResult = await stockItemsRes.json();
@@ -347,7 +380,7 @@ const MISForm: React.FC = () => {
           setStockItemsByType(prev => ({ ...prev, [mainType]: stockItems }));
           setStockBalancesByType(prev => ({ ...prev, [mainType]: balanceMap }));
           
-          const matchingItems: Array<{ itemCode: string; grade: string; stock: number; supplier?: string }> = [];
+          const matchingItems: Array<{ itemCode: string; grade: string; stock: number; uom?: string; supplier?: string }> = [];
           
           // Get grades from raw_materials for this type
           const gradesFromRM = rawMaterials
@@ -375,6 +408,7 @@ const MISForm: React.FC = () => {
                 itemCode: item.item_code,
                 grade: grade,
                 stock: stock,
+                uom: item.unit_of_measure, // Include UOM from stock item
                 supplier: item.category
               });
             }
@@ -390,6 +424,7 @@ const MISForm: React.FC = () => {
                 itemCode: matchingItem.item_code,
                 grade: rm.grade,
                 stock: balanceMap[matchingItem.item_code] || 0,
+                uom: matchingItem.unit_of_measure, // Include UOM from stock item
                 supplier: rm.supplier
               });
             }
@@ -401,17 +436,52 @@ const MISForm: React.FC = () => {
           setItemsForSubType(prev => ({ ...prev, [itemId]: matchingItems }));
         }
       } else {
-        // For PM and SPARE, only fetch stock items (fast)
-        const stockItemsRes = await fetch(`/api/admin/stock-items?item_type=${mainType}`);
-        const stockItemsResult = await stockItemsRes.json();
+        // For PM and SPARE, fetch stock items and balances together
+        // Use cached balances if available, otherwise fetch fresh
+        let balanceMap = stockBalancesByType[mainType] || {};
         
-        if (stockItemsResult.success && stockItemsResult.data) {
-          const stockItems = stockItemsResult.data;
-          
-          // Store for future use
-          setStockItemsByType(prev => ({ ...prev, [mainType]: stockItems }));
-          
-          const matchingItems: Array<{ itemCode: string; grade: string; stock: number; supplier?: string }> = [];
+        // If we don't have balances cached, fetch them
+        if (Object.keys(balanceMap).length === 0) {
+          try {
+            const balanceRes = await fetch(`/api/stock/balance?item_type=${mainType}&location=STORE`, {
+              credentials: 'include'
+            });
+            const balanceResult = await balanceRes.json();
+            
+            if (balanceResult.success && balanceResult.data) {
+              balanceMap = {};
+              balanceResult.data.forEach((b: any) => {
+                balanceMap[b.item_code] = (balanceMap[b.item_code] || 0) + (b.current_balance || 0);
+              });
+              // Cache the balances
+              setStockBalancesByType(prev => ({ ...prev, [mainType]: balanceMap }));
+            }
+          } catch (error) {
+            console.error('Error fetching balances:', error);
+          }
+        }
+        
+        // Fetch stock items if not cached
+        let stockItems = stockItemsByType[mainType] || [];
+        if (stockItems.length === 0) {
+          try {
+            const stockItemsRes = await fetch(`/api/admin/stock-items?item_type=${mainType}`, {
+              credentials: 'include'
+            });
+            const stockItemsResult = await stockItemsRes.json();
+            
+            if (stockItemsResult.success && stockItemsResult.data) {
+              stockItems = stockItemsResult.data;
+              // Cache the stock items
+              setStockItemsByType(prev => ({ ...prev, [mainType]: stockItems }));
+            }
+          } catch (error) {
+            console.error('Error fetching stock items:', error);
+          }
+        }
+        
+        if (stockItems.length > 0) {
+          const matchingItems: Array<{ itemCode: string; grade: string; stock: number; uom?: string; supplier?: string }> = [];
           
           // Find items matching this category
           stockItems.forEach((item: any) => {
@@ -419,7 +489,8 @@ const MISForm: React.FC = () => {
               matchingItems.push({
                 itemCode: item.item_code,
                 grade: item.item_name || item.item_code,
-                stock: 0, // Will be fetched on-demand when item is selected
+                stock: balanceMap[item.item_code] || 0, // Fetch stock from balance map
+                uom: item.unit_of_measure, // Store UOM from stock item
                 supplier: item.category
               });
             }
@@ -445,12 +516,25 @@ const MISForm: React.FC = () => {
   };
 
   // Handle Item Code selection
-  const handleItemCodeSelect = (itemId: string, itemCode: string) => {
+  const handleItemCodeSelect = async (itemId: string, itemCode: string) => {
     const items = itemsForSubType[itemId] || [];
     const selectedItem = items.find(i => i.itemCode === itemCode);
     if (selectedItem) {
       handleItemChange(itemId, 'itemCode', itemCode);
       handleItemChange(itemId, 'currentStock', selectedItem.stock.toString());
+      
+      // Use UOM from cached item data if available
+      if (selectedItem.uom) {
+        handleItemChange(itemId, 'uom', selectedItem.uom);
+      } else {
+        // Fallback: try to get UOM from cached stock items
+        const mainType = formData.typeOfIssue;
+        const stockItems = stockItemsByType[mainType] || [];
+        const stockItem = stockItems.find((item: any) => item.item_code === itemCode);
+        if (stockItem && stockItem.unit_of_measure) {
+          handleItemChange(itemId, 'uom', stockItem.unit_of_measure);
+        }
+      }
     }
   };
 
@@ -468,7 +552,9 @@ const MISForm: React.FC = () => {
     
     try {
       // Fetch balance from STORE location specifically (not total across all locations)
-      const response = await fetch(`/api/stock/balance?item_code=${itemCode}&location=STORE`);
+      const response = await fetch(`/api/stock/balance?item_code=${itemCode}&location=STORE`, {
+        credentials: 'include'
+      });
       const result = await response.json();
       // Sum up all balances for this item code at STORE
       const balance = result.success && result.data 
@@ -476,6 +562,16 @@ const MISForm: React.FC = () => {
         : 0;
       
       handleItemChange(itemId, 'currentStock', balance.toString());
+      
+      // Get UOM from cached stock items if not already set
+      const mainType = typeOfIssue;
+      if (mainType) {
+        const stockItems = stockItemsByType[mainType] || [];
+        const stockItem = stockItems.find((item: any) => item.item_code === itemCode);
+        if (stockItem && stockItem.unit_of_measure) {
+          handleItemChange(itemId, 'uom', stockItem.unit_of_measure);
+        }
+      }
     } catch (error) {
       console.error('Error fetching current stock:', error);
       handleItemChange(itemId, 'currentStock', '0');
@@ -595,7 +691,8 @@ const MISForm: React.FC = () => {
       const stockResponse = await fetch(`/api/stock/post/mis/${savedDocumentId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ posted_by: 'user' })
+        body: JSON.stringify({ posted_by: 'user' }),
+        credentials: 'include'
       });
       
       const stockResult = await stockResponse.json();
