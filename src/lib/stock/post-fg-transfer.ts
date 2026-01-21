@@ -348,6 +348,9 @@ interface FgnItem {
 /**
  * Validates that all components are available for all FG items
  * Returns validation result with any errors
+ * 
+ * NOTE: PM materials (carton, polybag, BOPP) are NOT validated - they are allowed to go negative
+ * Only SFG items are validated to ensure they are available before posting
  */
 async function validateAllFgItems(
   items: FgnItem[]
@@ -355,6 +358,7 @@ async function validateAllFgItems(
   const errors: string[] = [];
   
   // Aggregate component requirements across all items
+  // Only track SFG items - PM materials are allowed to go negative
   const requirements: Map<string, { 
     location: 'STORE' | 'FG_STORE'; 
     required: number; 
@@ -371,37 +375,24 @@ async function validateAllFgItems(
       continue;
     }
     
-    // Add SFG 1 requirement
+    // Add SFG 1 requirement (must be available)
     if (fgBom.sfg_1 && fgBom.sfg_1_qty) {
       addRequirement(requirements, fgBom.sfg_1, 'FG_STORE', boxes * fgBom.sfg_1_qty, `SFG 1: ${fgBom.sfg_1}`);
     }
     
-    // Add SFG 2 requirement
+    // Add SFG 2 requirement (must be available)
     if (fgBom.sfg_2 && fgBom.sfg_2_qty) {
       addRequirement(requirements, fgBom.sfg_2, 'FG_STORE', boxes * fgBom.sfg_2_qty, `SFG 2: ${fgBom.sfg_2}`);
     }
     
-    // Add carton requirement
-    if (fgBom.cnt_code && fgBom.cnt_qty) {
-      addRequirement(requirements, fgBom.cnt_code, 'STORE', boxes * fgBom.cnt_qty, `Carton: ${fgBom.cnt_code}`);
-    }
+    // PM materials (carton, polybag, BOPP) are NOT added to requirements
+    // They are allowed to go negative in stock ledger
+    // - Carton (fgBom.cnt_code)
+    // - Polybag (fgBom.polybag_code)
+    // - BOPP 1 (fgBom.bopp_1)
+    // - BOPP 2 (fgBom.bopp_2)
     
-    // Add polybag requirement
-    if (fgBom.polybag_code && fgBom.poly_qty) {
-      addRequirement(requirements, fgBom.polybag_code, 'STORE', boxes * fgBom.poly_qty, `Polybag: ${fgBom.polybag_code}`);
-    }
-    
-    // Add BOPP 1 requirement
-    if (fgBom.bopp_1 && fgBom.qty_meter) {
-      addRequirement(requirements, fgBom.bopp_1, 'STORE', boxes * fgBom.qty_meter, `BOPP 1: ${fgBom.bopp_1}`);
-    }
-    
-    // Add BOPP 2 requirement
-    if (fgBom.bopp_2 && fgBom.qty_meter_2) {
-      addRequirement(requirements, fgBom.bopp_2, 'STORE', boxes * fgBom.qty_meter_2, `BOPP 2: ${fgBom.bopp_2}`);
-    }
-    
-    // Add label requirement (if IML)
+    // Labels are still checked (if IML)
     if (isImlProduct(item.item_name) && IML_CONFIG.enabled) {
       const packSize = parseInt(fgBom.pack_size || '0') || 1;
       const labelReq = calculateLabelRequirement(item.item_name, boxes, packSize);
@@ -412,7 +403,7 @@ async function validateAllFgItems(
     }
   }
   
-  // Check availability of all requirements
+  // Check availability of all requirements (only SFG items and labels)
   for (const [itemCode, req] of requirements) {
     const available = await getBalance(itemCode, req.location);
     

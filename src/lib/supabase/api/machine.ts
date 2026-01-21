@@ -81,14 +81,44 @@ export const machineAPI = {
   // Create new machine
   async create(machine: Omit<Machine, 'created_at' | 'updated_at'>): Promise<Machine | null> {
     const supabase = getSupabase();
+    
+    // Filter out zone if it exists (legacy field) and ensure we only send valid fields
+    const machineData: any = { ...machine };
+    delete machineData.zone; // Remove zone if it exists (legacy field)
+    
+    // Remove undefined values and null values to avoid issues
+    Object.keys(machineData).forEach(key => {
+      if (machineData[key] === undefined || machineData[key] === null) {
+        delete machineData[key];
+      }
+    });
+    
+    // Ensure required fields have values
+    if (!machineData.make) machineData.make = '';
+    if (!machineData.model) machineData.model = '';
+    if (!machineData.type) machineData.type = 'Injection Molding Machine';
+    if (machineData.capacity_tons === undefined) machineData.capacity_tons = 0;
+    if (!machineData.install_date) machineData.install_date = new Date().toISOString().split('T')[0];
+    if (!machineData.purchase_date) machineData.purchase_date = new Date().toISOString().split('T')[0];
+    if (machineData.grinding_available === undefined) machineData.grinding_available = false;
+    if (!machineData.status) machineData.status = 'Active';
+    if (!machineData.remarks) machineData.remarks = '';
+    
     const { data, error } = await supabase
       .from('machines')
-      .insert([machine])
-      .select()
+      .insert([machineData])
+      .select('*')
       .single();
     
     if (error) {
       console.error('Error creating machine:', error);
+      console.error('Error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      console.error('Machine data sent:', JSON.stringify(machineData, null, 2));
       throw error;
     }
     return data;
@@ -97,11 +127,21 @@ export const machineAPI = {
   // Update machine
   async update(machineId: string, updates: Partial<Machine>): Promise<Machine | null> {
     const supabase = getSupabase();
+    
+    // Filter out undefined values and zone (legacy field) to avoid issues with database updates
+    const filteredUpdates: Record<string, any> = {};
+    Object.entries(updates).forEach(([key, value]) => {
+      // Exclude machine_id and zone from updates
+      if (key !== 'machine_id' && key !== 'zone' && value !== undefined) {
+        filteredUpdates[key] = value;
+      }
+    });
+    
     const { data, error } = await supabase
       .from('machines')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update({ ...filteredUpdates, updated_at: new Date().toISOString() })
       .eq('machine_id', machineId)
-      .select()
+      .select('*')
       .single();
     
     if (error) {
@@ -114,6 +154,24 @@ export const machineAPI = {
   // Delete machine
   async delete(machineId: string): Promise<boolean> {
     const supabase = getSupabase();
+    
+    // First, clear all line references to this machine
+    // This ensures orphaned references are cleaned up even if FK constraints don't fire
+    const lineFields = ['im_machine_id', 'robot_machine_id', 'conveyor_machine_id', 'hoist_machine_id', 'loader_machine_id'];
+    
+    for (const field of lineFields) {
+      const { error: updateError } = await supabase
+        .from('lines')
+        .update({ [field]: null })
+        .eq(field, machineId);
+      
+      if (updateError) {
+        console.warn(`Warning: Could not clear ${field} for machine ${machineId}:`, updateError);
+        // Continue even if one fails
+      }
+    }
+    
+    // Now delete the machine
     const { error } = await supabase
       .from('machines')
       .delete()
@@ -123,6 +181,8 @@ export const machineAPI = {
       console.error('Error deleting machine:', error);
       throw error;
     }
+    
+    console.log('✅ Successfully deleted machine:', machineId);
     return true;
   },
 

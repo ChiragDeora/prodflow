@@ -390,50 +390,137 @@ const MISForm: React.FC = () => {
               supplier: rm.supplier
             }));
           
-          // Find matching stock items
-          stockItems.forEach((item: any) => {
+          // Find matching stock items (e.g., item_code = "PP-HP-HJ333MO" or "RM-HP" for subType = "HP")
+          const matchingStockItems = stockItems.filter((item: any) => {
             let itemSubCategory = item.sub_category || '';
             if (itemSubCategory.startsWith('RM-')) {
               itemSubCategory = itemSubCategory.replace('RM-', '');
             }
-            
-            if (itemSubCategory === subType || item.sub_category === subType) {
-              const stock = balanceMap[item.item_code] || 0;
-              let grade = item.item_code;
-              if (item.item_code.includes('-')) {
-                const parts = item.item_code.split('-');
-                grade = parts[parts.length - 1];
-              }
-              matchingItems.push({
-                itemCode: item.item_code,
-                grade: grade,
-                stock: stock,
-                uom: item.unit_of_measure, // Include UOM from stock item
-                supplier: item.category
-              });
-            }
+            return itemSubCategory === subType || item.sub_category === subType;
           });
           
-          // Also add grades from raw_materials
-          gradesFromRM.forEach((rm: any) => {
-            const matchingItem = stockItems.find((item: any) => 
-              item.item_code.includes(rm.grade) || item.item_name.includes(rm.grade)
-            );
-            if (matchingItem && !matchingItems.find(m => m.grade === rm.grade)) {
+          // Process each matching stock item
+          // NEW SYSTEM: Item codes like "PP-HP-HJ333MO" contain the grade in the item_code
+          // OLD SYSTEM: Generic codes like "RM-HP" need grades extracted from ledger remarks
+          for (const stockItem of matchingStockItems) {
+            const stock = balanceMap[stockItem.item_code] || 0;
+            
+            // Check if item_code follows the new format: CATEGORY-TYPE-GRADE (e.g., PP-HP-HJ333MO)
+            // This format means the grade is already in the item_code, so we can extract it directly
+            const itemCodeParts = stockItem.item_code.split('-');
+            const isNewFormat = itemCodeParts.length >= 3 && itemCodeParts[0] && itemCodeParts[1] && itemCodeParts[2];
+            
+            if (isNewFormat) {
+              // NEW FORMAT: Extract grade from item_code (e.g., "PP-HP-HJ333MO" -> grade = "HJ333MO")
+              // For codes like "PP-HP-HJ333MO", the grade is everything after the second dash
+              const grade = itemCodeParts.slice(2).join('-'); // Join in case grade has dashes
+              
+              // Find matching raw_material for supplier info
+              const matchedRM = gradesFromRM.find(rm => rm.grade === grade);
+              
+              // Add this specific stock item with its own stock balance
+              // Each grade gets its own stock item and stock balance (not shared)
               matchingItems.push({
-                itemCode: matchingItem.item_code,
-                grade: rm.grade,
-                stock: balanceMap[matchingItem.item_code] || 0,
-                uom: matchingItem.unit_of_measure, // Include UOM from stock item
-                supplier: rm.supplier
+                itemCode: stockItem.item_code,
+                grade: grade,
+                stock: stock, // Each item has its own stock balance - this is the key fix!
+                uom: stockItem.unit_of_measure,
+                supplier: matchedRM ? matchedRM.supplier : ''
               });
+              
+              console.log(`[MISForm] New format item: ${stockItem.item_code} -> grade: ${grade}, stock: ${stock}`);
+            } else {
+              // OLD FORMAT: Generic code like "RM-HP" - need to extract grades from ledger remarks
+              // This is for backward compatibility with old data
+              try {
+                const ledgerRes = await fetch(`/api/stock/ledger?item_code=${encodeURIComponent(stockItem.item_code)}&location=STORE&limit=100`, {
+                  credentials: 'include'
+                });
+                const ledgerResult = await ledgerRes.json();
+                
+                // Extract unique grades from ledger entries' remarks
+                const gradesFromLedger = new Set<string>();
+                if (ledgerResult.success && ledgerResult.data) {
+                  ledgerResult.data.forEach((entry: any) => {
+                    if (entry.remarks) {
+                      // Parse remarks to find grade (format: "Grade: HJ333MO")
+                      const gradeMatch = entry.remarks.match(/grade:\s*([^|]+)/i);
+                      if (gradeMatch) {
+                        gradesFromLedger.add(gradeMatch[1].trim());
+                      }
+                    }
+                  });
+                }
+                
+                // If we found grades in ledger, use those (they represent actual stock with grades)
+                if (gradesFromLedger.size > 0) {
+                  gradesFromLedger.forEach(grade => {
+                    // Find matching raw_material for supplier info
+                    const matchedRM = gradesFromRM.find(rm => rm.grade === grade);
+                    
+                    matchingItems.push({
+                      itemCode: stockItem.item_code,
+                      grade: grade, // Grade from ledger (MOST IMPORTANT - actual stock)
+                      stock: stock, // Stock for this item_code
+                      uom: stockItem.unit_of_measure,
+                      supplier: matchedRM ? matchedRM.supplier : ''
+                    });
+                  });
+                } else {
+                  // Fallback: Use grades from raw_materials if no ledger entries found
+                  // This handles cases where stock exists but no recent ledger entries
+                  gradesFromRM.forEach(rm => {
+                    matchingItems.push({
+                      itemCode: stockItem.item_code,
+                      grade: rm.grade,
+                      stock: stock,
+                      uom: stockItem.unit_of_measure,
+                      supplier: rm.supplier
+                    });
+                  });
+                }
+              } catch (error) {
+                console.error('Error fetching ledger entries:', error);
+                // Fallback to raw_materials if ledger fetch fails
+                gradesFromRM.forEach(rm => {
+                  matchingItems.push({
+                    itemCode: stockItem.item_code,
+                    grade: rm.grade,
+                    stock: stock,
+                    uom: stockItem.unit_of_measure,
+                    supplier: rm.supplier
+                  });
+                });
+              }
             }
+          }
+          
+          // Remove duplicates (same itemCode + grade combination)
+          const uniqueItems = matchingItems.filter((item, index, self) =>
+            index === self.findIndex(t => t.itemCode === item.itemCode && t.grade === item.grade)
+          );
+          
+          // CRITICAL: For new format items (PP-HP-HJ333MO), we should only show items that actually exist
+          // Don't show all grades from raw_materials if they don't have stock items
+          // Filter out items where grade doesn't match the item_code (from old fallback logic)
+          const filteredItems = uniqueItems.filter(item => {
+            // If item_code is in new format (PP-HP-GRADE), verify grade matches
+            const itemCodeParts = item.itemCode.split('-');
+            if (itemCodeParts.length >= 3) {
+              const gradeFromCode = itemCodeParts.slice(2).join('-');
+              // Only include if grade matches (prevents showing wrong grades with wrong stock)
+              return gradeFromCode === item.grade;
+            }
+            // For old format (RM-HP), allow all (backward compatibility)
+            return true;
           });
           
           // Sort by stock descending
-          matchingItems.sort((a, b) => b.stock - a.stock);
+          filteredItems.sort((a, b) => b.stock - a.stock);
           
-          setItemsForSubType(prev => ({ ...prev, [itemId]: matchingItems }));
+          console.log(`[MISForm] Final items for ${subType}:`, filteredItems.map(i => `${i.grade}: ${i.stock}`));
+          
+          setItemsForSubType(prev => ({ ...prev, [itemId]: filteredItems }));
         }
       } else {
         // For PM and SPARE, fetch stock items and balances together
@@ -516,25 +603,58 @@ const MISForm: React.FC = () => {
   };
 
   // Handle Item Code selection
-  const handleItemCodeSelect = async (itemId: string, itemCode: string) => {
+  const handleItemCodeSelect = async (itemId: string, selectedValue: string) => {
     const items = itemsForSubType[itemId] || [];
-    const selectedItem = items.find(i => i.itemCode === itemCode);
+    // Parse the unique value: format is "itemCode|grade|supplier" or just itemCode for backward compatibility
+    let selectedItem;
+    let itemCode: string;
+    if (selectedValue.includes('|')) {
+      const parts = selectedValue.split('|');
+      itemCode = parts[0];
+      const grade = parts[1];
+      const supplier = parts[2] || '';
+      selectedItem = items.find(i => i.itemCode === itemCode && i.grade === grade && (i.supplier || '') === supplier);
+    } else {
+      // Fallback for old format
+      itemCode = selectedValue;
+      selectedItem = items.find(i => i.itemCode === selectedValue);
+    }
     if (selectedItem) {
-      handleItemChange(itemId, 'itemCode', itemCode);
-      handleItemChange(itemId, 'currentStock', selectedItem.stock.toString());
-      
-      // Use UOM from cached item data if available
-      if (selectedItem.uom) {
-        handleItemChange(itemId, 'uom', selectedItem.uom);
-      } else {
-        // Fallback: try to get UOM from cached stock items
-        const mainType = formData.typeOfIssue;
-        const stockItems = stockItemsByType[mainType] || [];
-        const stockItem = stockItems.find((item: any) => item.item_code === itemCode);
-        if (stockItem && stockItem.unit_of_measure) {
-          handleItemChange(itemId, 'uom', stockItem.unit_of_measure);
-        }
-      }
+      // Batch all updates in a single state update to prevent re-renders from resetting the select
+      const finalItemCode = selectedItem.itemCode;
+      setFormData(prev => {
+        const updatedItems = prev.items.map(item => {
+          if (item.id === itemId) {
+            const updates: Partial<MISItem> = {
+              itemCode: finalItemCode,
+              currentStock: selectedItem.stock.toString()
+            };
+            
+            // Store grade for RM items (needed for stock ledger)
+            if (prev.typeOfIssue === 'RM' && selectedItem.grade) {
+              updates.grade = selectedItem.grade;
+            }
+            
+            // Use UOM from cached item data if available
+            if (selectedItem.uom) {
+              updates.uom = selectedItem.uom;
+            } else {
+              // Fallback: try to get UOM from cached stock items
+              const mainType = prev.typeOfIssue;
+              const stockItems = stockItemsByType[mainType] || [];
+              const stockItem = stockItems.find((item: any) => item.item_code === finalItemCode);
+              if (stockItem && stockItem.unit_of_measure) {
+                updates.uom = stockItem.unit_of_measure;
+              }
+            }
+            
+            return { ...item, ...updates };
+          }
+          return item;
+        });
+        
+        return { ...prev, items: updatedItems };
+      });
     }
   };
 
@@ -655,14 +775,23 @@ const MISForm: React.FC = () => {
 
       const itemsData = formData.items
         .filter(item => item.itemDescription.trim() !== '' || item.itemCode.trim() !== '')
-        .map(item => ({
-          item_code: item.itemCode || undefined,
-          description_of_material: item.itemDescription,
-          uom: item.uom || undefined,
-          required_qty: item.currentStock ? parseFloat(item.currentStock) : undefined,
-          issue_qty: item.issueQty ? parseFloat(item.issueQty) : undefined,
-          remarks: item.remarks || undefined
-        }));
+        .map(item => {
+          // Build remarks with grade for RM items
+          let remarks = item.remarks || '';
+          if (formData.typeOfIssue === 'RM' && item.grade) {
+            const gradePart = `Grade: ${item.grade}`;
+            remarks = remarks ? `${remarks} | ${gradePart}` : gradePart;
+          }
+          
+          return {
+            item_code: item.itemCode || undefined,
+            description_of_material: item.itemDescription,
+            uom: item.uom || undefined,
+            required_qty: item.currentStock ? parseFloat(item.currentStock) : undefined,
+            issue_qty: item.issueQty ? parseFloat(item.issueQty) : undefined,
+            remarks: remarks || undefined
+          };
+        });
 
       const newMIS = await misAPI.create(misData, itemsData);
       
@@ -902,16 +1031,31 @@ const MISForm: React.FC = () => {
                   <td className="border border-gray-300 px-2 py-2">
                     {selectedSubType[item.id] && itemsForSubType[item.id] && itemsForSubType[item.id].length > 0 ? (
                       <select
-                        value={item.itemCode}
+                        value={(() => {
+                          // Find the matching item in the list to get the full unique value
+                          if (item.itemCode && item.grade) {
+                            const matchingItem = itemsForSubType[item.id].find(
+                              opt => opt.itemCode === item.itemCode && opt.grade === item.grade
+                            );
+                            if (matchingItem) {
+                              return `${matchingItem.itemCode}|${matchingItem.grade}|${matchingItem.supplier || ''}`;
+                            }
+                          }
+                          return item.itemCode || '';
+                        })()}
                         onChange={(e) => handleItemCodeSelect(item.id, e.target.value)}
                         className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">Select Item</option>
-                        {itemsForSubType[item.id].map((itemOption) => (
-                          <option key={itemOption.itemCode} value={itemOption.itemCode}>
-                            {itemOption.grade}{itemOption.supplier ? ` - ${itemOption.supplier}` : ''} (Stock: {itemOption.stock.toFixed(2)})
-                          </option>
-                        ))}
+                        {itemsForSubType[item.id].map((itemOption, idx) => {
+                          // Use itemCode|grade|supplier as unique value
+                          const uniqueValue = `${itemOption.itemCode}|${itemOption.grade}|${itemOption.supplier || ''}`;
+                          return (
+                            <option key={`${itemOption.itemCode}-${itemOption.grade}-${itemOption.supplier || ''}-${idx}`} value={uniqueValue}>
+                              {itemOption.grade}{itemOption.supplier ? ` - ${itemOption.supplier}` : ''} (Stock: {itemOption.stock.toFixed(2)})
+                            </option>
+                          );
+                        })}
                       </select>
                     ) : (
                       <input

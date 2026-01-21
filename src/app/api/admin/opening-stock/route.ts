@@ -12,6 +12,7 @@ interface OpeningStockEntry {
   item_code: string;
   location_code: 'STORE' | 'PRODUCTION' | 'FG_STORE';
   quantity: number;
+  transaction_date?: string;
   remarks?: string;
   posted_by?: string;
 }
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
     const results: { success: string[]; errors: string[] } = { success: [], errors: [] };
     
     for (const entry of entries) {
-      const { item_code, location_code, quantity, remarks, posted_by } = entry;
+      const { item_code, location_code, quantity, transaction_date, remarks, posted_by } = entry;
       
       // Validate required fields
       if (!item_code || !location_code || quantity === undefined || quantity === null) {
@@ -65,7 +66,8 @@ export async function POST(request: NextRequest) {
         continue;
       }
       
-      const transactionDate = new Date().toISOString().split('T')[0];
+      // Use provided transaction_date or default to today
+      const transactionDate = transaction_date || new Date().toISOString().split('T')[0];
       // Simplified document number format: OPEN-YYYYMMDD-ITEMCODE
       const dateStr = transactionDate.replace(/-/g, '');
       const documentNumber = `OPEN-${dateStr}-${item_code}`;

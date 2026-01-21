@@ -113,6 +113,15 @@ export async function postMisToStock(
         continue;
       }
       
+      // Extract grade from remarks if present (format: "Grade: {grade}" or "grade: {grade}")
+      let grade: string | undefined;
+      if (item.remarks) {
+        const gradeMatch = item.remarks.match(/grade:\s*([^|]+)/i);
+        if (gradeMatch) {
+          grade = gradeMatch[1].trim();
+        }
+      }
+      
       // Get current balance at STORE
       const storeBalance = await getBalance(stockItem.item_code, 'STORE');
       
@@ -125,6 +134,19 @@ export async function postMisToStock(
       
       // Calculate new STORE balance (OUT)
       const newStoreBalance = roundQuantity(storeBalance - quantity);
+      
+      // Build remarks with grade for RM items
+      const remarksParts: string[] = [];
+      remarksParts.push(`Issue to ${mis.dept_name || 'Production'} - ${stockItem.item_name || stockItem.item_code} (${roundQuantity(quantity)} ${stockItem.unit_of_measure || 'units'})`);
+      if (grade) {
+        remarksParts.push(`Grade: ${grade}`);
+      }
+      if (mis.issued_to) {
+        remarksParts.push(`Issued to: ${mis.issued_to}`);
+      }
+      if (mis.purpose) {
+        remarksParts.push(`Purpose: ${mis.purpose}`);
+      }
       
       // Create OUT ledger entry at STORE
       await createLedgerEntry({
@@ -141,7 +163,7 @@ export async function postMisToStock(
         movement_type: 'OUT',
         counterpart_location: 'PRODUCTION',
         posted_by: postedBy,
-        remarks: `Issue to ${mis.dept_name || 'Production'} - ${stockItem.item_name || stockItem.item_code} (${roundQuantity(quantity)} ${stockItem.unit_of_measure || 'units'})${mis.issued_to ? `, Issued to: ${mis.issued_to}` : ''}${mis.purpose ? `, Purpose: ${mis.purpose}` : ''}`,
+        remarks: remarksParts.join(' | '),
       });
       
       // Update STORE balance cache
@@ -156,6 +178,16 @@ export async function postMisToStock(
       // Get current balance at PRODUCTION
       const productionBalance = await getBalance(stockItem.item_code, 'PRODUCTION');
       const newProductionBalance = roundQuantity(productionBalance + quantity);
+      
+      // Build remarks for IN entry with grade
+      const inRemarksParts: string[] = [];
+      inRemarksParts.push(`Received from STORE - ${stockItem.item_name || stockItem.item_code} (${roundQuantity(quantity)} ${stockItem.unit_of_measure || 'units'}) for ${mis.dept_name || 'Production'}`);
+      if (grade) {
+        inRemarksParts.push(`Grade: ${grade}`);
+      }
+      if (mis.issued_to) {
+        inRemarksParts.push(`Issued to: ${mis.issued_to}`);
+      }
       
       // Create IN ledger entry at PRODUCTION
       await createLedgerEntry({
@@ -172,7 +204,7 @@ export async function postMisToStock(
         movement_type: 'IN',
         counterpart_location: 'STORE',
         posted_by: postedBy,
-        remarks: `Received from STORE - ${stockItem.item_name || stockItem.item_code} (${roundQuantity(quantity)} ${stockItem.unit_of_measure || 'units'}) for ${mis.dept_name || 'Production'}${mis.issued_to ? `, Issued to: ${mis.issued_to}` : ''}`,
+        remarks: inRemarksParts.join(' | '),
       });
       
       // Update PRODUCTION balance cache

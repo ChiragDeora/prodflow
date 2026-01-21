@@ -32,7 +32,7 @@ import {
   History,
 } from 'lucide-react';
 import { useAccessControl } from '@/lib/useAccessControl';
-import { jwAnnexureGRNAPI, grnAPI, misAPI } from '@/lib/supabase';
+import { jwAnnexureGRNAPI, grnAPI, misAPI, rawMaterialAPI } from '@/lib/supabase';
 
 // Types
 interface StockLedgerEntry {
@@ -59,6 +59,7 @@ interface StockLedgerEntry {
     item_name?: string;
     item_type?: string;
     sub_category?: string;
+    category?: string;
   };
 }
 
@@ -73,6 +74,7 @@ interface StockBalance {
   item_name?: string;
   item_type?: string;
   sub_category?: string;
+  category?: string;
 }
 
 interface StockItem {
@@ -794,6 +796,160 @@ const parseRemarksForList = (remarks?: string): { grade?: string; material?: str
   return result;
 };
 
+// Helper function to extract grade from item_code for RM items
+// Tries multiple strategies to find the grade
+const extractGradeFromItemCode = (itemCode: string, itemName?: string): string | null => {
+  // Common category codes that should NOT be treated as grades
+  const commonCategoryCodes = ['HP', 'PP', 'RM', 'PM', 'SFG', 'FG', 'STORE', 'PRODUCTION'];
+  
+  // Strategy 1: If item_code has format like "PP-HP-HJ333MO" or "RM-HP-HJ333MO", extract last part
+  if (itemCode.includes('-')) {
+    const parts = itemCode.split('-');
+    // If we have 3+ parts, the last part is likely the grade
+    if (parts.length >= 3) {
+      const lastPart = parts[parts.length - 1];
+      // Check if last part looks like a grade (has alphanumeric pattern, longer than 2 chars, not a common category code)
+      if (lastPart.length > 2 && 
+          /^[A-Z0-9]+$/i.test(lastPart) && 
+          !commonCategoryCodes.includes(lastPart.toUpperCase())) {
+        return lastPart;
+      }
+    }
+    // If we have 2 parts like "RM-HP", the second part is likely a category, not grade
+    // Don't return it - we need the actual grade, not the category
+  }
+  
+  // Strategy 2: Look for grade pattern in item_code (alphanumeric codes like HJ333MO, ABC123, etc.)
+  // Grades typically have a mix of letters and numbers, and are longer than category codes
+  const gradePattern = /([A-Z]{2,}[0-9]+[A-Z0-9]*|[A-Z0-9]{4,})/i;
+  const match = itemCode.match(gradePattern);
+  if (match) {
+    const potentialGrade = match[1];
+    // Make sure it's not a common category code
+    if (potentialGrade.length >= 4 && !commonCategoryCodes.includes(potentialGrade.toUpperCase())) {
+      return potentialGrade;
+    }
+  }
+  
+  // Strategy 3: Check if item_name contains the grade (for RM items, item_name might be the grade)
+  if (itemName && itemName.length >= 4 && !commonCategoryCodes.includes(itemName.toUpperCase())) {
+    // Check if item_name looks like a grade (has numbers or is longer than typical category names)
+    if (/\d/.test(itemName) || itemName.length >= 5) {
+      return itemName;
+    }
+  }
+  
+  return null;
+};
+
+// Helper function to format display title for StockLedgerEntry based on item type
+const formatItemDisplayTitle = (
+  entry: StockLedgerEntry,
+  parsedInfo: { grade?: string; material?: string; jwNo?: string; docNo?: string }
+): string => {
+  const itemType = entry.stock_items?.item_type;
+  const itemCode = entry.item_code;
+  const itemName = entry.stock_items?.item_name;
+  const category = entry.stock_items?.category;
+
+  // For RM: Show grade only (GRADE IS THE MOST IMPORTANT)
+  if (itemType === 'RM') {
+    // First try to get grade from remarks (most reliable - this is where we save it)
+    if (parsedInfo.grade) {
+      return parsedInfo.grade.trim();
+    }
+    // Try to extract grade from item_code (only if it looks like a real grade, not a category)
+    const extractedGrade = extractGradeFromItemCode(itemCode, itemName);
+    if (extractedGrade && extractedGrade.length >= 4) {
+      // Make sure it's not a common category code
+      const commonCategoryCodes = ['HP', 'PP', 'RM', 'PM', 'SFG', 'FG', 'STORE', 'PRODUCTION'];
+      if (!commonCategoryCodes.includes(extractedGrade.toUpperCase())) {
+        return extractedGrade;
+      }
+    }
+    // If we can't find a proper grade, show the full item_code rather than a category like "HP"
+    // This helps identify that the grade is missing
+    return itemCode;
+  }
+
+  // For PM: Show item code and category
+  if (itemType === 'PM') {
+    if (category) {
+      return `${itemCode} ${category}`;
+    }
+    return itemCode;
+  }
+
+  // For SFG: Show item code and item name
+  if (itemType === 'SFG') {
+    if (itemName) {
+      return `${itemCode} ${itemName}`;
+    }
+    return itemCode;
+  }
+
+  // For FG: Show item code and item name
+  if (itemType === 'FG') {
+    if (itemName) {
+      return `${itemCode} ${itemName}`;
+    }
+    return itemCode;
+  }
+
+  // For other types, show item name or item code
+  return itemName || itemCode;
+};
+
+// Helper function to format display title for StockBalance based on item type
+const formatBalanceItemDisplayTitle = (item: StockBalance): string => {
+  const itemType = item.item_type;
+  const itemCode = item.item_code;
+  const itemName = item.item_name;
+  const category = item.category;
+
+  // For RM: Show grade only (GRADE IS THE MOST IMPORTANT)
+  if (itemType === 'RM') {
+    // Try to extract grade from item_code (only if it looks like a real grade, not a category)
+    const extractedGrade = extractGradeFromItemCode(itemCode, itemName);
+    if (extractedGrade && extractedGrade.length >= 4) {
+      // Make sure it's not a common category code
+      const commonCategoryCodes = ['HP', 'PP', 'RM', 'PM', 'SFG', 'FG', 'STORE', 'PRODUCTION'];
+      if (!commonCategoryCodes.includes(extractedGrade.toUpperCase())) {
+        return extractedGrade;
+      }
+    }
+    // If we can't find a proper grade, show the full item_code rather than a category like "HP"
+    return itemCode;
+  }
+
+  // For PM: Show item code and category
+  if (itemType === 'PM') {
+    if (category) {
+      return `${itemCode} ${category}`;
+    }
+    return itemCode;
+  }
+
+  // For SFG: Show item code and item name
+  if (itemType === 'SFG') {
+    if (itemName) {
+      return `${itemCode} ${itemName}`;
+    }
+    return itemCode;
+  }
+
+  // For FG: Show item code and item name
+  if (itemType === 'FG') {
+    if (itemName) {
+      return `${itemCode} ${itemName}`;
+    }
+    return itemCode;
+  }
+
+  // For other types, show item name or item code
+  return itemName || itemCode;
+};
+
 // Movements List Component
 const MovementsList: React.FC<{
   groupedEntries: [string, StockLedgerEntry[]][];
@@ -835,23 +991,8 @@ const MovementsList: React.FC<{
               // Parse remarks to get original item code (Grade) and other details
               const parsedInfo = parseRemarksForList(entry.remarks);
               
-              // Better display logic for item code:
-              // 1. Try Grade from remarks (original form item code)
-              // 2. Try Material from remarks (often has descriptive name)
-              // 3. Try stock_items.item_name (from joined table)
-              // 4. Fall back to item_code only if it's not a generic category code
-              let displayItemCode = parsedInfo.grade;
-              if (!displayItemCode) {
-                // If item_code is a generic category like "RM-XXX", prefer item_name
-                const isGenericCode = entry.item_code.match(/^(RM|PM|SFG|FG|SPARE)-[A-Z]{2,4}$/);
-                if (isGenericCode && entry.stock_items?.item_name) {
-                  displayItemCode = entry.stock_items.item_name;
-                } else if (parsedInfo.material) {
-                  displayItemCode = parsedInfo.material;
-                } else {
-                  displayItemCode = entry.stock_items?.item_name || entry.item_code;
-                }
-              }
+              // Format display title based on item type
+              const displayItemCode = formatItemDisplayTitle(entry, parsedInfo);
               
               return (
                 <div
@@ -903,20 +1044,12 @@ const MovementsList: React.FC<{
                               {entry.location_code.replace('_', ' ')}
                             </span>
                           </div>
-                          {/* Show secondary info: stock item code and additional details */}
-                          <div className="text-sm text-gray-600 mb-1">
-                            {/* Show item_code if different from displayItemCode, or material info */}
-                            {displayItemCode !== entry.item_code && (
+                          {/* Show secondary info only for RM items (show item_code) */}
+                          {entry.stock_items?.item_type === 'RM' && displayItemCode !== entry.item_code && (
+                            <div className="text-sm text-gray-600 mb-1">
                               <span className="text-gray-500">{entry.item_code}</span>
-                            )}
-                            {parsedInfo.material && parsedInfo.material !== displayItemCode && (
-                              <span className="text-gray-400 ml-2">{parsedInfo.material}</span>
-                            )}
-                            {/* If no secondary info, show item name if available and different */}
-                            {displayItemCode === entry.item_code && entry.stock_items?.item_name && entry.stock_items.item_name !== displayItemCode && (
-                              <span className="text-gray-500">{entry.stock_items.item_name}</span>
+                            </div>
                           )}
-                          </div>
                           <div className="flex items-center gap-3 text-sm text-gray-500">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded ${docInfo.color}`}>
                               <DocIcon className="w-3 h-3" />
@@ -1289,9 +1422,9 @@ const BalancesGrid: React.FC<{
                                 </span>
                               )}
                             </div>
-                            {/* Item Name */}
+                            {/* Item Name - Format based on item type */}
                             <div className="font-medium text-gray-900 text-sm truncate">
-                              {item.item_name || item.item_code}
+                              {formatBalanceItemDisplayTitle(item)}
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -1392,7 +1525,9 @@ const BalancesGrid: React.FC<{
                   <td className="px-4 py-3">
                     <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">{item.item_code}</span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-900">{item.item_name || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">
+                    {formatBalanceItemDisplayTitle(item) || '-'}
+                  </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${LOCATION_COLORS[item.location_code]}`}>
                       <MapPin className="w-3 h-3" />
@@ -1509,11 +1644,39 @@ const DetailPanel: React.FC<{
   
   // Parse remarks to extract detailed info
   const parsedRemarks = parseRemarks(entry.remarks);
+  const parsedInfo = parseRemarksForList(entry.remarks);
   
   // Get item details from joined data
   const itemName = entry.stock_items?.item_name;
   const itemType = entry.stock_items?.item_type;
   const subCategory = entry.stock_items?.sub_category;
+  
+  // Format display title based on item type
+  const displayTitle = formatItemDisplayTitle(entry, parsedInfo);
+  
+  // For RM items, get supplier from raw_materials based on grade
+  const [supplier, setSupplier] = useState<string | null>(null);
+  useEffect(() => {
+    if (itemType === 'RM' && parsedInfo.grade) {
+      // Fetch supplier from raw_materials table
+      rawMaterialAPI.getAll()
+        .then(rawMaterials => {
+          // Find matching grade and get supplier
+          const matched = rawMaterials.find((rm: any) => 
+            rm.grade?.toLowerCase() === parsedInfo.grade?.toLowerCase()
+          );
+          if (matched && matched.supplier) {
+            setSupplier(matched.supplier);
+          }
+        })
+        .catch(err => console.error('Error fetching supplier:', err));
+    }
+  }, [itemType, parsedInfo.grade]);
+  
+  // For RM items, show grade as item name instead of the category name
+  const displayItemName = itemType === 'RM' && parsedInfo.grade 
+    ? parsedInfo.grade 
+    : itemName;
   
   // Fetch the correct document number from source document
   useEffect(() => {
@@ -1607,14 +1770,31 @@ const DetailPanel: React.FC<{
   return (
     <div className="w-96 bg-white border-l border-gray-200 flex flex-col">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-        <h3 className="font-semibold text-gray-900">Movement Details</h3>
-        <button
-          onClick={onClose}
-          className="p-1 text-gray-400 hover:text-gray-600 rounded"
-        >
-          <X className="w-5 h-5" />
-        </button>
+      <div className="px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-gray-900">Movement Details</h3>
+          <button
+            onClick={onClose}
+            className="p-1 text-gray-400 hover:text-gray-600 rounded"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        {/* Display formatted title based on item type */}
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-lg text-gray-900">{displayTitle}</span>
+          {itemType && (
+            <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${
+              itemType === 'RM' ? 'bg-orange-100 text-orange-800' :
+              itemType === 'PM' ? 'bg-purple-100 text-purple-800' :
+              itemType === 'SFG' ? 'bg-blue-100 text-blue-800' :
+              itemType === 'FG' ? 'bg-green-100 text-green-800' :
+              'bg-gray-100 text-gray-800'
+            }`}>
+              {itemType}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Content */}
@@ -1655,10 +1835,16 @@ const DetailPanel: React.FC<{
               <span className="text-gray-500">Item Code</span>
               <span className="font-mono font-medium text-gray-900 bg-gray-100 px-2 py-0.5 rounded">{entry.item_code}</span>
             </div>
-            {itemName && (
+            {displayItemName && (
               <div className="flex justify-between items-start">
                 <span className="text-gray-500">Item Name</span>
-                <span className="font-medium text-gray-900 text-right max-w-[180px]">{itemName}</span>
+                <span className="font-medium text-gray-900 text-right max-w-[180px]">{displayItemName}</span>
+              </div>
+            )}
+            {itemType === 'RM' && supplier && (
+              <div className="flex justify-between items-start">
+                <span className="text-gray-500">Supplier</span>
+                <span className="font-medium text-gray-900 text-right max-w-[180px]">{supplier}</span>
               </div>
             )}
             {itemType && (

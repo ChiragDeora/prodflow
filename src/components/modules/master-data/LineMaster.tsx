@@ -6,6 +6,7 @@ import {
   AlertCircle, CheckCircle, XCircle, Info, Link, Wrench, Package
 } from 'lucide-react';
 import { Line, Machine } from '../../../lib/supabase';
+import { lineAPI } from '../../../lib/supabase/api/line';
 
 interface LineMasterProps {
   linesMaster: Line[];
@@ -90,7 +91,43 @@ const LineMaster: React.FC<LineMasterProps> = ({
             Import Excel
           </button>
           <button 
-            onClick={() => handleAction('edit', null, 'line')}
+            onClick={async () => {
+              try {
+                // Find the highest line number to generate next line ID
+                const lineNumbers = linesMaster
+                  .map(line => {
+                    const match = line.line_id.match(/LINE-(\d+)/);
+                    return match ? parseInt(match[1], 10) : 0;
+                  })
+                  .filter(num => num > 0);
+                
+                const maxLineNumber = lineNumbers.length > 0 ? Math.max(...lineNumbers) : 0;
+                const nextLineNumber = maxLineNumber + 1;
+                const newLineId = `LINE-${nextLineNumber.toString().padStart(3, '0')}`;
+                
+                // Create new line with inactive status and empty fields
+                const newLine = await lineAPI.create({
+                  line_id: newLineId,
+                  description: `Production ${newLineId}`,
+                  im_machine_id: undefined,
+                  robot_machine_id: undefined,
+                  conveyor_machine_id: undefined,
+                  hoist_machine_id: undefined,
+                  loader_machine_id: undefined,
+                  status: 'Inactive',
+                  unit: defaultUnit || 'Unit 1',
+                  grinding: false
+                } as Omit<Line, 'created_at' | 'updated_at'>);
+                
+                if (newLine) {
+                  // Open edit modal for the new line so user can assign machines
+                  await handleAction('edit', newLine, 'line');
+                }
+              } catch (error) {
+                console.error('Error creating new line:', error);
+                alert('Failed to create new line. Please try again.');
+              }
+            }}
             className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             <Plus className="w-4 h-4 mr-2" />

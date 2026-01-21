@@ -342,6 +342,7 @@ const OpenIndent: React.FC = () => {
                             item.indentSlip.status === 'OPEN' ? 'bg-yellow-100 text-yellow-700' :
                             item.indentSlip.status === 'CLOSED_PERFECT' ? 'bg-green-100 text-green-700' :
                             item.indentSlip.status === 'CLOSED_OVER_RECEIVED' ? 'bg-orange-100 text-orange-700' :
+                            item.indentSlip.status === 'MANUALLY_CLOSED' ? 'bg-blue-100 text-blue-700' :
                             'bg-gray-100 text-gray-700'
                           }`}>
                             {item.indentSlip.status.replace('_', ' ')}
@@ -479,6 +480,7 @@ const OpenIndent: React.FC = () => {
                                 item.indentSlip.status === 'OPEN' ? 'bg-yellow-100 text-yellow-700' :
                                 item.indentSlip.status === 'CLOSED_PERFECT' ? 'bg-green-100 text-green-700' :
                                 item.indentSlip.status === 'CLOSED_OVER_RECEIVED' ? 'bg-orange-100 text-orange-700' :
+                                item.indentSlip.status === 'MANUALLY_CLOSED' ? 'bg-blue-100 text-blue-700' :
                                 'bg-gray-100 text-gray-700'
                               }`}>
                                 {item.indentSlip.status.replace('_', ' ')}

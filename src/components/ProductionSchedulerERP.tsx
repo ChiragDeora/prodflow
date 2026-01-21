@@ -1130,6 +1130,14 @@ const ProductionSchedulerERP: React.FC = () => {
             if (itemType === 'machine' && 'machine_id' in item && typeof item.machine_id === 'string') {
               await machineAPI.delete(item.machine_id);
               setMachinesMaster(prev => prev.filter(m => m.machine_id !== item.machine_id));
+              
+              // Refresh lines to reflect cleared machine assignments
+              try {
+                const refreshedLines = await lineAPI.getAll();
+                setLinesMaster(refreshedLines);
+              } catch (error) {
+                console.error('Error refreshing lines after machine deletion:', error);
+              }
             } else if (itemType === 'mold' && 'mold_id' in item && typeof item.mold_id === 'string') {
               await moldAPI.delete(item.mold_id);
               setMoldsMaster(prev => prev.filter(m => m.mold_id !== item.mold_id));
@@ -2102,6 +2110,9 @@ const ProductionSchedulerERP: React.FC = () => {
             <form onSubmit={async (e) => {
               e.preventDefault();
               const formData = new FormData(e.currentTarget);
+              const mfgDate = formData.get('mfg_date') as string;
+              const installDate = formData.get('install_date') as string;
+              
               const machineData = {
                 machine_id: formData.get('machine_id') as string,
                 make: formData.get('make') as string,
@@ -2110,44 +2121,188 @@ const ProductionSchedulerERP: React.FC = () => {
                 capacity_tons: parseInt(formData.get('size') as string) || 0,
                 type: 'Injection Molding Machine',
                 category: formData.get('category') as string || 'IM',
-                zone: formData.get('zone') as string || 'Production Area A',
-                purchase_date: (formData.get('mfg_date') as string) || '',
-                install_date: formData.get('install_date') as string || new Date().toISOString().split('T')[0],
+                line: formData.get('line') as string || undefined,
+                purchase_date: mfgDate && mfgDate.trim() ? mfgDate : new Date().toISOString().split('T')[0],
+                install_date: installDate && installDate.trim() ? installDate : new Date().toISOString().split('T')[0],
                 grinding_available: formData.get('grinding_available') === 'true',
                 remarks: formData.get('remarks') as string || '',
                 nameplate_image: undefined,
                 status: (formData.get('status') as string) as 'Active' | 'Maintenance' | 'Idle' || 'Active',
-                clm_sr_no: formData.get('clm_sr_no') as string || '',
-                inj_serial_no: formData.get('inj_serial_no') as string || '',
-                serial_no: formData.get('serial_no') as string || '',
-                mfg_date: formData.get('mfg_date') as string || undefined,
-                dimensions: formData.get('dimensions') as string || '',
+                clm_sr_no: formData.get('clm_sr_no') as string || undefined,
+                inj_serial_no: formData.get('inj_serial_no') as string || undefined,
+                serial_no: formData.get('serial_no') as string || undefined,
+                mfg_date: mfgDate && mfgDate.trim() ? mfgDate : undefined,
+                dimensions: formData.get('dimensions') as string || undefined,
                 nameplate_details: undefined,
                 unit: unitManagementEnabled ? (formData.get('unit') as string) || defaultUnit : undefined
               };
               
               try {
+                // Validation: Check if machine type already exists on the selected line
+                if (machineData.line) {
+                  const selectedLine = linesMaster.find(line => line.line_id === machineData.line);
+                  if (selectedLine) {
+                    const machineId = machineData.machine_id;
+                    const category = machineData.category;
+                    
+                    // Check if it's a hoist machine - don't allow adding hoist here
+                    if (machineId.startsWith('Hoist')) {
+                      alert('Hoist machines cannot be added here. Hoists are already assigned to lines separately.');
+                      return;
+                    }
+                    
+                    // Check if IM machine already exists on this line
+                    if (category === 'IM' && selectedLine.im_machine_id) {
+                      alert(`This line already has an IM machine (${selectedLine.im_machine_id}). Only one IM machine can be assigned per line.`);
+                      return;
+                    }
+                    
+                    // Check if Robot already exists on this line
+                    if (category === 'Robot' && selectedLine.robot_machine_id) {
+                      alert(`This line already has a Robot (${selectedLine.robot_machine_id}). Only one Robot can be assigned per line.`);
+                      return;
+                    }
+                    
+                    // Check if Conveyor (CONY) already exists on this line
+                    if (category === 'Aux' && machineId.startsWith('CONY') && selectedLine.conveyor_machine_id) {
+                      alert(`This line already has a Conveyor (${selectedLine.conveyor_machine_id}). Only one Conveyor can be assigned per line.`);
+                      return;
+                    }
+                  }
+                }
+                
+                // Get old machine data for comparison (if updating)
+                const oldMachine = editingItem && 'machine_id' in editingItem && typeof editingItem.machine_id === 'string' && editingItem.machine_id
+                  ? machinesMaster.find(m => m.machine_id === editingItem.machine_id)
+                  : null;
+                const oldLineId = oldMachine?.line;
+                
                 if (editingItem && 'machine_id' in editingItem && typeof editingItem.machine_id === 'string' && editingItem.machine_id) {
-                  // Update existing machine
-                  await machineAPI.update(editingItem.machine_id, machineData);
+                  // Update existing machine - exclude machine_id from update payload
+                  const { machine_id, ...updateData } = machineData;
+                  await machineAPI.update(editingItem.machine_id, updateData);
                   setMachinesMaster(prev => prev.map(m => 
-                    m.machine_id === editingItem.machine_id ? { ...m, ...machineData } : m
+                    m.machine_id === editingItem.machine_id ? { ...m, ...updateData } : m
                   ));
                 } else {
                   // Create new machine
-                  const newMachine = await machineAPI.create({
-                    ...machineData,
-                    category: 'General', // or set to a default or appropriate value
-                  });
+                  const newMachine = await machineAPI.create(machineData);
                   if (newMachine) {
                     setMachinesMaster(prev => [...prev, newMachine]);
                   }
                 }
+                
+                // Bidirectional sync: Update Line Master when machine line assignment changes
+                const machineId = machineData.machine_id;
+                const newLineId = machineData.line;
+                const category = machineData.category;
+                
+                // Determine which machine field to update based on category
+                let machineField: 'im_machine_id' | 'robot_machine_id' | 'conveyor_machine_id' | 'hoist_machine_id' | null = null;
+                if (category === 'IM') {
+                  machineField = 'im_machine_id';
+                } else if (category === 'Robot') {
+                  machineField = 'robot_machine_id';
+                } else if (category === 'Aux' && machineId.startsWith('CONY')) {
+                  machineField = 'conveyor_machine_id';
+                } else if (category === 'Aux' && machineId.startsWith('Hoist')) {
+                  machineField = 'hoist_machine_id';
+                }
+                
+                // If line assignment changed, update the line
+                if (oldLineId !== newLineId && machineField) {
+                  try {
+                    // Always clear old line's machine assignment if line changed
+                    // This ensures we don't leave stale assignments
+                    if (oldLineId) {
+                      await lineAPI.update(oldLineId, { [machineField]: null });
+                      setLinesMaster(prev => prev.map(l => {
+                        if (l.line_id === oldLineId) {
+                          const updated = { ...l };
+                          delete (updated as any)[machineField];
+                          return updated;
+                        }
+                        return l;
+                      }));
+                    }
+                    
+                    // Set new line's machine assignment
+                    if (newLineId) {
+                      // First, clear any existing machine of this type from the new line
+                      const newLine = linesMaster.find(l => l.line_id === newLineId);
+                      if (newLine && (newLine as any)[machineField] && (newLine as any)[machineField] !== machineId) {
+                        // Clear the old machine from the new line
+                        const oldMachineIdOnNewLine = (newLine as any)[machineField] as string;
+                        if (oldMachineIdOnNewLine) {
+                          await machineAPI.update(oldMachineIdOnNewLine, { line: undefined });
+                          setMachinesMaster(prev => prev.map(m => 
+                            m.machine_id === oldMachineIdOnNewLine ? { ...m, line: undefined } : m
+                          ));
+                        }
+                      }
+                      
+                      // Now assign this machine to the new line
+                      await lineAPI.update(newLineId, { [machineField]: machineId });
+                      setLinesMaster(prev => prev.map(l => 
+                        l.line_id === newLineId ? { ...l, [machineField]: machineId } : l
+                      ));
+                    }
+                    
+                    // Reload data from database to ensure sync
+                    try {
+                      const [refreshedLines, refreshedMachines] = await Promise.all([
+                        lineAPI.getAll(),
+                        machineAPI.getAll()
+                      ]);
+                      setLinesMaster(refreshedLines);
+                      setMachinesMaster(refreshedMachines);
+                    } catch (refreshError) {
+                      console.error('Error refreshing data after update:', refreshError);
+                      // Non-blocking - data might still be correct
+                    }
+                  } catch (lineError: any) {
+                    console.error('Error updating line assignments:', lineError);
+                    console.error('Line error details:', {
+                      message: lineError?.message,
+                      details: lineError?.details,
+                      hint: lineError?.hint,
+                      code: lineError?.code
+                    });
+                    // Don't block machine save if line update fails, but log the error
+                    alert(`Machine saved, but there was an issue updating line assignments: ${lineError?.message || 'Unknown error'}`);
+                    
+                    // Still try to refresh data even if there was an error
+                    try {
+                      const [refreshedLines, refreshedMachines] = await Promise.all([
+                        lineAPI.getAll(),
+                        machineAPI.getAll()
+                      ]);
+                      setLinesMaster(refreshedLines);
+                      setMachinesMaster(refreshedMachines);
+                    } catch (refreshError) {
+                      console.error('Error refreshing data after error:', refreshError);
+                    }
+                  }
+                } else {
+                  // Even if line didn't change, refresh to ensure sync
+                  try {
+                    const [refreshedLines, refreshedMachines] = await Promise.all([
+                      lineAPI.getAll(),
+                      machineAPI.getAll()
+                    ]);
+                    setLinesMaster(refreshedLines);
+                    setMachinesMaster(refreshedMachines);
+                  } catch (refreshError) {
+                    console.error('Error refreshing data:', refreshError);
+                  }
+                }
+                
                 setShowModal(false);
                 setEditingItem(null);
-              } catch (error) {
+              } catch (error: any) {
                 console.error('Error saving machine:', error);
-                alert('Error saving machine. Please try again.');
+                const errorMessage = error?.message || error?.error?.message || 'Unknown error occurred';
+                alert(`Error saving machine: ${errorMessage}. Please try again.`);
               }
             }}>
               <div className="p-6 space-y-6">
@@ -2339,13 +2494,16 @@ const ProductionSchedulerERP: React.FC = () => {
                         Line
                       </label>
                       <select 
-                        name="zone" 
+                        name="line" 
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-gray-500"
-                        defaultValue={editingItem && 'line' in editingItem ? editingItem.line : ''}
+                        defaultValue={editingItem && 'line' in editingItem && editingItem.line ? editingItem.line : ''}
                       >
-                        <option value="Production Area A">Production Area A</option>
-                        <option value="Production Area B">Production Area B</option>
-                        <option value="Production Area C">Production Area C</option>
+                        <option value="">Select a Line</option>
+                        {linesMaster.filter(line => line.status === 'Inactive').map((line) => (
+                          <option key={line.line_id} value={line.line_id}>
+                            {line.line_id} {line.description ? `- ${line.description}` : ''}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -3244,6 +3402,7 @@ const ProductionSchedulerERP: React.FC = () => {
                         <option value="ICP">ICP</option>
                         <option value="RCP">RCP</option>
                         <option value="LDPE">LDPE</option>
+                        <option value="HDPE">HDPE</option>
                         <option value="MB">MB</option>
                       </select>
                     </div>
@@ -4250,19 +4409,29 @@ const ProductionSchedulerERP: React.FC = () => {
                         <form onSubmit={async (e) => {
                           e.preventDefault();
                           const formData = new FormData(e.currentTarget);
+                          // Helper to convert empty string to undefined
+                          const getValueOrUndefined = (value: string | null) => {
+                            return value && value.trim() ? value : undefined;
+                          };
+                          
                           const updates = {
                             description: formData.get('description') as string,
-                            im_machine_id: formData.get('im_machine_id') as string || undefined,
-                            robot_machine_id: formData.get('robot_machine_id') as string || undefined,
-                            conveyor_machine_id: formData.get('conveyor_machine_id') as string || undefined,
-                            hoist_machine_id: formData.get('hoist_machine_id') as string || undefined,
-                            loader_machine_id: formData.get('loader_machine_id') as string || undefined,
+                            im_machine_id: getValueOrUndefined(formData.get('im_machine_id') as string),
+                            robot_machine_id: getValueOrUndefined(formData.get('robot_machine_id') as string),
+                            conveyor_machine_id: getValueOrUndefined(formData.get('conveyor_machine_id') as string),
+                            hoist_machine_id: getValueOrUndefined(formData.get('hoist_machine_id') as string),
+                            loader_machine_id: getValueOrUndefined(formData.get('loader_machine_id') as string),
                             status: formData.get('status') as 'Active' | 'Inactive' | 'Maintenance',
                             unit: formData.get('unit') as string || 'Unit 1',
                             grinding: formData.get('grinding') === 'true'
                           };
                           
                           try {
+                            // Get old line data for comparison (if updating)
+                            const oldLine = editingItem && 'line_id' in editingItem && editingItem.line_id
+                              ? linesMaster.find(l => l.line_id === (editingItem as Line).line_id)
+                              : null;
+                            
                             if (editingItem && 'line_id' in editingItem && editingItem.line_id) {
                               // Update existing line - use the returned value from API to ensure UI reflects all database fields
                               const updatedLine = await lineAPI.update((editingItem as Line).line_id, updates);
@@ -4272,6 +4441,61 @@ const ProductionSchedulerERP: React.FC = () => {
                                     ? updatedLine
                                     : line
                                 ));
+                                
+                                // Bidirectional sync: Update machine's line field when line assignments change
+                                const lineId = (editingItem as Line).line_id;
+                                const machineFields: Array<'im_machine_id' | 'robot_machine_id' | 'conveyor_machine_id' | 'hoist_machine_id' | 'loader_machine_id'> = 
+                                  ['im_machine_id', 'robot_machine_id', 'conveyor_machine_id', 'hoist_machine_id', 'loader_machine_id'];
+                                
+                                for (const field of machineFields) {
+                                  const oldMachineId = oldLine?.[field];
+                                  const newMachineId = updates[field];
+                                  
+                                  // If machine assignment changed, update the machine's line field
+                                  if (oldMachineId !== newMachineId) {
+                                    // Clear old machine's line assignment - it was removed from this line
+                                    // This handles both: machine changed to another machine, or machine was deselected (newMachineId is undefined)
+                                    // IMPORTANT: Always clear if oldMachineId exists, regardless of machine's current line field
+                                    // This ensures sync even if data was previously out of sync
+                                    if (oldMachineId) {
+                                      try {
+                                        // Always clear the old machine's line assignment since it was removed from this line
+                                        await machineAPI.update(oldMachineId, { line: undefined });
+                                        setMachinesMaster(prev => prev.map(m => 
+                                          m.machine_id === oldMachineId ? { ...m, line: undefined } : m
+                                        ));
+                                        console.log(`✅ Cleared line assignment for machine ${oldMachineId} (was assigned to line ${lineId})`);
+                                      } catch (error) {
+                                        console.error(`Error clearing line assignment for machine ${oldMachineId}:`, error);
+                                      }
+                                    }
+                                    
+                                    // Set new machine's line assignment (only if a new machine was selected)
+                                    if (newMachineId && newMachineId !== oldMachineId) {
+                                      try {
+                                        await machineAPI.update(newMachineId, { line: lineId });
+                                        setMachinesMaster(prev => prev.map(m => 
+                                          m.machine_id === newMachineId ? { ...m, line: lineId } : m
+                                        ));
+                                        console.log(`✅ Set line assignment ${lineId} for machine ${newMachineId}`);
+                                      } catch (error) {
+                                        console.error(`Error setting line assignment for machine ${newMachineId}:`, error);
+                                      }
+                                    }
+                                  }
+                                }
+                                
+                                // Reload data from database to ensure sync
+                                try {
+                                  const [refreshedLines, refreshedMachines] = await Promise.all([
+                                    lineAPI.getAll(),
+                                    machineAPI.getAll()
+                                  ]);
+                                  setLinesMaster(refreshedLines);
+                                  setMachinesMaster(refreshedMachines);
+                                } catch (refreshError) {
+                                  console.error('Error refreshing data after line update:', refreshError);
+                                }
                               }
                             } else {
                               // Create new line
@@ -4286,6 +4510,32 @@ const ProductionSchedulerERP: React.FC = () => {
                               } as Omit<Line, 'created_at' | 'updated_at'>);
                               if (newLine) {
                                 setLinesMaster(prev => [...prev, newLine]);
+                                
+                                // Bidirectional sync: Update machines' line field for new line assignments
+                                const machineFields: Array<'im_machine_id' | 'robot_machine_id' | 'conveyor_machine_id' | 'hoist_machine_id' | 'loader_machine_id'> = 
+                                  ['im_machine_id', 'robot_machine_id', 'conveyor_machine_id', 'hoist_machine_id', 'loader_machine_id'];
+                                
+                                for (const field of machineFields) {
+                                  const machineId = updates[field];
+                                  if (machineId) {
+                                    await machineAPI.update(machineId, { line: lineId });
+                                    setMachinesMaster(prev => prev.map(m => 
+                                      m.machine_id === machineId ? { ...m, line: lineId } : m
+                                    ));
+                                  }
+                                }
+                                
+                                // Reload data from database to ensure sync
+                                try {
+                                  const [refreshedLines, refreshedMachines] = await Promise.all([
+                                    lineAPI.getAll(),
+                                    machineAPI.getAll()
+                                  ]);
+                                  setLinesMaster(refreshedLines);
+                                  setMachinesMaster(refreshedMachines);
+                                } catch (refreshError) {
+                                  console.error('Error refreshing data after creating line:', refreshError);
+                                }
                               }
                             }
                             setShowModal(false);

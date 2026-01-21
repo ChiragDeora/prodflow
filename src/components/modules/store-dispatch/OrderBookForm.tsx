@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, Printer } from 'lucide-react';
 import { orderBookAPI } from '../../../lib/supabase';
+import UOMSelect from '../../shared/UOMSelect';
 
 interface OrderBookItem {
   id: string;
@@ -520,12 +521,10 @@ const OrderBookForm: React.FC = () => {
                     />
                   </td>
                   <td className="border border-gray-300 px-3 py-3 bg-blue-50">
-                    <input
-                      type="text"
+                    <UOMSelect
                       value={item.unit}
-                      onChange={(e) => handleItemChange(item.id, 'unit', e.target.value)}
+                      onChange={(value) => handleItemChange(item.id, 'unit', value)}
                       className="w-full px-3 py-2 text-sm border border-blue-200 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium"
-                      placeholder="PCS, KG"
                     />
                   </td>
                   <td className="border border-gray-300 px-3 py-3">

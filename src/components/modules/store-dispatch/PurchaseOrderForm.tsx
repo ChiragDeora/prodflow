@@ -7,6 +7,7 @@ import PrintHeader from '../../shared/PrintHeader';
 import CustomerSelect from './CustomerSelect';
 import { useStoreDispatch, PurchaseOrderItem } from './StoreDispatchContext';
 import { generateDocumentNumber, FORM_CODES } from '../../../utils/formCodeUtils';
+import UOMSelect from '../../shared/UOMSelect';
 
 const PurchaseOrderForm: React.FC = () => {
   const {
@@ -505,11 +506,10 @@ const PurchaseOrderForm: React.FC = () => {
                     />
                   </td>
                   <td className="border border-gray-300 px-2 py-2">
-                    <input
-                      type="text"
+                    <UOMSelect
                       value={item.unit}
-                      onChange={(e) => handleItemChange(item.id, 'unit', e.target.value)}
-                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                      onChange={(value) => handleItemChange(item.id, 'unit', value)}
+                      className="w-full"
                     />
                   </td>
                   <td className="border border-gray-300 px-2 py-2">

@@ -7,6 +7,7 @@ import PrintHeader from '../../shared/PrintHeader';
 import CustomerSelect from './CustomerSelect';
 import { useStoreDispatch, DeliveryChallanItem } from './StoreDispatchContext';
 import { generateDocumentNumber, FORM_CODES } from '../../../utils/formCodeUtils';
+import UOMSelect from '../../shared/UOMSelect';
 
 const DeliveryChallanForm: React.FC = () => {
   const {
@@ -293,7 +294,7 @@ const DeliveryChallanForm: React.FC = () => {
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Item Code</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Item Description</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">HSN Code</th>
-                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-24">UOM</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">UOM</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Pack Size</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Box No</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">No of Pcs</th>
@@ -331,11 +332,10 @@ const DeliveryChallanForm: React.FC = () => {
                     />
                   </td>
                   <td className="border border-gray-300 px-2 py-2">
-                    <input
-                      type="text"
+                    <UOMSelect
                       value={item.uom}
-                      onChange={(e) => handleItemChange(item.id, 'uom', e.target.value)}
-                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                      onChange={(value) => handleItemChange(item.id, 'uom', value)}
+                      className="w-full"
                     />
                   </td>
                   <td className="border border-gray-300 px-2 py-2">

@@ -18,7 +18,7 @@ export interface SiloConfig {
    * Value: Material info (type and sub_category)
    */
   siloMaterialMapping: Record<string, {
-    materialType: 'HP' | 'ICP' | 'RCP' | 'LDPE' | 'GPPS' | 'MB';
+    materialType: 'HP' | 'ICP' | 'RCP' | 'LDPE' | 'HDPE' | 'GPPS' | 'MB';
     materialGrade?: string;
     capacity?: number;  // in KG
   }>;

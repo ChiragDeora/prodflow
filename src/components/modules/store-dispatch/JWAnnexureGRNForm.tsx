@@ -6,6 +6,7 @@ import { jwAnnexureGRNAPI, materialIndentSlipAPI, MaterialIndentSlip, MaterialIn
 import PrintHeader from '../../shared/PrintHeader';
 import CustomerSelect from './CustomerSelect';
 import { generateDocumentNumber, FORM_CODES } from '../../../utils/formCodeUtils';
+import UOMSelect from '../../shared/UOMSelect';
 
 interface JWAnnexureGRNItem {
   id: string;
@@ -95,7 +96,11 @@ const JWAnnexureGRNForm: React.FC = () => {
   const fetchIndentSlips = async () => {
     try {
       const slips = await materialIndentSlipAPI.getAll();
-      setIndentSlips(slips);
+      // Filter out closed/100% completed indents (CLOSED_PERFECT and MANUALLY_CLOSED status)
+      const openSlips = slips.filter(slip => 
+        slip.status !== 'CLOSED_PERFECT' && slip.status !== 'MANUALLY_CLOSED'
+      );
+      setIndentSlips(openSlips);
     } catch (error) {
       console.error('Error fetching indent slips:', error);
     }
@@ -573,7 +578,7 @@ const JWAnnexureGRNForm: React.FC = () => {
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-12">Sl.</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Item Code</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Item Name</th>
-                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-20">UOM</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">UOM</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-24">Indent Qty.</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-24">Rcd. Qty.</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Rate</th>
@@ -609,11 +614,10 @@ const JWAnnexureGRNForm: React.FC = () => {
                     />
                   </td>
                   <td className="border border-gray-300 px-2 py-2">
-                    <input
-                      type="text"
-                      value={item.uom || 'Kgs'}
-                      onChange={(e) => handleItemChange(item.id, 'uom', e.target.value)}
-                      className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                    <UOMSelect
+                      value={item.uom || ''}
+                      onChange={(value) => handleItemChange(item.id, 'uom', value)}
+                      className="w-full"
                     />
                   </td>
                   <td className="border border-gray-300 px-2 py-2">

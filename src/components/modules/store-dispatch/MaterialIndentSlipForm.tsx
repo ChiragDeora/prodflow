@@ -8,6 +8,7 @@ import PrintHeader from '../../shared/PrintHeader';
 import CustomerSelect from './CustomerSelect';
 import { useStoreDispatch, MaterialIndentItem } from './StoreDispatchContext';
 import { generateDocumentNumber, FORM_CODES } from '../../../utils/formCodeUtils';
+import UOMSelect from '../../shared/UOMSelect';
 
 const MaterialIndentSlipForm: React.FC = () => {
   const {
@@ -341,7 +342,7 @@ const MaterialIndentSlipForm: React.FC = () => {
                     <th className="border border-gray-300 px-2 py-2 text-left font-semibold print:px-1 print:py-1 print:text-xs">Item Name</th>
                     <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32 print:px-1 print:py-1 print:text-xs">Item Code</th>
                     <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-24 print:px-1 print:py-1 print:text-xs">Qty.</th>
-                    <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-24 print:px-1 print:py-1 print:text-xs">UOM</th>
+                    <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32 print:px-1 print:py-1 print:text-xs">UOM</th>
                     <th className="border border-gray-300 px-2 py-2 text-left font-semibold print:px-1 print:py-1 print:text-xs">Color / Remarks</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-16 print:hidden">Action</th>
               </tr>
@@ -407,11 +408,10 @@ const MaterialIndentSlipForm: React.FC = () => {
                       />
                     </td>
                     <td className="border border-gray-300 px-2 py-2">
-                      <input
-                        type="text"
-                            value={item.uom}
-                            onChange={(e) => handleItemChange(item.id, 'uom', e.target.value)}
-                            className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded print:px-0 print:py-1 print:bg-transparent print:shadow-none"
+                      <UOMSelect
+                        value={item.uom}
+                        onChange={(value) => handleItemChange(item.id, 'uom', value)}
+                        className="w-full print:border-none print:px-0 print:py-1 print:bg-transparent print:shadow-none print:text-xs"
                       />
                     </td>
                     <td className="border border-gray-300 px-2 py-2">
@@ -447,7 +447,7 @@ const MaterialIndentSlipForm: React.FC = () => {
                     <th className="border border-gray-300 px-2 py-2 text-left font-semibold print:px-1 print:py-1 print:text-xs">Item Name</th>
                     <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32 print:px-1 print:py-1 print:text-xs">Item Code</th>
                     <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-24 print:px-1 print:py-1 print:text-xs">Qty.</th>
-                    <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-24 print:px-1 print:py-1 print:text-xs">UOM</th>
+                    <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32 print:px-1 print:py-1 print:text-xs">UOM</th>
                     <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32 print:px-1 print:py-1 print:text-xs">Party Name</th>
                     <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32 print:px-1 print:py-1 print:text-xs">Dimensions</th>
                     <th className="border border-gray-300 px-2 py-2 text-left font-semibold print:px-1 print:py-1 print:text-xs">Color / Remarks</th>
@@ -538,11 +538,10 @@ const MaterialIndentSlipForm: React.FC = () => {
                       />
                     </td>
                     <td className="border border-gray-300 px-2 py-2">
-                      <input
-                        type="text"
+                      <UOMSelect
                         value={item.uom}
-                        onChange={(e) => handleItemChange(item.id, 'uom', e.target.value)}
-                            className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded print:px-0 print:py-1 print:bg-transparent print:shadow-none"
+                        onChange={(value) => handleItemChange(item.id, 'uom', value)}
+                        className="w-full print:border-none print:px-0 print:py-1 print:bg-transparent print:shadow-none print:text-xs"
                       />
                     </td>
                     <td className="border border-gray-300 px-2 py-2">

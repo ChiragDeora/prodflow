@@ -55,6 +55,7 @@ interface BulkUploadPayload {
   pm_items?: PMUploadItem[];
   sfg_items?: SFGUploadItem[];
   location_code?: 'STORE' | 'PRODUCTION' | 'FG_STORE';
+  transaction_date?: string;
   remarks?: string;
 }
 
@@ -89,7 +90,7 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabase();
     const body: BulkUploadPayload = await request.json();
-    const { action, rm_items = [], pm_items = [], sfg_items = [], location_code = 'STORE', remarks } = body;
+    const { action, rm_items = [], pm_items = [], sfg_items = [], location_code = 'STORE', transaction_date, remarks } = body;
 
     if (action === 'validate') {
       // ====================================================================
@@ -109,12 +110,53 @@ export async function POST(request: NextRequest) {
           .select('id, category, type, grade, supplier');
         
         for (const item of rm_items) {
-          // Match by category + type + grade (case-insensitive)
-          const match = rmMaster?.find(rm => 
-            rm.category?.toLowerCase() === item.category?.toLowerCase() &&
-            rm.type?.toLowerCase() === item.type?.toLowerCase() &&
-            rm.grade?.toLowerCase() === item.grade?.toLowerCase()
-          );
+          // Normalize Excel data for comparison (whitespace-tolerant)
+          const normalizedItem = {
+            category: normalizeString(item.category),
+            type: normalizeString(item.type),
+            grade: normalizeString(item.grade)
+          };
+          
+          // Match by category + type + grade (exact category match required)
+          // PP must match PP, PE must match PE - they are NOT interchangeable
+          const match = rmMaster?.find(rm => {
+            const normalizedMaster = {
+              category: normalizeString(rm.category),
+              type: normalizeString(rm.type),
+              grade: normalizeString(rm.grade)
+            };
+            
+            // All three must match exactly (after normalization)
+            return normalizedMaster.category === normalizedItem.category &&
+                   normalizedMaster.type === normalizedItem.type &&
+                   normalizedMaster.grade === normalizedItem.grade;
+          });
+          
+          // If no match found, try a more flexible search and log for debugging
+          if (!match) {
+            // Try to find similar items for debugging
+            const similarItems = rmMaster?.filter(rm => {
+              const normalizedMaster = {
+                category: normalizeString(rm.category),
+                type: normalizeString(rm.type),
+                grade: normalizeString(rm.grade)
+              };
+              // Find items with same type
+              return normalizedMaster.type === normalizedItem.type;
+            }) || [];
+            
+            console.log(`[Bulk Opening Stock] No match found for:`, {
+              excel: `${item.category} | ${item.type} | ${item.grade}`,
+              excelNormalized: `${normalizedItem.category} | ${normalizedItem.type} | ${normalizedItem.grade}`,
+              similarItemsFound: similarItems.length,
+              similarItems: similarItems.slice(0, 5).map(rm => ({
+                category: rm.category,
+                type: rm.type,
+                grade: rm.grade,
+                normalized: `${normalizeString(rm.category)} | ${normalizeString(rm.type)} | ${normalizeString(rm.grade)}`
+              }))
+            });
+          }
           
           if (match) {
             // Generate stock item code based on category, type, and grade
@@ -145,9 +187,9 @@ export async function POST(request: NextRequest) {
           .select('id, category, type, item_code, pack_size, dimensions, brand, unit');
         
         for (const item of pm_items) {
-          // Match by item_code (case-insensitive)
+          // Match by item_code (case-insensitive and whitespace-tolerant)
           const match = pmMaster?.find(pm => 
-            pm.item_code?.toLowerCase() === item.item_code?.toLowerCase()
+            stringsMatch(pm.item_code, item.item_code)
           );
           
           if (match) {
@@ -234,8 +276,31 @@ export async function POST(request: NextRequest) {
         if (item.status !== 'matched') continue;
         
         try {
+          // Validate that category, type, and grade are all provided
+          // This ensures each grade gets its own unique stock item code
+          // Without grade, all HP items would share the same stock (e.g., RM-HP)
+          if (!item.category || !item.type || !item.grade) {
+            const missingFields = [
+              !item.category && 'category',
+              !item.type && 'type',
+              !item.grade && 'grade'
+            ].filter(Boolean).join(', ');
+            results.errors.push(`Missing required fields for RM item (${missingFields}): category="${item.category || 'MISSING'}", type="${item.type || 'MISSING'}", grade="${item.grade || 'MISSING'}". All three fields are required to create a unique stock item for each grade.`);
+            continue;
+          }
+          
           // Generate stock item code with category, type, and grade to ensure uniqueness
+          // This will create codes like PP-HP-HJ333MO, ensuring each grade has its own stock
           const stockItemCode = item.stock_item_code || generateRMStockCode(item.category, item.type, item.grade);
+          
+          // Verify the generated code is specific (not generic fallback like RM-HP)
+          // Generic codes cause all items of the same type to share stock
+          if (stockItemCode.startsWith('RM-') && !stockItemCode.includes(item.grade.trim())) {
+            results.errors.push(`Failed to generate specific stock code for ${item.category} ${item.type} ${item.grade}. Generated generic code: ${stockItemCode} (this would cause all ${item.type} items to share the same stock). Please ensure category, type, and grade are all provided in the Excel file.`);
+            continue;
+          }
+          
+          console.log(`[Bulk Opening Stock] Processing RM: ${item.category} ${item.type} ${item.grade} -> Stock Code: ${stockItemCode}, Quantity: ${item.quantity}`);
           
           // Create item name with category, type, grade, and supplier/brand if available
           // Format: "Category Type Grade (Supplier)" or "Category Type Grade"
@@ -288,7 +353,8 @@ export async function POST(request: NextRequest) {
             locationForRM, 
             item.quantity, 
             'KG',
-            remarksText
+            remarksText,
+            transaction_date
           );
           
           if (openingResult.success) {
@@ -355,7 +421,8 @@ export async function POST(request: NextRequest) {
             locationForPM, 
             item.quantity, 
             uom,
-            remarks || `Bulk upload: ${item.category} ${item.item_code}`
+            remarks || `Bulk upload: ${item.category} ${item.item_code}`,
+            transaction_date
           );
           
           if (openingResult.success) {
@@ -419,7 +486,8 @@ export async function POST(request: NextRequest) {
             locationForSFG, 
             item.quantity, 
             'NOS',
-            remarks || `Bulk upload: ${item.item_name}`
+            remarks || `Bulk upload: ${item.item_name}`,
+            transaction_date
           );
           
           if (openingResult.success) {
@@ -502,6 +570,28 @@ export async function GET(request: NextRequest) {
 // HELPER FUNCTIONS
 // ============================================================================
 
+/**
+ * Normalize a string for comparison by:
+ * - Trimming whitespace
+ * - Converting to lowercase
+ * - Removing ALL whitespace (spaces, tabs, etc.) for comparison
+ * This handles cases where Excel has "HDPE 50 MA 180" but master has "HDPE50MA180"
+ */
+function normalizeString(str: string | null | undefined): string {
+  if (!str) return '';
+  return str
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ''); // Remove ALL whitespace for comparison
+}
+
+/**
+ * Compare two strings with whitespace normalization
+ */
+function stringsMatch(str1: string | null | undefined, str2: string | null | undefined): boolean {
+  return normalizeString(str1) === normalizeString(str2);
+}
+
 function generateRMStockCode(category: string, type: string, grade: string): string {
   // Generate stock code in format: category-type-grade (e.g., PP-RCP-HJ333MO)
   // This ensures different grades of the same type create separate stock items
@@ -509,8 +599,11 @@ function generateRMStockCode(category: string, type: string, grade: string): str
   const cleanType = (type || '').trim().toUpperCase();
   const cleanGrade = (grade || '').trim();
   
+  // CRITICAL: For bulk opening stock, we MUST have all three fields to create unique stock items
+  // Without grade, all items of the same type would share the same stock (e.g., all HP items)
   if (!cleanCategory || !cleanType || !cleanGrade) {
-    // Fallback to old format if data is missing
+    // Fallback to old format if data is missing (for backward compatibility only)
+    // WARNING: This creates generic codes that will cause all items of the same type to share stock
     const typeMap: Record<string, string> = {
       'HP': 'RM-HP',
       'ICP': 'RM-ICP',
@@ -524,10 +617,13 @@ function generateRMStockCode(category: string, type: string, grade: string): str
       'BEIGE': 'RM-MB',
       'YELLOW': 'RM-MB',
     };
+    // Log warning about fallback usage
+    console.warn(`[generateRMStockCode] Using fallback generic code. Missing fields - category: ${cleanCategory || 'MISSING'}, type: ${cleanType || 'MISSING'}, grade: ${cleanGrade || 'MISSING'}`);
     return typeMap[cleanType] || `RM-${cleanType}`;
   }
   
-  // Format: category-type-grade (e.g., PP-RCP-HJ333MO)
+  // Format: category-type-grade (e.g., PP-HP-HJ333MO)
+  // This ensures each grade gets its own unique stock item and stock balance
   return `${cleanCategory}-${cleanType}-${cleanGrade}`;
 }
 
@@ -544,23 +640,37 @@ async function addOpeningStock(
   locationCode: string,
   quantity: number,
   uom: string,
-  remarks: string
+  remarks: string,
+  transactionDate?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const transactionDate = new Date().toISOString().split('T')[0];
+    // Use provided transaction_date or default to today
+    const transactionDateValue = transactionDate || new Date().toISOString().split('T')[0];
     // Simplified document number format: OPEN-YYYYMMDD-ITEMCODE
-    const dateStr = transactionDate.replace(/-/g, '');
+    const dateStr = transactionDateValue.replace(/-/g, '');
     const documentNumber = `OPEN-${dateStr}-${itemCode}`;
     // Generate a proper UUID for document_id (required by database)
     const documentId = randomUUID();
     
     // Check existing balance - use maybeSingle to avoid error
-    const { data: existingBalance } = await supabase
+    // CRITICAL: This query must use the specific item_code (e.g., PP-HP-HJ333MO)
+    // to ensure each grade gets its own stock balance, not a shared generic code
+    const { data: existingBalance, error: balanceError } = await supabase
       .from('stock_balances')
-      .select('current_balance')
+      .select('current_balance, item_code')
       .eq('item_code', itemCode)
       .eq('location_code', locationCode)
       .maybeSingle();
+    
+    if (balanceError && balanceError.code !== 'PGRST116') {
+      // PGRST116 means no rows found, which is fine (new item)
+      return { success: false, error: `Error checking balance: ${balanceError.message}` };
+    }
+    
+    // Verify we're updating the correct item_code (if balance exists)
+    if (existingBalance && existingBalance.item_code !== itemCode) {
+      return { success: false, error: `Item code mismatch: expected ${itemCode}, found ${existingBalance.item_code}` };
+    }
     
     const currentBalance = existingBalance?.current_balance || 0;
     const newBalance = currentBalance + quantity;
@@ -575,7 +685,7 @@ async function addOpeningStock(
         quantity: Math.abs(quantity),
         unit_of_measure: uom,
         balance_after: newBalance,
-        transaction_date: transactionDate,
+        transaction_date: transactionDateValue,
         document_type: 'OPENING',
         document_id: documentId,
         document_number: documentNumber,

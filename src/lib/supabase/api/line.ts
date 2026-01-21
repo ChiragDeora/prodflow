@@ -60,14 +60,35 @@ export const lineAPI = {
   // Update line
   async update(lineId: string, updates: Partial<Line>): Promise<Line | null> {
     const supabase = getSupabase();
+    
+    // Filter out undefined values and convert them to null for clearing fields
+    const filteredUpdates: Record<string, any> = {};
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === undefined) {
+        // Convert undefined to null to clear the field
+        filteredUpdates[key] = null;
+      } else if (value !== undefined) {
+        filteredUpdates[key] = value;
+      }
+    });
+    
+    // If no updates after filtering, return null
+    if (Object.keys(filteredUpdates).length === 0) {
+      console.log('No updates to apply for line:', lineId);
+      return null;
+    }
+    
     const { data, error } = await supabase
       .from('lines')
-      .update(updates)
+      .update({ ...filteredUpdates, updated_at: new Date().toISOString() })
       .eq('line_id', lineId)
       .select()
       .single();
     
     if (error) {
+      console.error('Error updating line:', error);
+      console.error('Line ID:', lineId);
+      console.error('Updates:', filteredUpdates);
       handleSupabaseError(error, 'updating line');
       throw error;
     }

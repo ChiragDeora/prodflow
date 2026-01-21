@@ -268,14 +268,14 @@ export const materialIndentSlipAPI = {
     }
   },
 
-  // Get completed indents (closed perfect or items with pending_qty = 0)
+  // Get completed indents (closed perfect or manually closed)
   async getCompletedIndents(): Promise<{ slip: MaterialIndentSlip; items: MaterialIndentSlipItem[] }[]> {
     try {
       const supabase = getSupabase();
       const { data: slips, error: slipsError } = await supabase
         .from('purchase_material_indent_slip')
         .select('*')
-        .eq('status', 'CLOSED_PERFECT')
+        .in('status', ['CLOSED_PERFECT', 'MANUALLY_CLOSED'])
         .order('date', { ascending: false });
       
       if (slipsError) {

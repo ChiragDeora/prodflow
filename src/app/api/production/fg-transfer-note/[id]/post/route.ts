@@ -93,6 +93,7 @@ export async function POST(
     }
 
     // Check stock availability
+    // NOTE: Only check SFG items - PM materials (carton, polybag, BOPP) are allowed to go negative
     const stockErrors: StockValidationError[] = [];
     
     for (const item of items) {
@@ -126,65 +127,8 @@ export async function POST(
         }
       }
 
-      // Check Carton stock in STORE
-      if (item.cnt_code && item.cnt_deduct > 0) {
-        const cntBalance = await getStockBalance(item.cnt_code, 'STORE');
-        if (cntBalance < item.cnt_deduct) {
-          stockErrors.push({
-            item_code: item.cnt_code,
-            item_name: `Carton for ${item.fg_code}`,
-            required: item.cnt_deduct,
-            available: cntBalance,
-            shortage: item.cnt_deduct - cntBalance,
-            location: 'STORE'
-          });
-        }
-      }
-
-      // Check Polybag stock in STORE
-      if (item.polybag_code && item.polybag_deduct > 0) {
-        const polyBalance = await getStockBalance(item.polybag_code, 'STORE');
-        if (polyBalance < item.polybag_deduct) {
-          stockErrors.push({
-            item_code: item.polybag_code,
-            item_name: `Polybag for ${item.fg_code}`,
-            required: item.polybag_deduct,
-            available: polyBalance,
-            shortage: item.polybag_deduct - polyBalance,
-            location: 'STORE'
-          });
-        }
-      }
-
-      // Check BOPP-1 stock in STORE
-      if (item.bopp1_code && item.bopp1_deduct > 0) {
-        const bopp1Balance = await getStockBalance(item.bopp1_code, 'STORE');
-        if (bopp1Balance < item.bopp1_deduct) {
-          stockErrors.push({
-            item_code: item.bopp1_code,
-            item_name: `BOPP-1 for ${item.fg_code}`,
-            required: item.bopp1_deduct,
-            available: bopp1Balance,
-            shortage: item.bopp1_deduct - bopp1Balance,
-            location: 'STORE'
-          });
-        }
-      }
-
-      // Check BOPP-2 stock in STORE
-      if (item.bopp2_code && item.bopp2_deduct > 0) {
-        const bopp2Balance = await getStockBalance(item.bopp2_code, 'STORE');
-        if (bopp2Balance < item.bopp2_deduct) {
-          stockErrors.push({
-            item_code: item.bopp2_code,
-            item_name: `BOPP-2 for ${item.fg_code}`,
-            required: item.bopp2_deduct,
-            available: bopp2Balance,
-            shortage: item.bopp2_deduct - bopp2Balance,
-            location: 'STORE'
-          });
-        }
-      }
+      // PM materials (carton, polybag, BOPP) are NOT checked - allowed to go negative
+      // This allows posting even if PM materials are not available in stock
     }
 
     if (stockErrors.length > 0) {

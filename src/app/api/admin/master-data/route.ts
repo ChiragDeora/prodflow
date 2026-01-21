@@ -88,13 +88,16 @@ export async function GET(request: NextRequest) {
     }));
     
     // Standard RM types for DPR posting
+    // Note: These are generic types without specific grades. When a grade is selected, 
+    // the item_name should be formatted as "Grade Type" (e.g., "HJ333MO ICP")
     const standardRmTypes = [
-      { item_code: 'RM-HP', item_name: 'Raw Material - HP (Homo Polymer)', item_type: 'RM', unit_of_measure: 'KG', category: 'PP', sub_category: 'HP' },
-      { item_code: 'RM-ICP', item_name: 'Raw Material - ICP (Impact Copolymer)', item_type: 'RM', unit_of_measure: 'KG', category: 'PP', sub_category: 'ICP' },
-      { item_code: 'RM-RCP', item_name: 'Raw Material - RCP (Random Copolymer)', item_type: 'RM', unit_of_measure: 'KG', category: 'PP', sub_category: 'RCP' },
-      { item_code: 'RM-LDPE', item_name: 'Raw Material - LDPE', item_type: 'RM', unit_of_measure: 'KG', category: 'PE', sub_category: 'LDPE' },
-      { item_code: 'RM-GPPS', item_name: 'Raw Material - GPPS', item_type: 'RM', unit_of_measure: 'KG', category: 'PS', sub_category: 'GPPS' },
-      { item_code: 'RM-MB', item_name: 'Raw Material - Masterbatch', item_type: 'RM', unit_of_measure: 'KG', category: 'MB', sub_category: 'MB' },
+      { item_code: 'RM-HP', item_name: 'HP', item_type: 'RM', unit_of_measure: 'KG', category: 'PP', sub_category: 'HP' },
+      { item_code: 'RM-ICP', item_name: 'ICP', item_type: 'RM', unit_of_measure: 'KG', category: 'PP', sub_category: 'ICP' },
+      { item_code: 'RM-RCP', item_name: 'RCP', item_type: 'RM', unit_of_measure: 'KG', category: 'PP', sub_category: 'RCP' },
+      { item_code: 'RM-LDPE', item_name: 'LDPE', item_type: 'RM', unit_of_measure: 'KG', category: 'PE', sub_category: 'LDPE' },
+      { item_code: 'RM-HDPE', item_name: 'HDPE', item_type: 'RM', unit_of_measure: 'KG', category: 'PE', sub_category: 'HDPE' },
+      { item_code: 'RM-GPPS', item_name: 'GPPS', item_type: 'RM', unit_of_measure: 'KG', category: 'PS', sub_category: 'GPPS' },
+      { item_code: 'RM-MB', item_name: 'MB', item_type: 'RM', unit_of_measure: 'KG', category: 'MB', sub_category: 'MB' },
       { item_code: 'REGRIND', item_name: 'Regrind Material', item_type: 'RM', unit_of_measure: 'KG', category: 'REGRIND', sub_category: null },
     ];
     

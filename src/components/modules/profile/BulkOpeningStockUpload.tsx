@@ -64,6 +64,7 @@ interface ValidationResult {
 interface BulkOpeningStockUploadProps {
   onClose: () => void;
   onSuccess?: () => void;
+  transactionDate?: string;
 }
 
 type TabType = 'rm' | 'pm' | 'sfg';
@@ -72,7 +73,7 @@ type TabType = 'rm' | 'pm' | 'sfg';
 // COMPONENT
 // ============================================================================
 
-const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose, onSuccess }) => {
+const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose, onSuccess, transactionDate }) => {
   const [activeTab, setActiveTab] = useState<TabType>('rm');
   const [rmItems, setRmItems] = useState<RMItem[]>([]);
   const [pmItems, setPmItems] = useState<PMItem[]>([]);
@@ -131,19 +132,50 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
         const gradeCol = findColIndex(['grade']);
         const qtyCol = findColIndex(['stock', 'qty', 'quantity']); // Prioritize "Stock" column
 
+        // Validate that all required columns are found
+        if (categoryCol === -1 || typeCol === -1 || gradeCol === -1) {
+          const missingCols = [
+            categoryCol === -1 && 'Category',
+            typeCol === -1 && 'Type',
+            gradeCol === -1 && 'Grade'
+          ].filter(Boolean).join(', ');
+          alert(`Error: Required columns not found in Excel file: ${missingCols}. Please ensure your Excel file has columns for Category, Type, Grade, and Quantity/Stock.`);
+          return;
+        }
+
         const items: RMItem[] = [];
         for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
           const row = jsonData[i];
+          // Skip empty rows - but require at least category to be present
           if (!row || !row[categoryCol]) continue;
           
-          // Parse quantity - allow 0 values (they should still be included)
+          // Parse quantity - allow 0 values (they should still be included
           const qty = parseFloat(row[qtyCol]) || 0;
-          // Don't skip rows with 0 quantity - they should still be parsed and shown
+          
+          // Extract and normalize values - trim and normalize whitespace
+          // This ensures "HDPE 50 MA 180" matches "HDPE50MA180" or "HDPE  50  MA  180"
+          const normalizeValue = (val: any): string => {
+            return String(val || '')
+              .trim()
+              .replace(/\s+/g, ' ') // Collapse multiple spaces to single space
+              .trim();
+          };
+          
+          const category = normalizeValue(row[categoryCol]);
+          const type = normalizeValue(row[typeCol]);
+          const grade = normalizeValue(row[gradeCol]);
+          
+          // Skip rows where category, type, or grade is missing
+          // This prevents creating generic stock codes that would cause all items of the same type to share stock
+          if (!category || !type || !grade) {
+            console.warn(`Skipping row ${i + 1}: Missing required fields - Category: "${category}", Type: "${type}", Grade: "${grade}"`);
+            continue;
+          }
 
           items.push({
-            category: String(row[categoryCol] || '').trim(),
-            type: String(row[typeCol] || '').trim(),
-            grade: String(row[gradeCol] || '').trim(),
+            category,
+            type,
+            grade,
             quantity: qty
           });
         }
@@ -361,6 +393,7 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
           pm_items: matchedPM,
           sfg_items: matchedSFG,
           location_code: 'STORE',
+          transaction_date: transactionDate || new Date().toISOString().split('T')[0],
           remarks: 'Bulk opening stock upload'
         })
       });

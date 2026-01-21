@@ -65,6 +65,11 @@ const UserProfileModule: React.FC = () => {
   const [showDeleteTypeModal, setShowDeleteTypeModal] = useState(false);
   const [showAddAllOpeningStockModal, setShowAddAllOpeningStockModal] = useState(false);
   const [addAllOpeningStockQuantity, setAddAllOpeningStockQuantity] = useState(0);
+  // "As on" date for stock management - defaults to today
+  const [stockAsOnDate, setStockAsOnDate] = useState<string>(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  });
   // Merged form for stock item + opening stock
   const [stockItemForm, setStockItemForm] = useState({
     // Common fields
@@ -294,7 +299,10 @@ const UserProfileModule: React.FC = () => {
           stockItemData.item_name = `${stockItemForm.category} ${stockItemForm.type} ${stockItemForm.grade}`;
         } else if (stockItemForm.type) {
           stockItemData.item_code = `RM-${stockItemForm.type}`;
-          stockItemData.item_name = `Raw Material - ${stockItemForm.type}`;
+          // Format: "Grade Type" - but if no grade, use just the type
+          stockItemData.item_name = stockItemForm.grade 
+            ? `${stockItemForm.grade} ${stockItemForm.type}` 
+            : stockItemForm.type;
         }
         stockItemData.category = stockItemForm.category || 'PP';
         stockItemData.sub_category = stockItemForm.type;
@@ -333,6 +341,7 @@ const UserProfileModule: React.FC = () => {
             item_code: existingItemCode,
             location_code: stockItemForm.location_code,
             quantity: stockItemForm.quantity,
+            transaction_date: stockAsOnDate,
             remarks: stockItemForm.remarks || `Opening stock for ${stockItemData.item_name || existingItemCode}`,
             posted_by: user?.email || 'ADMIN'
           })
@@ -664,6 +673,7 @@ const handleBulkDeleteStockItems = async () => {
         item_code: item.item_code,
         location_code: getLocationForType(item.item_type) as 'STORE' | 'PRODUCTION' | 'FG_STORE',
         quantity: addAllOpeningStockQuantity, // Use the entered quantity
+        transaction_date: stockAsOnDate,
         remarks: `Opening stock entry for ${item.item_name} - added by yogesh`,
         posted_by: 'yogesh'
       }));
@@ -1089,10 +1099,24 @@ const handleBulkDeleteStockItems = async () => {
 
             {/* Quick Actions */}
             <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                <Package className="w-5 h-5 mr-2" />
-                Stock Management
-              </h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+                  <Package className="w-5 h-5 mr-2" />
+                  Stock Management
+                </h3>
+                <div className="flex items-center gap-3">
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                    <span>As on Date:</span>
+                    <input
+                      type="date"
+                      value={stockAsOnDate}
+                      onChange={(e) => setStockAsOnDate(e.target.value)}
+                      className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      title="Select the date for which stock should be recorded"
+                    />
+                  </label>
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <button
                   onClick={() => setShowStockItemModal(true)}
@@ -1497,9 +1521,9 @@ const handleBulkDeleteStockItems = async () => {
                           onChange={(e) => setStockItemForm({ ...stockItemForm, unit_of_measure: e.target.value as 'KG' | 'NOS' | 'METERS' })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
-                          <option value="KG">Kilograms (KG)</option>
-                          <option value="NOS">Numbers (NOS)</option>
-                          <option value="METERS">Meters</option>
+                          <option value="KG">KGS</option>
+                          <option value="NOS">NOS</option>
+                          <option value="METERS">M</option>
                         </select>
                       </div>
                     </div>
@@ -1744,6 +1768,7 @@ const handleBulkDeleteStockItems = async () => {
                   loadStockItems();
                   setStockMessage({ type: 'success', text: 'Bulk opening stock uploaded successfully!' });
                 }}
+                transactionDate={stockAsOnDate}
               />
             )}
 

@@ -307,7 +307,7 @@ const MachineMaster: React.FC<MachineMasterProps> = ({
                       {machine.line}
                     </span>
                   ) : (
-                    <span className="text-gray-400">Not specified</span>
+                    <span className="text-gray-400">No line</span>
                   )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">{machine.unit || 'Unit 1'}</td>

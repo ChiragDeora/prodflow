@@ -322,6 +322,7 @@ export interface StockLedgerQuery {
 }
 
 export interface StockBalanceResult {
+  category?: string;
   id: string;
   item_code: string;
   item_name: string;

@@ -454,8 +454,8 @@ export async function mapItemToStockItem(
   }
   
   // Try RM Type match: If description is an RM Type (HP, ICP, RCP, etc.), find RM with that sub_category
-  // Common RM Types: HP, ICP, RCP, LDPE, GPPS, MB
-  const rmTypes = ['HP', 'ICP', 'RCP', 'LDPE', 'GPPS', 'MB'];
+  // Common RM Types: HP, ICP, RCP, LDPE, HDPE, GPPS, MB
+  const rmTypes = ['HP', 'ICP', 'RCP', 'LDPE', 'HDPE', 'GPPS', 'MB'];
   const upperDescription = description.toUpperCase().trim();
   if (rmTypes.includes(upperDescription)) {
     console.log(`[mapItemToStockItem] "${description}" is an RM type, trying RM-${upperDescription}`);
@@ -470,7 +470,7 @@ export async function mapItemToStockItem(
         .from('stock_items')
         .insert({
           item_code: standardRmCode,
-          item_name: `Raw Material - ${upperDescription}`,
+          item_name: upperDescription, // Just the type (e.g., "ICP", "HP") - grade will be added when specific grade is selected
           item_type: 'RM',
           category: 'PP',
           sub_category: upperDescription,
@@ -603,6 +603,19 @@ export async function createItemMapping(
  * 2. Case-insensitive match
  * 3. Returns null if not found
  */
+/**
+ * Normalize a product/mold name for comparison
+ * - Removes all whitespace
+ * - Converts to lowercase
+ * - Normalizes dashes (removes all dashes for comparison)
+ * This helps match names like "CK-Ro24-38-L" with "CK-Ro-24-38-L"
+ */
+function normalizeProductName(name: string): string {
+  if (!name) return '';
+  // Remove all whitespace, convert to lowercase, remove all dashes
+  return name.trim().toLowerCase().replace(/\s+/g, '').replace(/-/g, '');
+}
+
 export async function getSfgBomByMoldName(
   moldName: string
 ): Promise<SfgBom | null> {
@@ -632,6 +645,7 @@ export async function getSfgBomByMoldName(
     .select('*');
   
   if (!allBomsError && allBoms) {
+    // First try case-insensitive exact match
     const caseInsensitiveMatch = allBoms.find(
       bom => bom.item_name?.trim().toLowerCase() === normalizedName.toLowerCase()
     );
@@ -639,6 +653,18 @@ export async function getSfgBomByMoldName(
     if (caseInsensitiveMatch) {
       console.warn(`⚠️ [getSfgBomByMoldName] Case-insensitive match found: "${normalizedName}" matched "${caseInsensitiveMatch.item_name}"`);
       return caseInsensitiveMatch;
+    }
+    
+    // If still no match, try normalized comparison (ignoring dash variations)
+    const normalizedInput = normalizeProductName(normalizedName);
+    const normalizedMatch = allBoms.find(bom => {
+      const normalizedBomName = normalizeProductName(bom.item_name || '');
+      return normalizedBomName === normalizedInput && normalizedBomName !== '';
+    });
+    
+    if (normalizedMatch) {
+      console.warn(`⚠️ [getSfgBomByMoldName] Normalized match found: "${normalizedName}" matched "${normalizedMatch.item_name}" (dash/format variation)`);
+      return normalizedMatch;
     }
   }
   
