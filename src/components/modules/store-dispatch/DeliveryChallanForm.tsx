@@ -20,18 +20,27 @@ const DeliveryChallanForm: React.FC = () => {
   const [docNo, setDocNo] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
+  // Sync date state with dcDate when dcDate changes
+  useEffect(() => {
+    if (formData.dcDate) {
+      setDate(formData.dcDate);
+    }
+  }, [formData.dcDate]);
+
   // Generate document number
   useEffect(() => {
     const generateDocNo = async () => {
       try {
-        const docNo = await generateDocumentNumber(FORM_CODES.DELIVERY_CHALLAN, date);
+        // Use dcDate if available, otherwise use date state
+        const dateToUse = formData.dcDate || date;
+        const docNo = await generateDocumentNumber(FORM_CODES.DELIVERY_CHALLAN, dateToUse);
         setDocNo(docNo);
       } catch (error) {
         console.error('Error generating document number:', error);
       }
     };
     generateDocNo();
-  }, [date]);
+  }, [date, formData.dcDate]);
 
   const handleInputChange = (field: keyof Omit<typeof formData, 'items'>, value: string | boolean) => {
     updateDeliveryChallanField(field as any, value as any);
@@ -107,7 +116,7 @@ const DeliveryChallanForm: React.FC = () => {
     try {
       const challanData = {
         doc_no: docNo,
-        date: date,
+        date: formData.dcDate || date, // Use dcDate as the main date field
         sr_no: formData.dcNo || undefined, // Serial number
         dc_no: formData.dcNo || undefined,
         dc_date: formData.dcDate || undefined,

@@ -165,7 +165,7 @@ const MaterialIndentSlipForm: React.FC = () => {
       
       const slipData = {
         ident_no: formData.identNo,
-        date: new Date().toISOString().split('T')[0],
+        date: formData.indentDate || new Date().toISOString().split('T')[0], // Use indentDate as the main date field
         indent_date: formData.indentDate,
         tentative_required_date: formData.tentativeDate || undefined,
         party_name: formData.partyName || undefined,

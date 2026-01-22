@@ -64,6 +64,15 @@ interface MachineData {
   changeover: ProductionRun;
 }
 
+interface StoppageEntry {
+  id: string; // Temporary ID for form management
+  reason: string;
+  startTime: string;
+  endTime: string;
+  totalTime: number; // Calculated from start/end time
+  remark?: string;
+}
+
 interface ProductionRun {
   product: string;
   cavity: number;
@@ -83,6 +92,9 @@ interface ProductionRun {
   lumps: number;
   runTime: number;
   downTime: number;
+  // Multiple stoppages support
+  stoppages: StoppageEntry[];
+  // Legacy fields for backward compatibility (will be migrated from/to stoppages array)
   stoppageReason: string;
   startTime: string;
   endTime: string;
@@ -565,6 +577,7 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
                     lumps: 0,
                     runTime: 0,
                     downTime: 0,
+                    stoppages: [],
                     stoppageReason: '',
                     startTime: '',
                     endTime: '',
@@ -593,6 +606,7 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
                     lumps: 0,
                     runTime: 0,
                     downTime: 0,
+                    stoppages: [],
                     stoppageReason: '',
                     startTime: '',
                     endTime: '',
@@ -624,6 +638,24 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
                 shotsEnd: me.shots_end
               });
               
+              // Load stoppages from dpr_stoppage_entries and sort by start_time
+              const stoppages: StoppageEntry[] = (me.dpr_stoppage_entries || [])
+                .map((se: any) => ({
+                  id: se.id || `stoppage-${Date.now()}-${Math.random()}`,
+                  reason: se.reason || '',
+                  startTime: se.start_time || '',
+                  endTime: se.end_time || '',
+                  totalTime: se.total_time_min || 0,
+                  remark: se.remark || ''
+                }))
+                .sort((a: StoppageEntry, b: StoppageEntry) => {
+                  // Sort by start_time to maintain chronological order
+                  if (!a.startTime && !b.startTime) return 0;
+                  if (!a.startTime) return 1;
+                  if (!b.startTime) return -1;
+                  return a.startTime.localeCompare(b.startTime);
+                });
+
               const productionData = {
                 product: me.product || '',
                 cavity: me.cavity || 0,
@@ -643,11 +675,18 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
                 lumps: me.lumps_kgs || 0,
                 runTime: me.run_time_mins || 0,
                 downTime: me.down_time_min || 0,
-                stoppageReason: me.stoppage_reason || '',
-                startTime: isChangeover ? (me.changeover_start_time || '') : (me.stoppage_start || ''),
-                endTime: isChangeover ? (me.changeover_end_time || '') : (me.stoppage_end || ''),
+                stoppages: stoppages,
+                stoppageReason: me.stoppage_reason || '', // Legacy field
+                startTime: isChangeover ? (me.changeover_start_time || '') : (me.stoppage_start || ''), // Legacy field
+                endTime: isChangeover ? (me.changeover_end_time || '') : (me.stoppage_end || ''), // Legacy field
                 stoppageTotal: me.stoppage_total_min || 0,
-                totalTime: (me.run_time_mins || 0) + (me.down_time_min || 0),
+                totalTime: stoppages.reduce((sum, s) => {
+                  // Only count if both start and end times are present
+                  if (s.startTime && s.endTime && s.startTime.trim() && s.endTime.trim()) {
+                    return sum + (s.totalTime || 0);
+                  }
+                  return sum;
+                }, 0), // Calculate from stoppages (only counts those with start/end times)
                 mouldChange: me.mould_change || '',
                 remark: me.remark || '',
                 partWeightCheck: me.part_wt_check || '',
@@ -1470,6 +1509,7 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
       lumps: 0,
       runTime: 0,
       downTime: 0,
+      stoppages: [],
       stoppageReason: '',
       startTime: '',
       endTime: '',
@@ -1773,6 +1813,7 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
       lumps: getNumberValue(['lumps', 'lump', 'lumps (nos)'], 0),
       runTime: getNumberValue(['run time (mins)', 'run time', 'run time (minutes)'], 0),
       downTime: getNumberValue(['down time (min)', 'down time', 'downtime'], 0),
+      stoppages: [], // Excel import doesn't support multiple stoppages yet
       stoppageReason: String(getValue(['reason', 'stoppage', 'stoppage reason'], '')),
       startTime: String(getValue(['stoppage start time', 'start time'], '')),
       endTime: String(getValue(['stoppage end time', 'end time'], '')),
@@ -1856,6 +1897,7 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
         lumps: 0,
         runTime: 0,
         downTime: 0,
+        stoppages: [],
         stoppageReason: '',
         startTime: '',
         endTime: '',
@@ -1886,6 +1928,7 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
         lumps: 0,
         runTime: 0,
         downTime: 0,
+        stoppages: [],
         stoppageReason: '',
         startTime: '',
         endTime: '',
@@ -3923,13 +3966,26 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
   const [shiftIncharge, setShiftIncharge] = useState(existingData?.shiftIncharge || 'CHANDAN/DHIRAJ');
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   
+  // Calculate total stoppage time from all stoppages
+  // Only count stoppages that have both startTime and endTime filled
+  const getTotalStoppageTime = (stoppages: StoppageEntry[]): number => {
+    return stoppages.reduce((sum, stoppage) => {
+      // Only count if both start and end times are present
+      if (stoppage.startTime && stoppage.endTime && stoppage.startTime.trim() && stoppage.endTime.trim()) {
+        return sum + (stoppage.totalTime || 0);
+      }
+      return sum;
+    }, 0);
+  };
+  
   // Helper function to validate time sum (must equal 720)
   const validateTimeSum = (entryId: string) => {
     const entry = machineEntries.find(e => e.id === entryId);
     if (!entry) return;
     
     const currentRunTime = entry.currentProduction.targetRunTime || 0;
-    const stoppageTotalTime = entry.currentProduction.totalTime || 0;
+    // Calculate total stoppage time from all stoppages
+    const stoppageTotalTime = getTotalStoppageTime(entry.currentProduction.stoppages || []);
     const changeoverRunTime = entry.changeover.product ? (entry.changeover.targetRunTime || 0) : 0;
     
     const sum = currentRunTime + stoppageTotalTime + changeoverRunTime;
@@ -4433,6 +4489,103 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
     }
   };
 
+  // Helper function to calculate stoppage time from start/end times
+  const calculateStoppageTime = (startTime: string, endTime: string): number => {
+    if (!startTime || !endTime) return 0;
+    try {
+      const parseTimeToMinutes = (timeStr: string): number => {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes;
+      };
+      const startMinutes = parseTimeToMinutes(startTime);
+      const endMinutes = parseTimeToMinutes(endTime);
+      const diffMinutes = endMinutes - startMinutes;
+      // Handle next day case
+      const totalMinutes = diffMinutes < 0 ? diffMinutes + 1440 : diffMinutes;
+      return totalMinutes > 0 ? totalMinutes : 0;
+    } catch {
+      return 0;
+    }
+  };
+
+  // Add a new stoppage entry
+  const addStoppage = (entryId: string, isChangeover: boolean = false) => {
+    setMachineEntries(prev => prev.map(entry => {
+      if (entry.id !== entryId) return entry;
+      const run = isChangeover ? entry.changeover : entry.currentProduction;
+      const newStoppage: StoppageEntry = {
+        id: `stoppage-${Date.now()}-${Math.random()}`,
+        reason: '',
+        startTime: '',
+        endTime: '',
+        totalTime: 0,
+        remark: ''
+      };
+      const updatedRun = {
+        ...run,
+        stoppages: [...(run.stoppages || []), newStoppage]
+      };
+      return {
+        ...entry,
+        [isChangeover ? 'changeover' : 'currentProduction']: updatedRun
+      };
+    }));
+  };
+
+  // Remove a stoppage entry
+  const removeStoppage = (entryId: string, stoppageId: string, isChangeover: boolean = false) => {
+    setMachineEntries(prev => prev.map(entry => {
+      if (entry.id !== entryId) return entry;
+      const run = isChangeover ? entry.changeover : entry.currentProduction;
+      const updatedRun = {
+        ...run,
+        stoppages: (run.stoppages || []).filter(s => s.id !== stoppageId)
+      };
+      // Recalculate total stoppage time
+      updatedRun.totalTime = getTotalStoppageTime(updatedRun.stoppages);
+      const updatedEntry = {
+        ...entry,
+        [isChangeover ? 'changeover' : 'currentProduction']: updatedRun
+      };
+      // Validate time sum after removing stoppage
+      setTimeout(() => {
+        validateTimeSum(entryId);
+      }, 0);
+      return updatedEntry;
+    }));
+  };
+
+  // Update a stoppage entry
+  const updateStoppage = (entryId: string, stoppageId: string, field: keyof StoppageEntry, value: any, isChangeover: boolean = false) => {
+    setMachineEntries(prev => prev.map(entry => {
+      if (entry.id !== entryId) return entry;
+      const run = isChangeover ? entry.changeover : entry.currentProduction;
+      const updatedStoppages = (run.stoppages || []).map(stoppage => {
+        if (stoppage.id !== stoppageId) return stoppage;
+        const updated = { ...stoppage, [field]: value };
+        // Auto-calculate totalTime when startTime or endTime changes
+        if (field === 'startTime' || field === 'endTime') {
+          updated.totalTime = calculateStoppageTime(updated.startTime, updated.endTime);
+        }
+        return updated;
+      });
+      const updatedRun = {
+        ...run,
+        stoppages: updatedStoppages,
+        totalTime: getTotalStoppageTime(updatedStoppages)
+      };
+      const updatedEntry = {
+        ...entry,
+        [isChangeover ? 'changeover' : 'currentProduction']: updatedRun
+      };
+      // Validate time sum after updating stoppage
+      setTimeout(() => {
+        validateTimeSum(entryId);
+      }, 0);
+      return updatedEntry;
+    }));
+  };
+
   const handleSave = async () => {
     // Validate all entries before saving
     const errors: Record<string, string> = {};
@@ -4480,7 +4633,8 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
       
       // Validate time sum: must be > 0 and <= 720
       const currentRunTime = entry.currentProduction.targetRunTime || 0;
-      const stoppageTotalTime = entry.currentProduction.totalTime || 0;
+      // Calculate total stoppage time from all stoppages
+      const stoppageTotalTime = getTotalStoppageTime(entry.currentProduction.stoppages || []);
       const changeoverRunTime = entry.changeover.product ? (entry.changeover.targetRunTime || 0) : 0;
       const sum = currentRunTime + stoppageTotalTime + changeoverRunTime;
       
@@ -4597,9 +4751,16 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
           lumps: entry.currentProduction.lumps || 0,
           run_time: entry.currentProduction.runTime || 0,
           down_time: entry.currentProduction.downTime || 0,
-          stoppage_reason: entry.currentProduction.stoppageReason || '',
-          start_time: entry.currentProduction.startTime || '',
-          end_time: entry.currentProduction.endTime || '',
+          stoppage_reason: entry.currentProduction.stoppageReason || '', // Legacy field
+          start_time: entry.currentProduction.startTime || '', // Legacy field
+          end_time: entry.currentProduction.endTime || '', // Legacy field
+          stoppages: (entry.currentProduction.stoppages || []).map(s => ({
+            reason: s.reason,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            totalTime: s.totalTime,
+            remark: s.remark
+          })),
           mould_change: entry.currentProduction.mouldChange || '',
           remark: entry.currentProduction.remark || '',
           part_weight_check: entry.currentProduction.partWeightCheck || '',
@@ -4624,9 +4785,16 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
           lumps: entry.changeover.lumps || 0,
           run_time: entry.changeover.runTime || 0,
           down_time: entry.changeover.downTime || 0,
-          stoppage_reason: entry.changeover.stoppageReason || '',
-          start_time: entry.changeover.startTime || '',
-          end_time: entry.changeover.endTime || '',
+          stoppage_reason: entry.changeover.stoppageReason || '', // Legacy field
+          start_time: entry.changeover.startTime || '', // Legacy field
+          end_time: entry.changeover.endTime || '', // Legacy field
+          stoppages: (entry.changeover.stoppages || []).map(s => ({
+            reason: s.reason,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            totalTime: s.totalTime,
+            remark: s.remark
+          })),
           changeover_reason: entry.changeover.remark || '',
           mould_change: entry.changeover.mouldChange || '',
           remark: entry.changeover.remark || '',
@@ -4704,6 +4872,7 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
               lumps: 0,
               runTime: 0,
               downTime: 0,
+              stoppages: [],
               stoppageReason: '',
               startTime: '',
               endTime: '',
@@ -4732,6 +4901,7 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
               lumps: 0,
               runTime: 0,
               downTime: 0,
+              stoppages: [],
               stoppageReason: '',
               startTime: '',
               endTime: '',
@@ -4751,6 +4921,24 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
           machine.operatorName = me.operator_name;
         }
         
+        // Load stoppages from dpr_stoppage_entries and sort by start_time
+        const stoppages: StoppageEntry[] = (me.dpr_stoppage_entries || [])
+          .map((se: any) => ({
+            id: se.id || `stoppage-${Date.now()}-${Math.random()}`,
+            reason: se.reason || '',
+            startTime: se.start_time || '',
+            endTime: se.end_time || '',
+            totalTime: se.total_time_min || 0,
+                  remark: se.remark || ''
+                }))
+                .sort((a: StoppageEntry, b: StoppageEntry) => {
+                  // Sort by start_time to maintain chronological order
+                  if (!a.startTime && !b.startTime) return 0;
+                  if (!a.startTime) return 1;
+                  if (!b.startTime) return -1;
+                  return a.startTime.localeCompare(b.startTime);
+                });
+
         // Build production data object
         const productionData = {
           product: me.product || '',
@@ -4771,10 +4959,11 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
           lumps: me.lumps_kgs || 0,
           runTime: me.run_time_mins || 0,
           downTime: me.down_time_min || 0,
-          stoppageReason: me.stoppage_reason || '',
-          startTime: isChangeover ? (me.changeover_start_time || '') : (me.stoppage_start || ''),
-          endTime: isChangeover ? (me.changeover_end_time || '') : (me.stoppage_end || ''),
-          totalTime: (me.run_time_mins || 0) + (me.down_time_min || 0),
+          stoppages: stoppages,
+          stoppageReason: me.stoppage_reason || '', // Legacy field
+          startTime: isChangeover ? (me.changeover_start_time || '') : (me.stoppage_start || ''), // Legacy field
+          endTime: isChangeover ? (me.changeover_end_time || '') : (me.stoppage_end || ''), // Legacy field
+          totalTime: stoppages.length > 0 ? stoppages.reduce((sum, s) => sum + (s.totalTime || 0), 0) : 0, // Calculate from stoppages
           mouldChange: me.mould_change || '',
           remark: me.remark || '',
           partWeightCheck: me.part_wt_check || '',
@@ -5347,491 +5536,629 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
                   </div>
                 </div>
 
-                {/* Stoppage Time and Remarks - All in One Row */}
+                {/* Stoppage Time and Remarks - Multiple Stoppages */}
                 <div className="mb-3">
-                  <h4 className="text-xs font-semibold text-gray-800 mb-2">Stoppage Time and Remarks</h4>
-                  <div className="grid grid-cols-5 gap-2">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Reason</label>
-                      <select
-                        value={entry.currentProduction.stoppageReason || ''}
-                        onChange={(e) => {
-                          const newReason = e.target.value;
-                          handleFieldChange(entry.id, 'stoppageReason', newReason, false);
-                          // Clear changeover data if reason is changed away from "Mold Change"
-                          if (newReason !== 'Mold Change' && entry.changeover.product) {
-                            setMachineEntries(prev => prev.map(en => 
-                              en.id === entry.id ? {
-                                ...en,
-                                changeover: {
-                                  ...en.changeover,
-                                  product: '',
-                                  targetRunTime: 0,
-                                  actualPartWeight: 0,
-                                  actualCycle: 0,
-                                  shotsStart: 0,
-                                  shotsEnd: 0,
-                                  okProdQty: 0,
-                                  lumps: 0
-                                }
-                              } : en
-                            ));
-                            // Validate time sum after clearing changeover
-                            setTimeout(() => {
-                              validateTimeSum(entry.id);
-                            }, 0);
-                          } else if (newReason === 'Mold Change') {
-                            // Validate time sum when changeover is enabled
-                            setTimeout(() => {
-                              validateTimeSum(entry.id);
-                            }, 0);
-                          }
-                        }}
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                      >
-                        <option value="">Select reason</option>
-                        <option value="Mold Change">Mold Change</option>
-                        <option value="Power Failure">Power Failure</option>
-                        <option value="Machine Issue">Machine Issue</option>
-                        <option value="Robot Issue">Robot Issue</option>
-                        <option value="Mold Issue">Mold Issue</option>
-                        <option value="Other Issue">Other Issue</option>
-                      </select>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-semibold text-gray-800">Stoppage Time and Remarks</h4>
+                    <button
+                      type="button"
+                      onClick={() => addStoppage(entry.id, false)}
+                      className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                    >
+                      <Plus size={14} />
+                      Add Stoppage
+                    </button>
+                  </div>
+                  
+                  {/* List of stoppages */}
+                  {((entry.currentProduction.stoppages || []).length > 0) ? (
+                    <div className="space-y-2">
+                      {(() => {
+                        const stoppages = entry.currentProduction.stoppages || [];
+                        // Find the index of the first "Mold Change" stoppage
+                        const firstMoldChangeIndex = stoppages.findIndex(s => s.reason === 'Mold Change');
+                        
+                        // If no Mold Change exists, render all stoppages normally
+                        if (firstMoldChangeIndex === -1) {
+                          return stoppages.map((stoppage, idx) => (
+                            <div key={stoppage.id} className="border border-gray-300 rounded p-2 bg-gray-50">
+                              <div className="flex items-start justify-between mb-2">
+                                <span className="text-xs font-medium text-gray-600">Stoppage #{idx + 1}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeStoppage(entry.id, stoppage.id, false)}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  <X size={16} />
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-5 gap-2">
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">Reason</label>
+                                  <select
+                                    value={stoppage.reason || ''}
+                                    onChange={(e) => updateStoppage(entry.id, stoppage.id, 'reason', e.target.value, false)}
+                                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                                  >
+                                    <option value="">Select reason</option>
+                                    <option value="Mold Change">Mold Change</option>
+                                    <option value="Power Failure">Power Failure</option>
+                                    <option value="Machine Issue">Machine Issue</option>
+                                    <option value="Robot Issue">Robot Issue</option>
+                                    <option value="Mold Issue">Mold Issue</option>
+                                    <option value="Other Issue">Other Issue</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">Start Time</label>
+                                  <input
+                                    type="time"
+                                    value={stoppage.startTime || ''}
+                                    onChange={(e) => updateStoppage(entry.id, stoppage.id, 'startTime', e.target.value, false)}
+                                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">End Time</label>
+                                  <input
+                                    type="time"
+                                    value={stoppage.endTime || ''}
+                                    onChange={(e) => updateStoppage(entry.id, stoppage.id, 'endTime', e.target.value, false)}
+                                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">Total Time (min)</label>
+                                  <input
+                                    type="number"
+                                    value={stoppage.totalTime?.toFixed(2) || '0.00'}
+                                    readOnly
+                                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">REMARK</label>
+                                  <input
+                                    type="text"
+                                    value={stoppage.remark || ''}
+                                    onChange={(e) => updateStoppage(entry.id, stoppage.id, 'remark', e.target.value, false)}
+                                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                                    placeholder="Enter remarks"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ));
+                        }
+                        
+                        // Split into: before first Mold Change, Mold Change(s), after first Mold Change (non-Mold Change only)
+                        const beforeMoldChange = stoppages.slice(0, firstMoldChangeIndex);
+                        const moldChangeStoppages = stoppages.filter(s => s.reason === 'Mold Change');
+                        const afterMoldChange = stoppages
+                          .slice(firstMoldChangeIndex + 1)
+                          .filter(s => s.reason !== 'Mold Change');
+                        
+                        let stoppageCounter = 0;
+                        const renderStoppage = (stoppage: any) => {
+                          stoppageCounter++;
+                          return (
+                            <div key={stoppage.id} className="border border-gray-300 rounded p-2 bg-gray-50">
+                              <div className="flex items-start justify-between mb-2">
+                                <span className="text-xs font-medium text-gray-600">Stoppage #{stoppageCounter}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    // If removing a "Mold Change" stoppage, clear changeover
+                                    if (stoppage.reason === 'Mold Change' && entry.changeover.product) {
+                                      setMachineEntries(prev => prev.map(en => 
+                                        en.id === entry.id ? {
+                                          ...en,
+                                          changeover: {
+                                            ...en.changeover,
+                                            product: '',
+                                            targetRunTime: 0,
+                                            actualPartWeight: 0,
+                                            actualCycle: 0,
+                                            shotsStart: 0,
+                                            shotsEnd: 0,
+                                            okProdQty: 0,
+                                            lumps: 0
+                                          }
+                                        } : en
+                                      ));
+                                    }
+                                    removeStoppage(entry.id, stoppage.id, false);
+                                  }}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  <X size={16} />
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-5 gap-2">
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">Reason</label>
+                                  <select
+                                    value={stoppage.reason || ''}
+                                    onChange={(e) => {
+                                      const newReason = e.target.value;
+                                      updateStoppage(entry.id, stoppage.id, 'reason', newReason, false);
+                                      // Clear changeover data if reason is changed away from "Mold Change"
+                                      if (newReason !== 'Mold Change' && entry.changeover.product) {
+                                        setMachineEntries(prev => prev.map(en => 
+                                          en.id === entry.id ? {
+                                            ...en,
+                                            changeover: {
+                                              ...en.changeover,
+                                              product: '',
+                                              targetRunTime: 0,
+                                              actualPartWeight: 0,
+                                              actualCycle: 0,
+                                              shotsStart: 0,
+                                              shotsEnd: 0,
+                                              okProdQty: 0,
+                                              lumps: 0
+                                            }
+                                          } : en
+                                        ));
+                                      }
+                                    }}
+                                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                                  >
+                                    <option value="">Select reason</option>
+                                    <option value="Mold Change">Mold Change</option>
+                                    <option value="Power Failure">Power Failure</option>
+                                    <option value="Machine Issue">Machine Issue</option>
+                                    <option value="Robot Issue">Robot Issue</option>
+                                    <option value="Mold Issue">Mold Issue</option>
+                                    <option value="Other Issue">Other Issue</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">Start Time</label>
+                                  <input
+                                    type="time"
+                                    value={stoppage.startTime || ''}
+                                    onChange={(e) => updateStoppage(entry.id, stoppage.id, 'startTime', e.target.value, false)}
+                                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">End Time</label>
+                                  <input
+                                    type="time"
+                                    value={stoppage.endTime || ''}
+                                    onChange={(e) => updateStoppage(entry.id, stoppage.id, 'endTime', e.target.value, false)}
+                                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">Total Time (min)</label>
+                                  <input
+                                    type="number"
+                                    value={stoppage.totalTime?.toFixed(2) || '0.00'}
+                                    readOnly
+                                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">REMARK</label>
+                                  <input
+                                    type="text"
+                                    value={stoppage.remark || ''}
+                                    onChange={(e) => updateStoppage(entry.id, stoppage.id, 'remark', e.target.value, false)}
+                                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                                    placeholder="Enter remarks"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        };
+                        
+                        return (
+                          <>
+                            {/* Stoppages before Mold Change */}
+                            {beforeMoldChange.map(renderStoppage)}
+                            
+                            {/* Mold Change stoppages */}
+                            {moldChangeStoppages.map(renderStoppage)}
+                            
+                            {/* Changeover UI section - appears right after Mold Change */}
+                            <div className="mt-3 border-t-2 border-orange-200 pt-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <h4 className="text-xs font-semibold text-orange-800 flex items-center">
+                                  <span className="bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded mr-2 text-xs">CHANGEOVER</span>
+                                  Mold Change
+                                </h4>
+                                <span className="text-xs text-gray-500">Select a different mold if there was a changeover during the shift</span>
+                              </div>
+                              
+                              {/* Changeover Product Selection */}
+                              <div className="mb-2">
+                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                  Changeover Product (Mold) <span className="text-xs text-gray-500">(Selecting releases current mold for other lines)</span>
+                                </label>
+                                <select
+                                  value={entry.changeover.product || ''}
+                                  onChange={(e) => handleProductSelect(entry.id, e.target.value, true)}
+                                  className="w-full px-2 py-1.5 border border-orange-300 rounded text-sm bg-orange-50"
+                                >
+                                  <option value="">No Changeover</option>
+                                  {molds.map(mold => {
+                                    const moldName = mold.mold_name || mold.item_name || '';
+                                    if (!moldName) return null;
+                                    const isAvailable = isMoldAvailable(moldName, entry.id, true);
+                                    const isSameAsCurrent = moldName === entry.currentProduction.product;
+                                    return (
+                                      <option 
+                                        key={mold.mold_id} 
+                                        value={moldName}
+                                        disabled={!isAvailable || isSameAsCurrent}
+                                        className={(!isAvailable || isSameAsCurrent) ? 'text-red-500 bg-red-50' : ''}
+                                      >
+                                        {moldName} {isSameAsCurrent ? '(Current)' : !isAvailable ? '(In Use)' : ''}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                              </div>
+
+                              {/* Changeover Fields - Only show if changeover product is selected */}
+                              {entry.changeover.product && (
+                                <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
+                                  {/* Cavity, Trg Cycle, Part Wt - In one row */}
+                                  <div className="grid grid-cols-3 gap-3 mb-3">
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-700 mb-1">Cavity</label>
+                                      <input
+                                        type="number"
+                                        value={entry.changeover.cavity || ''}
+                                        readOnly
+                                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-700 mb-1">Trg Cycle (sec)</label>
+                                      <input
+                                        type="number"
+                                        value={entry.changeover.targetCycle || ''}
+                                        readOnly
+                                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-700 mb-1">Part Wt (gm)</label>
+                                      <input
+                                        type="number"
+                                        value={entry.changeover.partWeight || ''}
+                                        readOnly
+                                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {/* Production Input Fields - All in One Row */}
+                                  <div className="mb-3">
+                                    <h4 className="text-xs font-semibold text-gray-800 mb-2">Production Input Fields</h4>
+                                    <div className="grid grid-cols-7 gap-2">
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-700 mb-1">Trg Run Time (min) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        value={entry.changeover.targetRunTime || ''}
+                                        onChange={(e) => {
+                                          const newValue = parseFloat(e.target.value) || 0;
+                                          handleFieldChange(entry.id, 'targetRunTime', newValue, true);
+                                          const errorKey = `${entry.id}-timeSum`;
+                                          if (validationErrors[errorKey]) {
+                                            setValidationErrors(prev => {
+                                              const updated = { ...prev };
+                                              delete updated[errorKey];
+                                              return updated;
+                                            });
+                                          }
+                                        }}
+                                        onBlur={() => validateTimeSum(entry.id)}
+                                        data-error-key={`${entry.id}-timeSum`}
+                                        className={`w-full px-2 py-1.5 border rounded text-sm ${
+                                          validationErrors[`${entry.id}-timeSum`] 
+                                            ? 'border-red-500 bg-red-50' 
+                                            : 'border-gray-300'
+                                        }`}
+                                        required
+                                      />
+                                      {validationErrors[`${entry.id}-timeSum`] && (
+                                        <p className="text-xs text-red-600 mt-1">{validationErrors[`${entry.id}-timeSum`]}</p>
+                                      )}
+                                    </div>
+
+                                    <div className="min-w-0">
+                                      <label className="block text-xs font-medium text-gray-700 mb-1">Act part wt (gm) *</label>
+                                      <div className="flex gap-1 items-center min-w-0">
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        value={entry.changeover.actualPartWeight || ''}
+                                        onChange={(e) => {
+                                          const newValue = e.target.value === '' ? '' : parseFloat(e.target.value);
+                                          const errorKey = `${entry.id}-actualPartWeight-changeover`;
+                                          if (validationErrors[errorKey]) {
+                                            setValidationErrors(prev => {
+                                              const updated = { ...prev };
+                                              delete updated[errorKey];
+                                              return updated;
+                                            });
+                                          }
+                                          if (newValue === '' || !isNaN(newValue as number)) {
+                                            handleFieldChange(entry.id, 'actualPartWeight', newValue === '' ? 0 : newValue, true);
+                                          }
+                                        }}
+                                        onBlur={(e) => {
+                                          const newValue = parseFloat(e.target.value) || 0;
+                                          const targetWeight = entry.changeover.partWeight || 0;
+                                          const errorKey = `${entry.id}-actualPartWeight-changeover`;
+                                          if (targetWeight > 0 && newValue > 0) {
+                                            const diff = Math.abs(newValue - targetWeight);
+                                            if (diff > 3) {
+                                              setValidationErrors(prev => ({
+                                                ...prev,
+                                                [errorKey]: `Must be within ±3 gm of target (${targetWeight} gm). Current difference: ${diff.toFixed(2)} gm`
+                                              }));
+                                            } else {
+                                              setValidationErrors(prev => {
+                                                const updated = { ...prev };
+                                                delete updated[errorKey];
+                                                return updated;
+                                              });
+                                            }
+                                          }
+                                        }}
+                                        data-error-key={`${entry.id}-actualPartWeight-changeover`}
+                                        className={`flex-1 min-w-0 px-2 py-1.5 border rounded text-sm ${
+                                          validationErrors[`${entry.id}-actualPartWeight-changeover`] 
+                                            ? 'border-red-500 bg-red-50' 
+                                            : 'border-gray-300'
+                                        }`}
+                                        required
+                                      />
+                                      {entry.changeover.partWeightCheck === 'OK' && (
+                                        <span className="inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 flex-shrink-0">
+                                          OK
+                                        </span>
+                                      )}
+                                      {entry.changeover.partWeightCheck === 'NOT OK' && (
+                                        <span className="inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 flex-shrink-0">
+                                          NOT OK
+                                        </span>
+                                      )}
+                                    </div>
+                                      {validationErrors[`${entry.id}-actualPartWeight-changeover`] && (
+                                        <p className="text-xs text-red-600 mt-1">{validationErrors[`${entry.id}-actualPartWeight-changeover`]}</p>
+                                      )}
+                                    </div>
+
+                                    <div className="min-w-0">
+                                      <label className="block text-xs font-medium text-gray-700 mb-1">Act Cycle (sec) *</label>
+                                      <div className="flex gap-1 items-center min-w-0">
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        value={entry.changeover.actualCycle || ''}
+                                        onChange={(e) => {
+                                          const newValue = e.target.value === '' ? '' : parseFloat(e.target.value);
+                                          const errorKey = `${entry.id}-actualCycle-changeover`;
+                                          if (validationErrors[errorKey]) {
+                                            setValidationErrors(prev => {
+                                              const updated = { ...prev };
+                                              delete updated[errorKey];
+                                              return updated;
+                                            });
+                                          }
+                                          if (newValue === '' || !isNaN(newValue as number)) {
+                                            handleFieldChange(entry.id, 'actualCycle', newValue === '' ? 0 : newValue, true);
+                                          }
+                                        }}
+                                        onBlur={(e) => {
+                                          const newValue = parseFloat(e.target.value) || 0;
+                                          const targetCycle = entry.changeover.targetCycle || 0;
+                                          const errorKey = `${entry.id}-actualCycle-changeover`;
+                                          if (targetCycle > 0 && newValue > 0) {
+                                            const diff = Math.abs(newValue - targetCycle);
+                                            if (diff > 2) {
+                                              setValidationErrors(prev => ({
+                                                ...prev,
+                                                [errorKey]: `Must be within ±2 sec of target (${targetCycle} sec). Current difference: ${diff.toFixed(2)} sec`
+                                              }));
+                                            } else {
+                                              setValidationErrors(prev => {
+                                                const updated = { ...prev };
+                                                delete updated[errorKey];
+                                                return updated;
+                                              });
+                                            }
+                                          }
+                                        }}
+                                        data-error-key={`${entry.id}-actualCycle-changeover`}
+                                        className={`flex-1 min-w-0 px-2 py-1.5 border rounded text-sm ${
+                                          validationErrors[`${entry.id}-actualCycle-changeover`] 
+                                            ? 'border-red-500 bg-red-50' 
+                                            : 'border-gray-300'
+                                        }`}
+                                        required
+                                      />
+                                      {entry.changeover.cycleTimeCheck === 'OK' && (
+                                        <span className="inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 flex-shrink-0">
+                                          OK
+                                        </span>
+                                      )}
+                                      {entry.changeover.cycleTimeCheck === 'NOT OK' && (
+                                        <span className="inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 flex-shrink-0">
+                                          NOT OK
+                                        </span>
+                                      )}
+                                    </div>
+                                      {validationErrors[`${entry.id}-actualCycle-changeover`] && (
+                                        <p className="text-xs text-red-600 mt-1">{validationErrors[`${entry.id}-actualCycle-changeover`]}</p>
+                                      )}
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-700 mb-1">Shots Start *</label>
+                                      <input
+                                        type="number"
+                                        value={entry.changeover.shotsStart !== undefined ? entry.changeover.shotsStart : 0}
+                                        onChange={(e) => {
+                                          const numVal = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                          handleFieldChange(entry.id, 'shotsStart', isNaN(numVal) ? 0 : numVal, true);
+                                        }}
+                                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                                        required
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-700 mb-1">Shots End *</label>
+                                      <input
+                                        type="number"
+                                        value={entry.changeover.shotsEnd !== undefined ? entry.changeover.shotsEnd : 0}
+                                        onChange={(e) => {
+                                          const numVal = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                          handleFieldChange(entry.id, 'shotsEnd', isNaN(numVal) ? 0 : numVal, true);
+                                        }}
+                                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                                        required
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-700 mb-1">Ok Prod Qty (Nos) *</label>
+                                      <input
+                                        type="number"
+                                        value={entry.changeover.okProdQty || ''}
+                                        onChange={(e) => handleFieldChange(entry.id, 'okProdQty', parseFloat(e.target.value) || 0, true)}
+                                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                                        required
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-700 mb-1">lumps (KG)</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        value={entry.changeover.lumps || ''}
+                                        onChange={(e) => handleFieldChange(entry.id, 'lumps', parseFloat(e.target.value) || 0, true)}
+                                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                                        placeholder="0.00"
+                                      />
+                                    </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Calculated Fields Display - All in One Row */}
+                                  <div className="mb-3">
+                                    <h4 className="text-xs font-semibold text-gray-800 mb-2">Calculated Fields</h4>
+                                    <div className="grid grid-cols-7 gap-2">
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">Target Qty (Nos)</label>
+                                        <input
+                                          type="number"
+                                          value={entry.changeover.targetQty?.toFixed(0) || '0'}
+                                          readOnly
+                                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">Actual Qty (Nos)</label>
+                                        <input
+                                          type="number"
+                                          value={entry.changeover.actualQty?.toFixed(0) || '0'}
+                                          readOnly
+                                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">Ok Prod (Kgs)</label>
+                                        <input
+                                          type="number"
+                                          value={entry.changeover.okProdKgs?.toFixed(2) || '0.00'}
+                                          readOnly
+                                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">Ok Prod (%)</label>
+                                        <input
+                                          type="number"
+                                          value={entry.changeover.okProdPercent ? (entry.changeover.okProdPercent * 100).toFixed(2) : '0.00'}
+                                          readOnly
+                                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">Rej (Kgs)</label>
+                                        <input
+                                          type="number"
+                                          value={entry.changeover.rejKgs?.toFixed(2) || '0.00'}
+                                          readOnly
+                                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">Run Time (mins)</label>
+                                        <input
+                                          type="number"
+                                          value={entry.changeover.runTime?.toFixed(2) || '0.00'}
+                                          readOnly
+                                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">Down time (min)</label>
+                                        <input
+                                          type="number"
+                                          value={entry.changeover.downTime?.toFixed(2) || '0.00'}
+                                          readOnly
+                                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Stoppages after Mold Change */}
+                            {afterMoldChange.map(renderStoppage)}
+                          </>
+                        );
+                      })()}
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Start Time</label>
-                      <input
-                        type="time"
-                        value={entry.currentProduction.startTime || ''}
-                        onChange={(e) => {
-                          handleFieldChange(entry.id, 'startTime', e.target.value, false);
-                          // Validate time sum after total time is recalculated
-                          setTimeout(() => {
-                            validateTimeSum(entry.id);
-                          }, 0);
-                        }}
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">End Time</label>
-                      <input
-                        type="time"
-                        value={entry.currentProduction.endTime || ''}
-                        onChange={(e) => {
-                          handleFieldChange(entry.id, 'endTime', e.target.value, false);
-                          // Validate time sum after total time is recalculated
-                          setTimeout(() => {
-                            validateTimeSum(entry.id);
-                          }, 0);
-                        }}
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Total Time (min)</label>
+                  ) : (
+                    <p className="text-xs text-gray-500 italic">No stoppages recorded. Click "Add Stoppage" to add one.</p>
+                  )}
+                  
+                  {/* Total Stoppage Time */}
+                  <div className="mt-2 pt-2 border-t border-gray-300">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium text-gray-700">Total Stoppage Time (min)</label>
                       <input
                         type="number"
                         value={entry.currentProduction.totalTime?.toFixed(2) || '0.00'}
                         readOnly
-                        className={`w-full px-2 py-1.5 border rounded text-sm bg-gray-100 ${
+                        className={`w-32 px-2 py-1.5 border rounded text-sm bg-gray-100 ${
                           validationErrors[`${entry.id}-timeSum`] 
                             ? 'border-red-500 bg-red-50' 
                             : 'border-gray-300'
                         }`}
                       />
-                      {validationErrors[`${entry.id}-timeSum`] && (
-                        <p className="text-xs text-red-600 mt-1">{validationErrors[`${entry.id}-timeSum`]}</p>
-                      )}
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">REMARK</label>
-                      <input
-                        type="text"
-                        value={entry.currentProduction.remark || ''}
-                        onChange={(e) => handleFieldChange(entry.id, 'remark', e.target.value, false)}
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                        placeholder="Enter remarks"
-                      />
-                    </div>
+                    {validationErrors[`${entry.id}-timeSum`] && (
+                      <p className="text-xs text-red-600 mt-1">{validationErrors[`${entry.id}-timeSum`]}</p>
+                    )}
                   </div>
                 </div>
-
-                {/* Changeover Section - Only show when "Mold Change" is selected in stoppage reason */}
-                {entry.currentProduction.stoppageReason === 'Mold Change' && (
-                <div className="mt-3 border-t-2 border-orange-200 pt-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-xs font-semibold text-orange-800 flex items-center">
-                      <span className="bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded mr-2 text-xs">CHANGEOVER</span>
-                      Mold Change
-                    </h4>
-                    <span className="text-xs text-gray-500">Select a different mold if there was a changeover during the shift</span>
-                  </div>
-                  
-                  {/* Changeover Product Selection */}
-                  <div className="mb-2">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Changeover Product (Mold) <span className="text-xs text-gray-500">(Selecting releases current mold for other lines)</span>
-                    </label>
-                    <select
-                      value={entry.changeover.product || ''}
-                      onChange={(e) => handleProductSelect(entry.id, e.target.value, true)}
-                      className="w-full px-2 py-1.5 border border-orange-300 rounded text-sm bg-orange-50"
-                    >
-                      <option value="">No Changeover</option>
-                      {molds.map(mold => {
-                        const moldName = mold.mold_name || mold.item_name || '';
-                        if (!moldName) return null;
-                        const isAvailable = isMoldAvailable(moldName, entry.id, true);
-                        // Don't allow selecting the same mold as current production
-                        const isSameAsCurrent = moldName === entry.currentProduction.product;
-                        return (
-                          <option 
-                            key={mold.mold_id} 
-                            value={moldName}
-                            disabled={!isAvailable || isSameAsCurrent}
-                            className={(!isAvailable || isSameAsCurrent) ? 'text-red-500 bg-red-50' : ''}
-                          >
-                            {moldName} {isSameAsCurrent ? '(Current)' : !isAvailable ? '(In Use)' : ''}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-
-                  {/* Changeover Fields - Only show if changeover product is selected */}
-                  {entry.changeover.product && (
-                    <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
-                      {/* Cavity, Trg Cycle, Part Wt - In one row */}
-                      <div className="grid grid-cols-3 gap-3 mb-3">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Cavity</label>
-                          <input
-                            type="number"
-                            value={entry.changeover.cavity || ''}
-                            readOnly
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Trg Cycle (sec)</label>
-                          <input
-                            type="number"
-                            value={entry.changeover.targetCycle || ''}
-                            readOnly
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Part Wt (gm)</label>
-                          <input
-                            type="number"
-                            value={entry.changeover.partWeight || ''}
-                            readOnly
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Production Input Fields - All in One Row */}
-                      <div className="mb-3">
-                        <h4 className="text-xs font-semibold text-gray-800 mb-2">Production Input Fields</h4>
-                        <div className="grid grid-cols-7 gap-2">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Trg Run Time (min) *</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={entry.changeover.targetRunTime || ''}
-                            onChange={(e) => {
-                              const newValue = parseFloat(e.target.value) || 0;
-                              handleFieldChange(entry.id, 'targetRunTime', newValue, true);
-                              // Clear time sum error when user starts typing
-                              const errorKey = `${entry.id}-timeSum`;
-                              if (validationErrors[errorKey]) {
-                                setValidationErrors(prev => {
-                                  const updated = { ...prev };
-                                  delete updated[errorKey];
-                                  return updated;
-                                });
-                              }
-                            }}
-                            onBlur={() => validateTimeSum(entry.id)}
-                            data-error-key={`${entry.id}-timeSum`}
-                            className={`w-full px-2 py-1.5 border rounded text-sm ${
-                              validationErrors[`${entry.id}-timeSum`] 
-                                ? 'border-red-500 bg-red-50' 
-                                : 'border-gray-300'
-                            }`}
-                            required
-                          />
-                          {validationErrors[`${entry.id}-timeSum`] && (
-                            <p className="text-xs text-red-600 mt-1">{validationErrors[`${entry.id}-timeSum`]}</p>
-                          )}
-                        </div>
-
-                        <div className="min-w-0">
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Act part wt (gm) *</label>
-                          <div className="flex gap-1 items-center min-w-0">
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={entry.changeover.actualPartWeight || ''}
-                              onChange={(e) => {
-                                const newValue = e.target.value === '' ? '' : parseFloat(e.target.value);
-                                // Clear error when user starts typing
-                                const errorKey = `${entry.id}-actualPartWeight-changeover`;
-                                if (validationErrors[errorKey]) {
-                                  setValidationErrors(prev => {
-                                    const updated = { ...prev };
-                                    delete updated[errorKey];
-                                    return updated;
-                                  });
-                                }
-                                // Allow typing, validate on blur
-                                if (newValue === '' || !isNaN(newValue as number)) {
-                                  handleFieldChange(entry.id, 'actualPartWeight', newValue === '' ? 0 : newValue, true);
-                                }
-                              }}
-                              onBlur={(e) => {
-                                const newValue = parseFloat(e.target.value) || 0;
-                                const targetWeight = entry.changeover.partWeight || 0;
-                                const errorKey = `${entry.id}-actualPartWeight-changeover`;
-                                // Validate: Must be within ±3 gm of target
-                                if (targetWeight > 0 && newValue > 0) {
-                                  const diff = Math.abs(newValue - targetWeight);
-                                  if (diff > 3) {
-                                    setValidationErrors(prev => ({
-                                      ...prev,
-                                      [errorKey]: `Must be within ±3 gm of target (${targetWeight} gm). Current difference: ${diff.toFixed(2)} gm`
-                                    }));
-                                  } else {
-                                    setValidationErrors(prev => {
-                                      const updated = { ...prev };
-                                      delete updated[errorKey];
-                                      return updated;
-                                    });
-                                  }
-                                }
-                              }}
-                              data-error-key={`${entry.id}-actualPartWeight-changeover`}
-                              className={`flex-1 min-w-0 px-2 py-1.5 border rounded text-sm ${
-                                validationErrors[`${entry.id}-actualPartWeight-changeover`] 
-                                  ? 'border-red-500 bg-red-50' 
-                                  : 'border-gray-300'
-                              }`}
-                              required
-                            />
-                            {entry.changeover.partWeightCheck === 'OK' && (
-                              <span className="inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 flex-shrink-0">
-                                OK
-                              </span>
-                            )}
-                            {entry.changeover.partWeightCheck === 'NOT OK' && (
-                              <span className="inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 flex-shrink-0">
-                                NOT OK
-                              </span>
-                            )}
-                        </div>
-                          {validationErrors[`${entry.id}-actualPartWeight-changeover`] && (
-                            <p className="text-xs text-red-600 mt-1">{validationErrors[`${entry.id}-actualPartWeight-changeover`]}</p>
-                          )}
-                        </div>
-
-                        <div className="min-w-0">
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Act Cycle (sec) *</label>
-                          <div className="flex gap-1 items-center min-w-0">
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={entry.changeover.actualCycle || ''}
-                              onChange={(e) => {
-                                const newValue = e.target.value === '' ? '' : parseFloat(e.target.value);
-                                // Clear error when user starts typing
-                                const errorKey = `${entry.id}-actualCycle-changeover`;
-                                if (validationErrors[errorKey]) {
-                                  setValidationErrors(prev => {
-                                    const updated = { ...prev };
-                                    delete updated[errorKey];
-                                    return updated;
-                                  });
-                                }
-                                // Allow typing, validate on blur
-                                if (newValue === '' || !isNaN(newValue as number)) {
-                                  handleFieldChange(entry.id, 'actualCycle', newValue === '' ? 0 : newValue, true);
-                                }
-                              }}
-                              onBlur={(e) => {
-                                const newValue = parseFloat(e.target.value) || 0;
-                                const targetCycle = entry.changeover.targetCycle || 0;
-                                const errorKey = `${entry.id}-actualCycle-changeover`;
-                                // Validate: Must be within ±2 sec of target
-                                if (targetCycle > 0 && newValue > 0) {
-                                  const diff = Math.abs(newValue - targetCycle);
-                                  if (diff > 2) {
-                                    setValidationErrors(prev => ({
-                                      ...prev,
-                                      [errorKey]: `Must be within ±2 sec of target (${targetCycle} sec). Current difference: ${diff.toFixed(2)} sec`
-                                    }));
-                                  } else {
-                                    setValidationErrors(prev => {
-                                      const updated = { ...prev };
-                                      delete updated[errorKey];
-                                      return updated;
-                                    });
-                                  }
-                                }
-                              }}
-                              data-error-key={`${entry.id}-actualCycle-changeover`}
-                              className={`flex-1 min-w-0 px-2 py-1.5 border rounded text-sm ${
-                                validationErrors[`${entry.id}-actualCycle-changeover`] 
-                                  ? 'border-red-500 bg-red-50' 
-                                  : 'border-gray-300'
-                              }`}
-                              required
-                            />
-                            {entry.changeover.cycleTimeCheck === 'OK' && (
-                              <span className="inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 flex-shrink-0">
-                                OK
-                              </span>
-                            )}
-                            {entry.changeover.cycleTimeCheck === 'NOT OK' && (
-                              <span className="inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 flex-shrink-0">
-                                NOT OK
-                              </span>
-                            )}
-                        </div>
-                          {validationErrors[`${entry.id}-actualCycle-changeover`] && (
-                            <p className="text-xs text-red-600 mt-1">{validationErrors[`${entry.id}-actualCycle-changeover`]}</p>
-                          )}
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Shots Start *</label>
-                          <input
-                            type="number"
-                            value={entry.changeover.shotsStart !== undefined ? entry.changeover.shotsStart : 0}
-                            onChange={(e) => {
-                              const numVal = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                              handleFieldChange(entry.id, 'shotsStart', isNaN(numVal) ? 0 : numVal, true);
-                            }}
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                            required
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Shots End *</label>
-                          <input
-                            type="number"
-                            value={entry.changeover.shotsEnd !== undefined ? entry.changeover.shotsEnd : 0}
-                            onChange={(e) => {
-                              const numVal = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                              handleFieldChange(entry.id, 'shotsEnd', isNaN(numVal) ? 0 : numVal, true);
-                            }}
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                            required
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Ok Prod Qty (Nos) *</label>
-                          <input
-                            type="number"
-                            value={entry.changeover.okProdQty || ''}
-                            onChange={(e) => handleFieldChange(entry.id, 'okProdQty', parseFloat(e.target.value) || 0, true)}
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                            required
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">lumps (KG)</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={entry.changeover.lumps || ''}
-                            onChange={(e) => handleFieldChange(entry.id, 'lumps', parseFloat(e.target.value) || 0, true)}
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                            placeholder="0.00"
-                          />
-                        </div>
-                        </div>
-                      </div>
-
-                    {/* Calculated Fields Display - All in One Row */}
-                    <div className="mb-3">
-                      <h4 className="text-xs font-semibold text-gray-800 mb-2">Calculated Fields</h4>
-                      <div className="grid grid-cols-7 gap-2">
-                          <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Target Qty (Nos)</label>
-                          <input
-                            type="number"
-                            value={entry.changeover.targetQty?.toFixed(0) || '0'}
-                            readOnly
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
-                          />
-                          </div>
-                          <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Actual Qty (Nos)</label>
-                          <input
-                            type="number"
-                            value={entry.changeover.actualQty?.toFixed(0) || '0'}
-                            readOnly
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
-                          />
-                          </div>
-                          <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Ok Prod (Kgs)</label>
-                          <input
-                            type="number"
-                            value={entry.changeover.okProdKgs?.toFixed(2) || '0.00'}
-                            readOnly
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
-                          />
-                          </div>
-                          <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Ok Prod (%)</label>
-                          <input
-                            type="number"
-                            value={entry.changeover.okProdPercent ? (entry.changeover.okProdPercent * 100).toFixed(2) : '0.00'}
-                            readOnly
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
-                          />
-                          </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Rej (Kgs)</label>
-                          <input
-                            type="number"
-                            value={entry.changeover.rejKgs?.toFixed(2) || '0.00'}
-                            readOnly
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Run Time (mins)</label>
-                          <input
-                            type="number"
-                            value={entry.changeover.runTime?.toFixed(2) || '0.00'}
-                            readOnly
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Down time (min)</label>
-                          <input
-                            type="number"
-                            value={entry.changeover.downTime?.toFixed(2) || '0.00'}
-                            readOnly
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-gray-100"
-                          />
-                        </div>
-                      </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                )}
               </div>
             ))}
 

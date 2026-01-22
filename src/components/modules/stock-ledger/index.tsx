@@ -183,40 +183,61 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
   // Sort and filter state for Current Stock view
   const [balancesSortBy, setBalancesSortBy] = useState<'code' | 'name' | 'balance' | 'type'>('code');
   const [balancesSortOrder, setBalancesSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [balancesStockFilter, setBalancesStockFilter] = useState<'all' | 'zero' | 'negative'>('all');
+  const [balancesStockFilter, setBalancesStockFilter] = useState<'all' | 'withStock' | 'zero' | 'negative'>('all');
 
-  // Fetch ledger entries
+  // Fetch ledger entries - fetch all entries in batches until we get everything
   const fetchLedgerEntries = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (filters.searchTerm) params.append('item_code', filters.searchTerm);
-      if (filters.location !== 'ALL') params.append('location', filters.location);
-      if (filters.itemType !== 'ALL') params.append('item_type', filters.itemType);
-      if (filters.documentType !== 'ALL') params.append('document_type', filters.documentType);
-      if (filters.fromDate) params.append('from', filters.fromDate);
-      if (filters.toDate) params.append('to', filters.toDate);
+      const allEntries: StockLedgerEntry[] = [];
+      const batchSize = 1000; // Fetch in batches of 1000
+      let offset = 0;
+      let hasMore = true;
       
-      const response = await fetch(`/api/stock/ledger?${params.toString()}`, {
-        credentials: 'include'
-      });
-      if (response.ok) {
-        const data = await response.json();
-        // API returns { success: true, count: number, data: StockLedgerEntry[] }
-        let entries = data.data || [];
+      while (hasMore) {
+        const params = new URLSearchParams();
+        // Don't send searchTerm to API - we'll filter client-side for better flexibility
+        // The API might do exact match on item_code, but we want to search in item_code, item_name, etc.
+        if (filters.location !== 'ALL') params.append('location', filters.location);
+        if (filters.itemType !== 'ALL') params.append('item_type', filters.itemType);
+        if (filters.documentType !== 'ALL') params.append('document_type', filters.documentType);
+        if (filters.fromDate) params.append('from', filters.fromDate);
+        if (filters.toDate) params.append('to', filters.toDate);
+        params.append('limit', batchSize.toString());
+        params.append('offset', offset.toString());
         
-        // Apply movement type filter on client side (API doesn't support it directly)
-        if (filters.movementType !== 'ALL') {
-          entries = entries.filter((e: StockLedgerEntry) => e.movement_type === filters.movementType);
+        const response = await fetch(`/api/stock/ledger?${params.toString()}`, {
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const entries = data.data || [];
+          
+          if (entries.length === 0) {
+            hasMore = false;
+          } else {
+            allEntries.push(...entries);
+            offset += batchSize;
+            
+            // If we got fewer entries than the batch size, we've reached the end
+            if (entries.length < batchSize) {
+              hasMore = false;
+            }
+          }
+        } else {
+          console.error('Failed to fetch ledger entries:', response.status, response.statusText);
+          hasMore = false;
         }
-        
-        setLedgerEntries(entries);
-      } else {
-        console.error('Failed to fetch ledger entries:', response.status, response.statusText);
-        setLedgerEntries([]);
       }
+      
+      console.log(`📊 Loaded ${allEntries.length} total ledger entries`);
+      // Don't filter here - all filtering is done in filteredEntries useMemo for consistency
+      // This ensures what you see is what you export
+      setLedgerEntries(allEntries);
     } catch (error) {
       console.error('Error fetching ledger entries:', error);
+      setLedgerEntries([]);
     } finally {
       setLoading(false);
     }
@@ -234,6 +255,9 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
         params.append('location', locationCode);
       }
       if (filters.itemType !== 'ALL') params.append('item_type', filters.itemType);
+      // Add date range filters for Current Stock (if API supports it)
+      if (filters.fromDate) params.append('from', filters.fromDate);
+      if (filters.toDate) params.append('to', filters.toDate);
       
       console.log('📊 Fetching stock balances with params:', params.toString());
       const response = await fetch(`/api/stock/balance?${params.toString()}`, {
@@ -258,7 +282,22 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
     }
   }, [filters]);
 
-  // Initial data fetch
+  // Clear all filters
+  const clearAllFilters = useCallback(() => {
+    const clearedFilters = {
+      searchTerm: '',
+      location: 'ALL',
+      itemType: 'ALL',
+      documentType: 'ALL',
+      movementType: 'ALL',
+      fromDate: '',
+      toDate: '',
+    };
+    setFilters(clearedFilters);
+    // The useEffect will automatically trigger re-fetch when filters change
+  }, []);
+
+  // Initial data fetch - only on tab change
   useEffect(() => {
     if (activeTab === 'movements') {
       fetchLedgerEntries();
@@ -266,6 +305,19 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
       fetchBalances();
     }
   }, [activeTab, fetchLedgerEntries, fetchBalances]);
+
+  // Re-fetch movements when search term or date range changes (if on movements tab)
+  // This ensures that when switching from balances to movements with onViewHistory,
+  // the data is fetched with the updated filters including date range
+  useEffect(() => {
+    if (activeTab === 'movements') {
+      // Small delay to ensure state updates are complete
+      const timeoutId = setTimeout(() => {
+        fetchLedgerEntries();
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [filters.searchTerm, filters.fromDate, filters.toDate, activeTab, fetchLedgerEntries]);
 
   // Calculate summary stats
   const summaryStats = useMemo(() => {
@@ -303,13 +355,62 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
     };
   }, [ledgerEntries, balances]);
 
-  // Filter entries
+  // Filter entries - apply all filters including date range
   const filteredEntries = useMemo(() => {
-    return ledgerEntries.filter(entry => {
-      if (filters.movementType !== 'ALL' && entry.movement_type !== filters.movementType) return false;
-      if (filters.searchTerm && !entry.item_code.toLowerCase().includes(filters.searchTerm.toLowerCase())) return false;
-      return true;
-    });
+    let filtered = ledgerEntries;
+    
+    // Apply location filter
+    if (filters.location !== 'ALL') {
+      filtered = filtered.filter(entry => entry.location_code === filters.location);
+    }
+    
+    // Apply item type filter
+    if (filters.itemType !== 'ALL') {
+      filtered = filtered.filter(entry => entry.stock_items?.item_type === filters.itemType);
+    }
+    
+    // Apply document type filter
+    if (filters.documentType !== 'ALL') {
+      filtered = filtered.filter(entry => entry.document_type === filters.documentType);
+    }
+    
+    // Apply movement type filter
+    if (filters.movementType !== 'ALL') {
+      filtered = filtered.filter(entry => entry.movement_type === filters.movementType);
+    }
+    
+    // Apply search term filter - search in multiple fields including display title
+    if (filters.searchTerm && filters.searchTerm.trim()) {
+      const searchLower = filters.searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(entry => {
+        // Parse remarks to get display title (e.g., "Yellow-219220044")
+        const parsedInfo = parseRemarks(entry.remarks);
+        const displayTitle = formatItemDisplayTitle(entry, parsedInfo);
+        
+        return (
+          entry.item_code?.toLowerCase().includes(searchLower) ||
+          entry.stock_items?.item_name?.toLowerCase().includes(searchLower) ||
+          entry.document_number?.toLowerCase().includes(searchLower) ||
+          entry.posted_by?.toLowerCase().includes(searchLower) ||
+          displayTitle?.toLowerCase().includes(searchLower) ||
+          parsedInfo.grade?.toLowerCase().includes(searchLower) ||
+          parsedInfo.material?.toLowerCase().includes(searchLower)
+        );
+      });
+    }
+    
+    // Apply date range filter (client-side backup in case API doesn't filter properly)
+    if (filters.fromDate || filters.toDate) {
+      filtered = filtered.filter(entry => {
+        const entryDate = entry.transaction_date;
+        if (!entryDate) return false;
+        if (filters.fromDate && entryDate < filters.fromDate) return false;
+        if (filters.toDate && entryDate > filters.toDate) return false;
+        return true;
+      });
+    }
+    
+    return filtered;
   }, [ledgerEntries, filters]);
 
   // Group entries by date
@@ -338,29 +439,71 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
 
   // Export to CSV
   const handleExport = () => {
-    const csvContent = [
-      ['Date', 'Item Code', 'Location', 'Movement', 'Quantity', 'Unit', 'Balance After', 'Document', 'Doc Number', 'Posted By', 'Remarks'].join(','),
-      ...filteredEntries.map(e => [
-        e.transaction_date,
-        e.item_code,
-        e.location_code,
-        e.movement_type,
-        e.quantity,
-        e.unit_of_measure,
-        e.balance_after,
-        e.document_type,
-        e.document_number,
-        e.posted_by,
-        `"${e.remarks || ''}"`,
-      ].join(','))
-    ].join('\n');
-    
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `stock-ledger-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
+    if (activeTab === 'movements') {
+      // Check if we have entries to export
+      if (filteredEntries.length === 0) {
+        alert('No movement data to export. Please adjust your filters or date range.');
+        return;
+      }
+      
+      // Export movements - use filteredEntries which already respects all filters including date range
+      const csvContent = [
+        ['Date', 'Item Code', 'Item Name', 'Location', 'Movement', 'Quantity', 'Unit', 'Balance After', 'Document', 'Doc Number', 'Posted By', 'Remarks'].join(','),
+        ...filteredEntries.map(e => [
+          e.transaction_date || '',
+          e.item_code || '',
+          `"${(e.stock_items?.item_name || '').replace(/"/g, '""')}"`,
+          e.location_code || '',
+          e.movement_type || '',
+          e.quantity || 0,
+          e.unit_of_measure || '',
+          e.balance_after || 0,
+          e.document_type || '',
+          e.document_number || '',
+          e.posted_by || '',
+          `"${(e.remarks || '').replace(/"/g, '""')}"`,
+        ].join(','))
+      ].join('\n');
+      
+      const dateRange = filters.fromDate || filters.toDate 
+        ? `_${filters.fromDate || 'all'}_to_${filters.toDate || 'all'}`
+        : '';
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `stock-movements${dateRange}-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } else if (activeTab === 'balances') {
+      // Export current stock balances
+      const csvContent = [
+        ['Item Code', 'Item Name', 'Item Type', 'Category', 'Location', 'Current Balance', 'Unit', 'Last Movement'].join(','),
+        ...balances.map(b => [
+          b.item_code,
+          `"${b.item_name || ''}"`,
+          b.item_type || '',
+          b.category || '',
+          b.location_code,
+          b.current_balance,
+          b.unit_of_measure,
+          b.last_movement_at || '',
+        ].join(','))
+      ].join('\n');
+      
+      const dateRange = filters.fromDate || filters.toDate 
+        ? `_${filters.fromDate || 'all'}_to_${filters.toDate || 'all'}`
+        : '';
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `stock-balances${dateRange}-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   };
 
   // If user has no access to any tabs, show a message
@@ -410,16 +553,8 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-gray-900 text-sm">Filters</h3>
                 <button
-                  onClick={() => setFilters({
-                    searchTerm: '',
-                    location: 'ALL',
-                    itemType: 'ALL',
-                    documentType: 'ALL',
-                    movementType: 'ALL',
-                    fromDate: '',
-                    toDate: '',
-                  })}
-                  className="text-xs text-gray-500 hover:text-gray-700"
+                  onClick={clearAllFilters}
+                  className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
                 >
                   Clear All
                 </button>
@@ -530,6 +665,14 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
                         All Items
                       </button>
                       <button
+                        onClick={() => setBalancesStockFilter('withStock')}
+                        className={`w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left ${
+                          balancesStockFilter === 'withStock' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        Items with Stock
+                      </button>
+                      <button
                         onClick={() => setBalancesStockFilter('zero')}
                         className={`w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left ${
                           balancesStockFilter === 'zero' ? 'bg-yellow-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -596,28 +739,26 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
                 </div>
               )}
 
-              {/* Date Range */}
-              {activeTab === 'movements' && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-2">Date Range</label>
-                  <div className="space-y-2">
-                    <input
-                      type="date"
-                      value={filters.fromDate}
-                      onChange={(e) => setFilters(prev => ({ ...prev, fromDate: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                      placeholder="From"
-                    />
-                    <input
-                      type="date"
-                      value={filters.toDate}
-                      onChange={(e) => setFilters(prev => ({ ...prev, toDate: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                      placeholder="To"
-                    />
-                  </div>
+              {/* Date Range - Show for both Movements and Current Stock */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-2">Date Range</label>
+                <div className="space-y-2">
+                  <input
+                    type="date"
+                    value={filters.fromDate}
+                    onChange={(e) => setFilters(prev => ({ ...prev, fromDate: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="From"
+                  />
+                  <input
+                    type="date"
+                    value={filters.toDate}
+                    onChange={(e) => setFilters(prev => ({ ...prev, toDate: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="To"
+                  />
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Apply Button */}
@@ -745,9 +886,10 @@ const StockLedgerModule: React.FC<StockLedgerModuleProps> = ({ onSubNavClick }) 
                   expandedItems={expandedItems}
                   onToggleExpand={toggleItemExpansion}
                   onViewHistory={(itemCode) => {
+                    // Preserve existing filters (especially date range) and set search term
                     setFilters(prev => ({ ...prev, searchTerm: itemCode }));
                     setActiveTab('movements');
-                    fetchLedgerEntries();
+                    // The useEffect will automatically trigger fetchLedgerEntries when filters or tab changes
                   }}
                   filters={filters}
                   sortBy={balancesSortBy}
@@ -798,9 +940,93 @@ const parseRemarksForList = (remarks?: string): { grade?: string; material?: str
 
 // Helper function to extract grade from item_code for RM items
 // Tries multiple strategies to find the grade
-const extractGradeFromItemCode = (itemCode: string, itemName?: string): string | null => {
+const extractGradeFromItemCode = (itemCode: string, itemName?: string, category?: string): string | null => {
   // Common category codes that should NOT be treated as grades
   const commonCategoryCodes = ['HP', 'PP', 'RM', 'PM', 'SFG', 'FG', 'STORE', 'PRODUCTION'];
+  
+  // Special handling for MB (Master Batch) items
+  // Format: PP-MB-{COLOR}-{NUMBER} or similar
+  // For MB items, we want to extract the COLOR and NUMBER together
+  // Check both category and item_code for MB
+  const isMB = category === 'MB' || itemCode.toUpperCase().includes('-MB-') || itemCode.toUpperCase().startsWith('MB-');
+  
+  if (isMB && itemCode.includes('-')) {
+    const parts = itemCode.split('-');
+    // Look for pattern: XX-MB-COLOR-XXXXX
+    if (parts.length >= 4) {
+      // Find the index of "MB" in the parts
+      const mbIndex = parts.findIndex(part => part.toUpperCase() === 'MB');
+      if (mbIndex >= 0 && mbIndex < parts.length - 2) {
+        // The color is the part after MB
+        const colorPart = parts[mbIndex + 1];
+        // The number is the last part
+        const numberPart = parts[parts.length - 1];
+        // Make sure color is not a number and number exists
+        if (colorPart && !/^\d+$/.test(colorPart) && numberPart) {
+          // Capitalize first letter of color and combine with number
+          const colorName = colorPart.charAt(0).toUpperCase() + colorPart.slice(1).toLowerCase();
+          return `${colorName}-${numberPart}`;
+        }
+      }
+    } else if (parts.length >= 3) {
+      // Fallback: if only 3 parts (XX-MB-COLOR), just return the color
+      const mbIndex = parts.findIndex(part => part.toUpperCase() === 'MB');
+      if (mbIndex >= 0 && mbIndex < parts.length - 1) {
+        const colorPart = parts[mbIndex + 1];
+        if (colorPart && !/^\d+$/.test(colorPart)) {
+          return colorPart.charAt(0).toUpperCase() + colorPart.slice(1).toLowerCase();
+        }
+      }
+    }
+  }
+  
+  // Special handling for HDPE and LDPE items
+  // Format: PE-HDPE-{GRADE} or PE-LDPE-{GRADE} or similar
+  // The grade might be in the last part or in item_name
+  // Also check if item_code contains HDPE or LDPE
+  const isHDPE = category === 'HDPE' || itemCode.toUpperCase().includes('HDPE');
+  const isLDPE = category === 'LDPE' || itemCode.toUpperCase().includes('LDPE');
+  
+  if (isHDPE || isLDPE) {
+    // First try item_code
+    if (itemCode.includes('-')) {
+      const parts = itemCode.split('-');
+      // Look for pattern: XX-HDPE-GRADE or XX-LDPE-GRADE
+      if (parts.length >= 3) {
+        const lastPart = parts[parts.length - 1];
+        // Check if last part contains a grade pattern (has numbers, like "50MA180" or "HDPE 50MA180")
+        if (lastPart && /\d/.test(lastPart)) {
+          // If it contains the category name, extract just the grade part
+          // e.g., "HDPE 50MA180" -> "50MA180"
+          // Pattern: number followed by letters/numbers (e.g., "50MA180", "16MA400")
+          const gradeMatch = lastPart.match(/(\d+[A-Z0-9]+)/i);
+          if (gradeMatch) {
+            return gradeMatch[1];
+          }
+          // If no match, try to extract any alphanumeric code that looks like a grade
+          const altMatch = lastPart.match(/([A-Z0-9]{4,})/i);
+          if (altMatch && !['HDPE', 'LDPE'].includes(altMatch[1].toUpperCase())) {
+            return altMatch[1];
+          }
+          return lastPart;
+        }
+      }
+    }
+    // If grade not found in item_code, try item_name
+    if (itemName) {
+      // Look for grade pattern in item_name (e.g., "PE HDPE HDPE 50MA180" -> "50MA180")
+      // Pattern: number followed by letters/numbers
+      const gradeMatch = itemName.match(/(\d+[A-Z0-9]+)/i);
+      if (gradeMatch) {
+        return gradeMatch[1];
+      }
+    }
+    // If still not found, try extracting from item_code without dashes
+    const gradeMatch = itemCode.match(/(\d+[A-Z0-9]+)/i);
+    if (gradeMatch) {
+      return gradeMatch[1];
+    }
+  }
   
   // Strategy 1: If item_code has format like "PP-HP-HJ333MO" or "RM-HP-HJ333MO", extract last part
   if (itemCode.includes('-')) {
@@ -859,12 +1085,27 @@ const formatItemDisplayTitle = (
       return parsedInfo.grade.trim();
     }
     // Try to extract grade from item_code (only if it looks like a real grade, not a category)
-    const extractedGrade = extractGradeFromItemCode(itemCode, itemName);
-    if (extractedGrade && extractedGrade.length >= 4) {
-      // Make sure it's not a common category code
-      const commonCategoryCodes = ['HP', 'PP', 'RM', 'PM', 'SFG', 'FG', 'STORE', 'PRODUCTION'];
-      if (!commonCategoryCodes.includes(extractedGrade.toUpperCase())) {
+    // Pass category for MB, HDPE, LDPE items special handling
+    const extractedGrade = extractGradeFromItemCode(itemCode, itemName, category);
+    if (extractedGrade) {
+      // For MB items, extractedGrade will be the color name with number (Black-219660103, etc.)
+      const isMB = category === 'MB' || itemCode.toUpperCase().includes('-MB-') || itemCode.toUpperCase().startsWith('MB-');
+      if (isMB) {
         return extractedGrade;
+      }
+      // For HDPE and LDPE items, extractedGrade will be the grade (50MA180, 16MA400, etc.)
+      const isHDPE = category === 'HDPE' || itemCode.toUpperCase().includes('HDPE');
+      const isLDPE = category === 'LDPE' || itemCode.toUpperCase().includes('LDPE');
+      if (isHDPE || isLDPE) {
+        return extractedGrade;
+      }
+      // For other RM items, check if it's a valid grade (length >= 4 and not a category code)
+      if (extractedGrade.length >= 4) {
+        // Make sure it's not a common category code
+        const commonCategoryCodes = ['HP', 'PP', 'RM', 'PM', 'SFG', 'FG', 'STORE', 'PRODUCTION', 'HDPE', 'LDPE'];
+        if (!commonCategoryCodes.includes(extractedGrade.toUpperCase())) {
+          return extractedGrade;
+        }
       }
     }
     // If we can't find a proper grade, show the full item_code rather than a category like "HP"
@@ -910,12 +1151,27 @@ const formatBalanceItemDisplayTitle = (item: StockBalance): string => {
   // For RM: Show grade only (GRADE IS THE MOST IMPORTANT)
   if (itemType === 'RM') {
     // Try to extract grade from item_code (only if it looks like a real grade, not a category)
-    const extractedGrade = extractGradeFromItemCode(itemCode, itemName);
-    if (extractedGrade && extractedGrade.length >= 4) {
-      // Make sure it's not a common category code
-      const commonCategoryCodes = ['HP', 'PP', 'RM', 'PM', 'SFG', 'FG', 'STORE', 'PRODUCTION'];
-      if (!commonCategoryCodes.includes(extractedGrade.toUpperCase())) {
+    // Pass category for MB, HDPE, LDPE items special handling
+    const extractedGrade = extractGradeFromItemCode(itemCode, itemName, category);
+    if (extractedGrade) {
+      // For MB items, extractedGrade will be the color name with number (Black-219660103, etc.)
+      const isMB = category === 'MB' || itemCode.toUpperCase().includes('-MB-') || itemCode.toUpperCase().startsWith('MB-');
+      if (isMB) {
         return extractedGrade;
+      }
+      // For HDPE and LDPE items, extractedGrade will be the grade (50MA180, 16MA400, etc.)
+      const isHDPE = category === 'HDPE' || itemCode.toUpperCase().includes('HDPE');
+      const isLDPE = category === 'LDPE' || itemCode.toUpperCase().includes('LDPE');
+      if (isHDPE || isLDPE) {
+        return extractedGrade;
+      }
+      // For other RM items, check if it's a valid grade (length >= 4 and not a category code)
+      if (extractedGrade.length >= 4) {
+        // Make sure it's not a common category code
+        const commonCategoryCodes = ['HP', 'PP', 'RM', 'PM', 'SFG', 'FG', 'STORE', 'PRODUCTION', 'HDPE', 'LDPE'];
+        if (!commonCategoryCodes.includes(extractedGrade.toUpperCase())) {
+          return extractedGrade;
+        }
       }
     }
     // If we can't find a proper grade, show the full item_code rather than a category like "HP"
@@ -1243,7 +1499,7 @@ const BalancesGrid: React.FC<{
   filters: FilterState;
   sortBy: 'code' | 'name' | 'balance' | 'type';
   sortOrder: 'asc' | 'desc';
-  stockFilter: 'all' | 'zero' | 'negative';
+  stockFilter: 'all' | 'withStock' | 'zero' | 'negative';
   setSortBy: (sortBy: 'code' | 'name' | 'balance' | 'type') => void;
   setSortOrder: (sortOrder: 'asc' | 'desc') => void;
 }> = ({ balances, expandedItems, onToggleExpand, onViewHistory, filters, sortBy, sortOrder, stockFilter, setSortBy, setSortOrder }) => {
@@ -1276,7 +1532,9 @@ const BalancesGrid: React.FC<{
     }
 
     // Apply stock filter (removed 'with_stock' as requested)
-    if (stockFilter === 'zero') {
+    if (stockFilter === 'withStock') {
+      filtered = filtered.filter(item => item.current_balance > 0);
+    } else if (stockFilter === 'zero') {
       filtered = filtered.filter(item => item.current_balance === 0);
     } else if (stockFilter === 'negative') {
       filtered = filtered.filter(item => item.current_balance < 0);

@@ -43,18 +43,27 @@ const GRNForm: React.FC = () => {
   // Item type toggle: Production Materials (RM/PM) or Spare Parts (SPARE)
   const [itemTypeMode, setItemTypeMode] = useState<'production' | 'spare'>('production');
 
+  // Sync date state with grnDate when grnDate changes
+  useEffect(() => {
+    if (formData.grnDate) {
+      setDate(formData.grnDate);
+    }
+  }, [formData.grnDate]);
+
   // Generate document number
   useEffect(() => {
     const generateDocNo = async () => {
       try {
-        const docNo = await generateDocumentNumber(FORM_CODES.GRN, date);
+        // Use grnDate if available, otherwise use date state
+        const dateToUse = formData.grnDate || date;
+        const docNo = await generateDocumentNumber(FORM_CODES.GRN, dateToUse);
         setDocNo(docNo);
       } catch (error) {
         console.error('Error generating document number:', error);
       }
     };
     generateDocNo();
-  }, [date]);
+  }, [date, formData.grnDate]);
 
   // Fetch indent slips and purchase orders
   useEffect(() => {
@@ -253,7 +262,7 @@ const GRNForm: React.FC = () => {
     try {
       const grnData = {
         doc_no: docNo,
-        date: date,
+        date: formData.grnDate || date, // Use grnDate as the main date field
         grn_no: formData.grnNo || undefined,
         grn_date: formData.grnDate || undefined,
         po_no: formData.poNo || undefined,

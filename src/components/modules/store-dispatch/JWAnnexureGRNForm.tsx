@@ -66,11 +66,20 @@ const JWAnnexureGRNForm: React.FC = () => {
   const [stockStatus, setStockStatus] = useState<'NOT_SAVED' | 'SAVED' | 'POSTING' | 'POSTED' | 'ERROR'>('NOT_SAVED');
   const [stockMessage, setStockMessage] = useState<string>('');
 
+  // Sync date state with jwDate when jwDate changes
+  useEffect(() => {
+    if (formData.jwDate) {
+      setDate(formData.jwDate);
+    }
+  }, [formData.jwDate]);
+
   // Generate document number and JW No
   useEffect(() => {
     const generateDocNo = async () => {
       try {
-        const generatedDocNo = await generateDocumentNumber(FORM_CODES.JW_ANNEXURE_GRN, date);
+        // Use jwDate if available, otherwise use date state
+        const dateToUse = formData.jwDate || date;
+        const generatedDocNo = await generateDocumentNumber(FORM_CODES.JW_ANNEXURE_GRN, dateToUse);
         setDocNo(generatedDocNo);
         
         // Auto-generate JW No - same as doc_no (full number)
@@ -86,7 +95,7 @@ const JWAnnexureGRNForm: React.FC = () => {
       }
     };
     generateDocNo();
-  }, [date]);
+  }, [date, formData.jwDate]);
 
   // Fetch indent slips
   useEffect(() => {
@@ -223,7 +232,7 @@ const JWAnnexureGRNForm: React.FC = () => {
     try {
       const grnData = {
         doc_no: docNo,
-        date: date,
+        date: formData.jwDate || date, // Use jwDate as the main date field
         jw_no: formData.jwNo || undefined,
         jw_date: formData.jwDate || undefined,
         indent_no: formData.indentNo || undefined,

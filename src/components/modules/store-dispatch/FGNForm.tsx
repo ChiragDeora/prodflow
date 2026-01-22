@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Save, Printer, Upload, CheckCircle, Loader2, X, Search, Package } from 'lucide-react';
+import { Plus, Trash2, Save, Printer, Upload, CheckCircle, Loader2, X, Search, Package, History } from 'lucide-react';
 import PrintHeader from '../../shared/PrintHeader';
+import FGTransferNoteHistory from './FGTransferNoteHistory';
 
 // Types
 interface BOMData {
@@ -150,6 +151,20 @@ const FGNForm: React.FC = () => {
   const [stockStatus, setStockStatus] = useState<'NOT_SAVED' | 'SAVED' | 'POSTING' | 'POSTED' | 'ERROR'>('NOT_SAVED');
   const [stockMessage, setStockMessage] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
+  
+  // History view state
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Sync date state with transferDateTime when transferDateTime changes
+  useEffect(() => {
+    if (formData.transferDateTime) {
+      // Extract date part from datetime-local format (YYYY-MM-DDTHH:mm)
+      const datePart = formData.transferDateTime.split('T')[0];
+      if (datePart) {
+        setDate(datePart);
+      }
+    }
+  }, [formData.transferDateTime]);
 
   // Generate document number (only for new documents, not for saved ones)
   useEffect(() => {
@@ -162,14 +177,18 @@ const FGNForm: React.FC = () => {
       try {
         // Use formCodeUtils for consistent document numbering
         const { generateDocumentNumber, FORM_CODES } = await import('../../../utils/formCodeUtils');
-        const docNo = await generateDocumentNumber(FORM_CODES.FG_TRANSFER_NOTE, date);
+        // Extract date from transferDateTime if available, otherwise use date state
+        const dateToUse = formData.transferDateTime 
+          ? formData.transferDateTime.split('T')[0] 
+          : date;
+        const docNo = await generateDocumentNumber(FORM_CODES.FG_TRANSFER_NOTE, dateToUse);
         setDocNo(docNo);
       } catch (error) {
         console.error('Error generating document number:', error);
       }
     };
     generateDocNo();
-  }, [date, savedDocumentId]);
+  }, [date, formData.transferDateTime, savedDocumentId]);
 
   // Fetch BOM data
   useEffect(() => {
@@ -360,7 +379,9 @@ const FGNForm: React.FC = () => {
 
       const payload = {
         doc_no: docNo,
-        date: date,
+        date: formData.transferDateTime 
+          ? formData.transferDateTime.split('T')[0] 
+          : date, // Extract date from transferDateTime if available
         from_dept: formData.fromDept,
         to_dept: formData.toDept,
         transfer_date_time: formData.transferDateTime || null,
@@ -508,6 +529,13 @@ const FGNForm: React.FC = () => {
   // Get unique party names from BOM data for filter dropdown
   const uniqueParties = [...new Set(bomData.map(b => b.party_name).filter(Boolean))];
 
+  // Show history view if showHistory is true
+  if (showHistory) {
+    return (
+      <FGTransferNoteHistory onBack={() => setShowHistory(false)} />
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg shadow p-8 max-w-7xl mx-auto print:shadow-none print:rounded-none print:p-0 print:max-w-none">
       <PrintHeader docNo={docNo} date={date} />
@@ -517,6 +545,14 @@ const FGNForm: React.FC = () => {
         <div className="flex justify-between items-start mb-6 print:mb-4">
           <div className="flex items-center gap-4">
             {/* Logo removed as per requirements */}
+            <button
+              type="button"
+              onClick={() => setShowHistory(true)}
+              className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 flex items-center gap-2 print:hidden"
+            >
+              <History className="w-4 h-4" />
+              History
+            </button>
           </div>
           <div className="text-right text-sm space-y-1">
             <div>

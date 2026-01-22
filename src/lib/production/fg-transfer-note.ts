@@ -4,12 +4,10 @@
 // Helper functions for production FG Transfer Note operations
 // ============================================================================
 
-import { createClient } from '@supabase/supabase-js';
+import { getSupabase } from '../supabase/utils';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Get Supabase client (uses client-side client for browser, server client for server)
+const getSupabaseClient = () => getSupabase();
 
 // Types
 export interface FGTransferNote {
@@ -93,6 +91,7 @@ export interface BOMData {
 // GET ALL FG TRANSFER NOTES
 // ============================================================================
 export async function getAllFGTransferNotes(): Promise<FGTransferNote[]> {
+  const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('production_fg_transfer_note')
     .select('*')
@@ -111,6 +110,7 @@ export async function getAllFGTransferNotes(): Promise<FGTransferNote[]> {
 // GET FG TRANSFER NOTE BY ID WITH ITEMS
 // ============================================================================
 export async function getFGTransferNoteById(id: string): Promise<{ note: FGTransferNote; items: FGTransferNoteItem[] } | null> {
+  const supabase = getSupabaseClient();
   const { data: note, error: noteError } = await supabase
     .from('production_fg_transfer_note')
     .select('*')
@@ -144,6 +144,7 @@ export async function createFGTransferNote(
   items: Omit<FGTransferNoteItem, 'id' | 'transfer_note_id' | 'created_at'>[]
 ): Promise<FGTransferNote> {
   // Create the header
+  const supabase = getSupabaseClient();
   const { data: newNote, error: noteError } = await supabase
     .from('production_fg_transfer_note')
     .insert([{ ...note, stock_status: 'DRAFT' }])
@@ -187,6 +188,7 @@ export async function updateFGTransferNote(
   items?: Omit<FGTransferNoteItem, 'id' | 'transfer_note_id' | 'created_at'>[]
 ): Promise<FGTransferNote> {
   // Check if already posted
+  const supabase = getSupabaseClient();
   const { data: existing } = await supabase
     .from('production_fg_transfer_note')
     .select('stock_status')
@@ -242,6 +244,7 @@ export async function updateFGTransferNote(
 // ============================================================================
 export async function deleteFGTransferNote(id: string): Promise<void> {
   // Check if already posted
+  const supabase = getSupabaseClient();
   const { data: existing } = await supabase
     .from('production_fg_transfer_note')
     .select('stock_status')
@@ -268,6 +271,7 @@ export async function deleteFGTransferNote(id: string): Promise<void> {
 // ============================================================================
 export async function getAllBOMData(): Promise<BOMData[]> {
   // Fetch FG BOM
+  const supabase = getSupabaseClient();
   const { data: fgData, error: fgError } = await supabase
     .from('fg_bom_with_versions')
     .select('*');
@@ -299,10 +303,17 @@ export async function getAllBOMData(): Promise<BOMData[]> {
 // ============================================================================
 // GET INT_WT FROM MOLD MASTER VIA SFG BOM
 // ============================================================================
+// Normalize mold name for comparison (handles case, dashes, spacing variations)
+function normalizeMoldName(name: string): string {
+  if (!name) return '';
+  return name.trim().toLowerCase().replace(/\s+/g, '').replace(/-/g, '');
+}
+
 export async function getIntWtForSFG(sfgCode: string): Promise<number | null> {
   if (!sfgCode) return null;
 
   // Get item_name (mold name) from sfg_bom
+  const supabase = getSupabaseClient();
   const { data: sfgData, error: sfgError } = await supabase
     .from('sfg_bom')
     .select('item_name')
@@ -314,25 +325,58 @@ export async function getIntWtForSFG(sfgCode: string): Promise<number | null> {
     return null;
   }
 
-  // Get int_wt from molds table using mold_name
-  const { data: moldData, error: moldError } = await supabase
+  const moldNameFromSfg = sfgData.item_name.trim();
+  
+  // Try exact match first
+  let { data: moldData, error: moldError } = await supabase
     .from('molds')
-    .select('int_wt')
-    .eq('mold_name', sfgData.item_name)
-    .single();
+    .select('int_wt, mold_name')
+    .eq('mold_name', moldNameFromSfg)
+    .maybeSingle();
 
-  if (moldError || moldData?.int_wt === undefined) {
-    console.error(`Mold ${sfgData.item_name} not found in molds`);
-    return null;
+  if (!moldError && moldData?.int_wt !== undefined) {
+    return moldData.int_wt;
   }
 
-  return moldData.int_wt;
+  // If exact match fails, try case-insensitive match
+  const { data: allMolds, error: allMoldsError } = await supabase
+    .from('molds')
+    .select('int_wt, mold_name');
+
+  if (!allMoldsError && allMolds) {
+    // Try case-insensitive exact match
+    const caseInsensitiveMatch = allMolds.find(
+      mold => mold.mold_name?.trim().toLowerCase() === moldNameFromSfg.toLowerCase()
+    );
+    
+    if (caseInsensitiveMatch?.int_wt !== undefined) {
+      console.warn(`⚠️ [getIntWtForSFG] Case-insensitive match found: "${moldNameFromSfg}" matched "${caseInsensitiveMatch.mold_name}"`);
+      return caseInsensitiveMatch.int_wt;
+    }
+    
+    // Try normalized match (handles dash/format variations)
+    const normalizedSfgName = normalizeMoldName(moldNameFromSfg);
+    const normalizedMatch = allMolds.find(mold => {
+      const normalizedMoldName = normalizeMoldName(mold.mold_name || '');
+      return normalizedMoldName === normalizedSfgName && normalizedMoldName !== '';
+    });
+    
+    if (normalizedMatch?.int_wt !== undefined) {
+      console.warn(`⚠️ [getIntWtForSFG] Normalized match found: "${moldNameFromSfg}" matched "${normalizedMatch.mold_name}" (dash/format variation)`);
+      return normalizedMatch.int_wt;
+    }
+  }
+
+  // No match found
+  console.error(`Mold ${moldNameFromSfg} not found in molds (tried exact, case-insensitive, and normalized matching)`);
+  return null;
 }
 
 // ============================================================================
 // GET ALL COLORS FROM COLOR_LABEL_MASTER
 // ============================================================================
 export async function getAllColors(): Promise<{ id: string; color_label: string }[]> {
+  const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('color_label_master')
     .select('id, color_label')
@@ -350,6 +394,7 @@ export async function getAllColors(): Promise<{ id: string; color_label: string 
 // GET ALL PARTIES FROM PARTY_NAME_MASTER
 // ============================================================================
 export async function getAllParties(): Promise<{ id: string; name: string }[]> {
+  const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('party_name_master')
     .select('id, name')

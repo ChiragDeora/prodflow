@@ -885,6 +885,13 @@ const ProductionSchedulerERP: React.FC = () => {
     return sortRawMaterials(filteredData.rawMaterials, rawMaterialSortField, rawMaterialSortDirection);
   }, [rawMaterialsMaster, rawMaterialSortField, rawMaterialSortDirection, selectedUnit]);
 
+  // Calculate next sequential sl_no for new raw materials
+  const nextRawMaterialSlNo = useMemo(() => {
+    if (rawMaterialsMaster.length === 0) return 1;
+    const maxSlNo = Math.max(...rawMaterialsMaster.map(rm => rm.sl_no || 0));
+    return maxSlNo + 1;
+  }, [rawMaterialsMaster]);
+
   const sortedPackingMaterials = useMemo(() => {
     const filteredData = getFilteredData();
     let filteredMaterials = filteredData.packingMaterials;
@@ -3283,7 +3290,13 @@ const ProductionSchedulerERP: React.FC = () => {
           </div>
         </div>
       )}
-      {showModal && modalType === 'raw_material' && (
+      {showModal && modalType === 'raw_material' && (() => {
+        const isEditing = editingItem && 'id' in editingItem && editingItem.id;
+        const currentSlNo = isEditing && editingItem && 'sl_no' in editingItem && editingItem.sl_no != null
+          ? editingItem.sl_no
+          : nextRawMaterialSlNo;
+
+        return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             {/* Header */}
@@ -3294,10 +3307,10 @@ const ProductionSchedulerERP: React.FC = () => {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">
-                    {editingItem && 'id' in editingItem && editingItem.id ? 'Edit Raw Material' : 'Add New Raw Material'}
+                    {isEditing ? 'Edit Raw Material' : 'Add New Raw Material'}
                   </h2>
                   <p className="text-sm text-gray-500 mt-1">
-                    {editingItem && 'id' in editingItem && editingItem.id 
+                    {isEditing 
                       ? 'Update raw material information' 
                       : 'Enter raw material details to add to the system'}
                   </p>
@@ -3329,7 +3342,7 @@ const ProductionSchedulerERP: React.FC = () => {
               };
               
               try {
-                if (editingItem && 'id' in editingItem && editingItem.id) {
+                if (isEditing && editingItem && 'id' in editingItem && editingItem.id) {
                   // Update existing raw material
                   await rawMaterialAPI.update(editingItem.id, rawMaterialData);
                   setRawMaterialsMaster(prev => prev.map(r => 
@@ -3367,9 +3380,10 @@ const ProductionSchedulerERP: React.FC = () => {
                         name="sl_no"
                         required
                         min="1"
-                        placeholder="e.g., 1"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-900"
-                        defaultValue={editingItem && 'sl_no' in editingItem && editingItem.sl_no != null ? editingItem.sl_no : ''}
+                        value={currentSlNo}
+                        readOnly
+                        disabled
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
                       />
                     </div>
                     <div>
@@ -3554,14 +3568,15 @@ const ProductionSchedulerERP: React.FC = () => {
                     className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center"
                   >
                     <Save className="w-4 h-4 mr-2" />
-                    {editingItem && 'id' in editingItem && editingItem.id ? 'Update Raw Material' : 'Add Raw Material'}
+                    {isEditing ? 'Update Raw Material' : 'Add Raw Material'}
                   </button>
                 </div>
               </div>
             </form>
           </div>
         </div>
-      )}
+        );
+      })()}
       {showModal && modalType === 'color_label' && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">

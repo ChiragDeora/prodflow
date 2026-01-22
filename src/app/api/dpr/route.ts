@@ -301,9 +301,10 @@ export async function POST(request: NextRequest) {
     });
     
     if (machineEntriesToInsert.length > 0) {
-      const { error: machineError } = await supabase
+      const { data: insertedMachineEntries, error: machineError } = await supabase
         .from('dpr_machine_entries')
-        .insert(machineEntriesToInsert);
+        .insert(machineEntriesToInsert)
+        .select();
       
       if (machineError) {
         console.error('Error creating machine entries:', machineError);
@@ -313,6 +314,76 @@ export async function POST(request: NextRequest) {
           { success: false, error: machineError.message },
           { status: 500 }
         );
+      }
+
+      // Insert stoppage entries for each machine entry
+      if (insertedMachineEntries) {
+        const stoppageEntriesToInsert: any[] = [];
+        
+        // Map machine entries by machine_no and section_type to find corresponding stoppages
+        const machineEntryMap = new Map<string, any>();
+        insertedMachineEntries.forEach((me: any) => {
+          const key = `${me.machine_no}-${me.section_type}`;
+          machineEntryMap.set(key, me);
+        });
+
+        // Process stoppages from request
+        machine_entries.forEach((entry: any) => {
+          const machineNo = entry.machine_no;
+          
+          // Process current production stoppages
+          if (entry.current_production?.stoppages && Array.isArray(entry.current_production.stoppages)) {
+            const machineEntry = machineEntryMap.get(`${machineNo}-current`);
+            if (machineEntry) {
+              entry.current_production.stoppages.forEach((stoppage: any) => {
+                if (stoppage.reason && stoppage.startTime && stoppage.endTime) {
+                  stoppageEntriesToInsert.push({
+                    dpr_machine_entry_id: machineEntry.id,
+                    reason: stoppage.reason,
+                    start_time: stoppage.startTime.substring(0, 8), // TIME format
+                    end_time: stoppage.endTime.substring(0, 8), // TIME format
+                    total_time_min: stoppage.totalTime || null,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                  });
+                }
+              });
+            }
+          }
+          
+          // Process changeover stoppages
+          if (entry.changeover?.stoppages && Array.isArray(entry.changeover.stoppages)) {
+            const machineEntry = machineEntryMap.get(`${machineNo}-changeover`);
+            if (machineEntry) {
+              entry.changeover.stoppages.forEach((stoppage: any) => {
+                if (stoppage.reason && stoppage.startTime && stoppage.endTime) {
+                  stoppageEntriesToInsert.push({
+                    dpr_machine_entry_id: machineEntry.id,
+                    reason: stoppage.reason,
+                    start_time: stoppage.startTime.substring(0, 8), // TIME format
+                    end_time: stoppage.endTime.substring(0, 8), // TIME format
+                    total_time_min: stoppage.totalTime || null,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                  });
+                }
+              });
+            }
+          }
+        });
+
+        // Insert stoppage entries if any
+        if (stoppageEntriesToInsert.length > 0) {
+          const { error: stoppageError } = await supabase
+            .from('dpr_stoppage_entries')
+            .insert(stoppageEntriesToInsert);
+          
+          if (stoppageError) {
+            console.error('Error creating stoppage entries:', stoppageError);
+            // Note: We don't rollback here as machine entries are already created
+            // Stoppages are supplementary data
+          }
+        }
       }
     }
     

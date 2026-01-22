@@ -13,7 +13,7 @@ interface HistoryDetailViewProps {
   loading?: boolean;
   // Stock posting props
   documentId?: string;
-  documentType?: 'grn' | 'jw-grn' | 'job-work-challan';
+  documentType?: 'grn' | 'jw-grn' | 'job-work-challan' | 'fg-transfer-note';
   stockStatus?: string;
   onStockPost?: () => void;
 }
@@ -47,6 +47,8 @@ const HistoryDetailView: React.FC<HistoryDetailViewProps> = ({
         endpoint = `/api/stock/post/jw-grn/${documentId}`;
       } else if (documentType === 'job-work-challan') {
         endpoint = `/api/stock/post/job-work-challan/${documentId}`;
+      } else if (documentType === 'fg-transfer-note') {
+        endpoint = `/api/production/fg-transfer-note/${documentId}/post`;
       } else {
         endpoint = `/api/stock/post/grn/${documentId}`;
       }
@@ -197,13 +199,6 @@ const HistoryDetailView: React.FC<HistoryDetailViewProps> = ({
       <div className="bg-gradient-to-r from-slate-600 to-slate-700 text-white p-6 rounded-t-lg">
         <div className="flex justify-between items-start">
           <div>
-            <button
-              onClick={onClose}
-              className="mb-4 text-slate-200 hover:text-white flex items-center gap-2 text-sm transition-colors"
-            >
-              <X className="w-4 h-4" />
-              Back to History
-            </button>
             <h2 className="text-3xl font-bold">{title}</h2>
             <p className="text-slate-200 mt-1">{formatDate(date)}</p>
           </div>

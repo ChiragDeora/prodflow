@@ -82,10 +82,19 @@ const MISForm: React.FC = () => {
     }
   };
 
+  // Sync date state with issueDate when issueDate changes
+  useEffect(() => {
+    if (formData.issueDate) {
+      setDate(formData.issueDate);
+    }
+  }, [formData.issueDate]);
+
   // Generate document number on initial load and when date changes
   useEffect(() => {
-    generateDocNo(date);
-  }, [date]);
+    // Use issueDate if available, otherwise use date state
+    const dateToUse = formData.issueDate || date;
+    generateDocNo(dateToUse);
+  }, [date, formData.issueDate]);
 
   const handleInputChange = (field: keyof Omit<MISFormData, 'items'>, value: string) => {
     setFormData(prev => ({
@@ -767,7 +776,7 @@ const MISForm: React.FC = () => {
     try {
       const misData = {
         doc_no: docNo,
-        date: date,
+        date: formData.issueDate || date, // Use issueDate as the main date field
         dept_name: formData.department,
         issue_no: formData.issueNo,
         issue_date: formData.issueDate

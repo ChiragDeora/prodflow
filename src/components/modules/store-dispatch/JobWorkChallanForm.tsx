@@ -75,11 +75,20 @@ const JobWorkChallanForm: React.FC = () => {
   const [stockStatus, setStockStatus] = useState<'NOT_SAVED' | 'SAVED' | 'POSTING' | 'POSTED' | 'ERROR'>('NOT_SAVED');
   const [stockMessage, setStockMessage] = useState<string>('');
 
+  // Sync date state with dated when dated changes
+  useEffect(() => {
+    if (formData.dated) {
+      setDate(formData.dated);
+    }
+  }, [formData.dated]);
+
   // Generate document number using JOB_WORK_CHALLAN form code
   useEffect(() => {
     const generateDocNo = async () => {
       try {
-        const docNo = await generateDocumentNumber(FORM_CODES.JOB_WORK_CHALLAN, date);
+        // Use dated if available, otherwise use date state
+        const dateToUse = formData.dated || date;
+        const docNo = await generateDocumentNumber(FORM_CODES.JOB_WORK_CHALLAN, dateToUse);
         setDocNo(docNo);
         setFormData(prev => ({ ...prev, challanNo: docNo }));
       } catch (error) {
@@ -87,7 +96,7 @@ const JobWorkChallanForm: React.FC = () => {
       }
     };
     generateDocNo();
-  }, [date]);
+  }, [date, formData.dated]);
 
   // Fetch customers and FG stock items
   useEffect(() => {
@@ -216,7 +225,7 @@ const JobWorkChallanForm: React.FC = () => {
       const challanData = {
         doc_no: docNo,
         sr_no: formData.challanNo || docNo,
-        date: date,
+        date: formData.dated || date, // Use dated as the main date field
         party_name: formData.customerName || '',
         party_address: formData.customerAddress || undefined,
         gst_no: formData.customerGstin || undefined,
