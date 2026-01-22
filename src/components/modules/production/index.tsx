@@ -3979,36 +3979,39 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
   };
   
   // Helper function to validate time sum (must equal 720)
+  // If there's a mold change, current Trg Run Time + changeover Trg Run Time should equal 720
+  // Stoppage time is excluded from this validation
   const validateTimeSum = (entryId: string) => {
     const entry = machineEntries.find(e => e.id === entryId);
     if (!entry) return;
     
     const currentRunTime = entry.currentProduction.targetRunTime || 0;
-    // Calculate total stoppage time from all stoppages
-    const stoppageTotalTime = getTotalStoppageTime(entry.currentProduction.stoppages || []);
     const changeoverRunTime = entry.changeover.product ? (entry.changeover.targetRunTime || 0) : 0;
+    const hasChangeover = !!entry.changeover.product;
     
-    const sum = currentRunTime + stoppageTotalTime + changeoverRunTime;
-    const errorKey = `${entryId}-timeSum`;
-    
-    if (sum <= 0) {
-      setValidationErrors(prev => ({
-        ...prev,
-        [errorKey]: `Sum must be greater than 0. Current sum: ${sum.toFixed(2)} min`
-      }));
-    } else if (sum > 720) {
-      setValidationErrors(prev => ({
-        ...prev,
-        [errorKey]: `Sum cannot exceed 720 min. Current sum: ${sum.toFixed(2)} min (Maximum: 720 min)`
-      }));
-    } else {
-      // Sum is valid (0 < sum <= 720)
-      setValidationErrors(prev => {
-        const updated = { ...prev };
-        delete updated[errorKey];
-        return updated;
-      });
-    }
+    setValidationErrors(prev => {
+      const updated = { ...prev };
+      const errorKey = `${entryId}-timeSum`;
+      
+      if (hasChangeover) {
+        // If there's a changeover, current + changeover should equal 720
+        const sum = currentRunTime + changeoverRunTime;
+        if (sum !== 720) {
+          updated[errorKey] = `Current + Changeover must equal 720 min. Sum: ${sum.toFixed(2)} min`;
+        } else {
+          delete updated[errorKey];
+        }
+      } else {
+        // If no changeover, current should equal 720
+        if (currentRunTime !== 720) {
+          updated[errorKey] = `Trg Run Time (current) must equal 720 min. Current value: ${currentRunTime.toFixed(2)} min`;
+        } else {
+          delete updated[errorKey];
+        }
+      }
+      
+      return updated;
+    });
   };
   
   // Initialize machine entries from existing data or start with empty entry
@@ -4345,13 +4348,24 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
       // Only auto-calculate if changeover Trg Run Time hasn't been manually set yet
       if (!isChangeover && field === 'targetRunTime') {
         const currentRunTime = parseFloat(value) || 0;
-        // Only auto-set if changeover Trg Run Time is empty or 0
-        if (!entry.changeover.targetRunTime || entry.changeover.targetRunTime === 0) {
+        // Only auto-set if changeover Trg Run Time is empty or 0 and changeover product exists
+        if (entry.changeover.product && (!entry.changeover.targetRunTime || entry.changeover.targetRunTime === 0)) {
           entry.changeover.targetRunTime = 720 - currentRunTime;
           // Recalculate changeover fields if changeover has product selected
-          if (entry.changeover.product) {
-            entry.changeover.targetQty = calculateField('targetQty', entry.changeover, true);
-          }
+          entry.changeover.targetQty = calculateField('targetQty', entry.changeover, true);
+        }
+      }
+      
+      // If updating Trg Run Time for changeover, auto-calculate current Trg Run Time
+      // Formula: Trg Run Time (current) = 720 - Trg Run Time (changeover)
+      // Only auto-calculate if current Trg Run Time hasn't been manually set yet
+      if (isChangeover && field === 'targetRunTime') {
+        const changeoverRunTime = parseFloat(value) || 0;
+        // Only auto-set if current Trg Run Time is empty or 0
+        if (!entry.currentProduction.targetRunTime || entry.currentProduction.targetRunTime === 0) {
+          entry.currentProduction.targetRunTime = 720 - changeoverRunTime;
+          // Recalculate current production fields
+          entry.currentProduction.targetQty = calculateField('targetQty', entry.currentProduction, false);
         }
       }
 
@@ -4631,17 +4645,24 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
         }
       }
       
-      // Validate time sum: must be > 0 and <= 720
+      // Validate time sum: target run times must equal 720
+      // If there's a mold change, current Trg Run Time + changeover Trg Run Time should equal 720
+      // Stoppage time is excluded from this validation
       const currentRunTime = entry.currentProduction.targetRunTime || 0;
-      // Calculate total stoppage time from all stoppages
-      const stoppageTotalTime = getTotalStoppageTime(entry.currentProduction.stoppages || []);
       const changeoverRunTime = entry.changeover.product ? (entry.changeover.targetRunTime || 0) : 0;
-      const sum = currentRunTime + stoppageTotalTime + changeoverRunTime;
+      const hasChangeover = !!entry.changeover.product;
       
-      if (sum <= 0) {
-        errors[`${entry.id}-timeSum`] = `Total time (Trg Run Time + Stoppage Total Time + Changeover Trg Run Time) must be greater than 0. Current sum: ${sum.toFixed(2)} min`;
-      } else if (sum > 720) {
-        errors[`${entry.id}-timeSum`] = `Total time (Trg Run Time + Stoppage Total Time + Changeover Trg Run Time) cannot exceed 720 min. Current sum: ${sum.toFixed(2)} min (Maximum: 720 min)`;
+      if (hasChangeover) {
+        // If there's a changeover, current + changeover should equal 720
+        const sum = currentRunTime + changeoverRunTime;
+        if (sum !== 720) {
+          errors[`${entry.id}-timeSum`] = `Current + Changeover must equal 720 min. Sum: ${sum.toFixed(2)} min`;
+        }
+      } else {
+        // If no changeover, current should equal 720
+        if (currentRunTime !== 720) {
+          errors[`${entry.id}-timeSum`] = `Trg Run Time (current) must equal 720 min. Current value: ${currentRunTime.toFixed(2)} min`;
+        }
       }
     });
     
@@ -6147,16 +6168,9 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
                         type="number"
                         value={entry.currentProduction.totalTime?.toFixed(2) || '0.00'}
                         readOnly
-                        className={`w-32 px-2 py-1.5 border rounded text-sm bg-gray-100 ${
-                          validationErrors[`${entry.id}-timeSum`] 
-                            ? 'border-red-500 bg-red-50' 
-                            : 'border-gray-300'
-                        }`}
+                        className="w-32 px-2 py-1.5 border rounded text-sm bg-gray-100 border-gray-300"
                       />
                     </div>
-                    {validationErrors[`${entry.id}-timeSum`] && (
-                      <p className="text-xs text-red-600 mt-1">{validationErrors[`${entry.id}-timeSum`]}</p>
-                    )}
                   </div>
                 </div>
               </div>
