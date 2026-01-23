@@ -106,7 +106,8 @@ export async function postDprToStock(
     const { data: entries, error: entriesError } = await supabase
       .from('dpr_machine_entries')
       .select('*')
-      .eq('dpr_id', dprId);
+      .eq('dpr_id', dprId)
+      .order('created_at', { ascending: true });
     
     if (entriesError) {
       handleSupabaseError(entriesError, 'fetching DPR production entries');
@@ -122,7 +123,9 @@ export async function postDprToStock(
     
     console.log('📦 [postDprToStock] Fetched DPR entries:', {
       count: entries.length,
-      sample: entries.slice(0, 2).map(e => ({
+      entries: entries.map(e => ({
+        id: e.id,
+        machine_no: e.machine_no,
         product: e.product,
         ok_prod_qty_nos: e.ok_prod_qty_nos,
         ok_prod_kgs: e.ok_prod_kgs,
@@ -188,58 +191,85 @@ export async function postDprToStock(
       );
     }
     
-    // Step 5: Process each aggregated SFG
+    // Step 5: Process aggregated production
     let entriesCreated = 0;
     const transactionDate = dpr.report_date;
     const documentNumber = `DPR-${dpr.report_date}-${dpr.shift}`;
     
+    console.log(`📦 [postDprToStock] Processing ${aggregatedProduction.length} aggregated SFG entries`);
+    
+    // Step 5a: Aggregate RM consumption across ALL entries first
+    // This prevents duplicate ledger entries when multiple SFGs consume the same RM type
+    const aggregatedRmConsumption: Map<string, number> = new Map();
+    let totalRegrindKgs = 0;
+    
     for (const aggProd of aggregatedProduction) {
-      // 5a: Consume raw materials from PRODUCTION
-      // Uses: total_good_kgs (ok_prod_kgs) + total_rej_kgs (rej_kgs) for total consumption
-      // RM ratios come from sfg_bom table based on mold name
       const totalConsumption = roundQuantity(aggProd.total_good_kgs + aggProd.total_rej_kgs);
       
-      console.log(`📦 Consuming RM from PRODUCTION for ${aggProd.mold_name}:`, {
-        total_consumption: totalConsumption,
-        from_ok_prod_kgs: aggProd.total_good_kgs,
-        from_rej_kgs: aggProd.total_rej_kgs,
-        bom_percentages: aggProd.bom
-      });
-      
       if (totalConsumption > 0) {
-        // Process each RM type based on BOM percentages from sfg_bom table
-        // Note: BOM percentages are stored as decimals (e.g., 0.75 for 75%, 0.125 for 12.5%)
+        // Aggregate RM consumption by type
         for (const [percentField, rmType] of Object.entries(RM_TYPE_MAPPING)) {
           const percentage = aggProd.bom[percentField as keyof typeof aggProd.bom] || 0;
           
           if (percentage > 0) {
-            // BOM percentage is already a decimal, so multiply directly without dividing by 100
             const rmConsumption = roundQuantity(totalConsumption * percentage);
             
-            console.log(`  → Consuming ${rmConsumption} kg of ${rmType} (${(percentage * 100).toFixed(1)}% of ${totalConsumption} kg)`);
-            
             if (rmConsumption > 0) {
-              const result = await consumeRmFifo(
-                rmType,
-                rmConsumption,
-                'PRODUCTION',
-                transactionDate,
-                'DPR',
-                dprId,
-                documentNumber,
-                postedBy
-              );
-              
-              entriesCreated += result.entries.length;
-              warnings.push(...result.warnings);
+              const current = aggregatedRmConsumption.get(rmType) || 0;
+              aggregatedRmConsumption.set(rmType, roundQuantity(current + rmConsumption));
             }
           }
         }
       }
       
-      // 5b: Create SFG in FG_STORE
-      // Auto-creates the SFG item if it doesn't exist
-      if (aggProd.total_pieces > 0) {
+      // Aggregate regrind
+      if (aggProd.total_rej_kgs > 0) {
+        totalRegrindKgs = roundQuantity(totalRegrindKgs + aggProd.total_rej_kgs);
+      }
+    }
+    
+    // Step 5b: Process aggregated RM consumption (once per RM type)
+    console.log(`📦 [postDprToStock] Processing aggregated RM consumption:`, 
+      Array.from(aggregatedRmConsumption.entries()).map(([type, qty]) => `${type}: ${qty} kg`).join(', ')
+    );
+    
+    for (const [rmType, totalConsumption] of aggregatedRmConsumption.entries()) {
+      if (totalConsumption > 0) {
+        console.log(`  → Consuming ${totalConsumption} kg of ${rmType} from PRODUCTION`);
+        
+        try {
+          const result = await consumeRmFifo(
+            rmType,
+            totalConsumption,
+            'PRODUCTION',
+            transactionDate,
+            'DPR',
+            dprId,
+            documentNumber,
+            postedBy
+          );
+          
+          entriesCreated += result.entries.length;
+          warnings.push(...result.warnings);
+        } catch (rmError) {
+          const errorMsg = `Error consuming ${rmType}: ${rmError instanceof Error ? rmError.message : String(rmError)}`;
+          console.error(`❌ [postDprToStock]`, errorMsg, rmError);
+          warnings.push(errorMsg);
+          // Continue processing other RM types even if one fails
+        }
+      }
+    }
+    
+    // Step 5c: Process each aggregated SFG (create SFG stock entries)
+    for (let i = 0; i < aggregatedProduction.length; i++) {
+      const aggProd = aggregatedProduction[i];
+      console.log(`📦 [postDprToStock] Processing aggregated entry ${i + 1}/${aggregatedProduction.length}: ${aggProd.sfg_code} (${aggProd.mold_name})`);
+      
+      try {
+      
+        // Create SFG in FG_STORE
+        // Auto-creates the SFG item if it doesn't exist
+        if (aggProd.total_pieces > 0) {
         console.log(`📦 Creating SFG stock for ${aggProd.sfg_code} (${aggProd.mold_name}): ${aggProd.total_pieces} pcs`);
         
         // Get or create the SFG item (auto-creates if missing)
@@ -274,21 +304,40 @@ export async function postDprToStock(
           sfgItem.unit_of_measure
         );
         
-        entriesCreated++;
+          entriesCreated++;
+        }
+        
+        console.log(`✅ [postDprToStock] Completed processing aggregated entry ${i + 1}/${aggregatedProduction.length}: ${aggProd.sfg_code}`);
+      } catch (entryError) {
+        const errorMsg = `Error processing aggregated entry ${i + 1}/${aggregatedProduction.length} (${aggProd.sfg_code}/${aggProd.mold_name}): ${entryError instanceof Error ? entryError.message : String(entryError)}`;
+        console.error(`❌ [postDprToStock]`, errorMsg, entryError);
+        warnings.push(errorMsg);
+        // Continue processing other entries even if one fails
+        // This ensures all processable entries are posted
       }
+    }
+    
+    // Step 5d: Create aggregated REGRIND in STORE (once for all entries)
+    if (totalRegrindKgs > 0) {
+      console.log(`📦 [postDprToStock] Creating aggregated REGRIND: ${totalRegrindKgs} kg`);
       
-      // 5c: Create REGRIND in STORE
-      if (aggProd.total_rej_kgs > 0) {
+      try {
         const regrindItem = await getOrCreateRegrindItem();
         
         const currentBalance = await getBalance(regrindItem.item_code, 'STORE');
-        const newBalance = roundQuantity(currentBalance + aggProd.total_rej_kgs);
+        const newBalance = roundQuantity(currentBalance + totalRegrindKgs);
+        
+        // Build remarks with all mold names that contributed regrind
+        const moldNames = aggregatedProduction
+          .filter(agg => agg.total_rej_kgs > 0)
+          .map(agg => agg.mold_name)
+          .join(', ');
         
         await createLedgerEntry({
           item_id: regrindItem.id,
           item_code: regrindItem.item_code,
           location_code: 'STORE',
-          quantity: roundQuantity(aggProd.total_rej_kgs),
+          quantity: roundQuantity(totalRegrindKgs),
           unit_of_measure: regrindItem.unit_of_measure,
           balance_after: newBalance,
           transaction_date: transactionDate,
@@ -297,7 +346,7 @@ export async function postDprToStock(
           document_number: documentNumber,
           movement_type: 'IN',
           posted_by: postedBy,
-          remarks: `Regrind from ${aggProd.mold_name} rejection (${roundQuantity(aggProd.total_rej_kgs)} ${regrindItem.unit_of_measure || 'Kgs'}), Shift: ${dpr.shift || 'N/A'}`,
+          remarks: `Regrind from rejection (${roundQuantity(totalRegrindKgs)} ${regrindItem.unit_of_measure || 'Kgs'}) from Molds: ${moldNames}, Shift: ${dpr.shift || 'N/A'}`,
         });
         
         await updateBalance(
@@ -309,8 +358,14 @@ export async function postDprToStock(
         );
         
         entriesCreated++;
+      } catch (regrindError) {
+        const errorMsg = `Error creating regrind: ${regrindError instanceof Error ? regrindError.message : String(regrindError)}`;
+        console.error(`❌ [postDprToStock]`, errorMsg, regrindError);
+        warnings.push(errorMsg);
       }
     }
+    
+    console.log(`📦 [postDprToStock] Total entries created: ${entriesCreated}`);
     
     if (entriesCreated === 0) {
       throw new StockPostingError(
@@ -377,9 +432,15 @@ async function aggregateProductionBySfg(
   const aggregated: Map<string, DprAggregatedProduction> = new Map();
   const errors: string[] = [];
   
-  for (const entry of entries) {
+  console.log(`📊 [aggregateProductionBySfg] Processing ${entries.length} entries`);
+  
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    console.log(`📊 [aggregateProductionBySfg] Processing entry ${i + 1}/${entries.length}: machine=${entry.machine_no}, product=${entry.product}`);
+    
     // Skip entries with no product (mold name)
     if (!entry.product) {
+      console.warn(`⚠️ [aggregateProductionBySfg] Entry ${i + 1} has no product, skipping`);
       continue;
     }
     
@@ -390,7 +451,7 @@ async function aggregateProductionBySfg(
     if (!sfgBom) {
       const errorMsg = `No BOM mapping found for mold: ${entry.product}`;
       errors.push(errorMsg);
-      console.error('❌ [aggregateProductionBySfg]', errorMsg);
+      console.error(`❌ [aggregateProductionBySfg] Entry ${i + 1}:`, errorMsg);
       continue;
     }
     
@@ -400,10 +461,10 @@ async function aggregateProductionBySfg(
     if (!sfgCode || sfgCode.trim() === '') {
       const errorMsg = `BOM for mold "${entry.product}" has empty sfg_code. Please update the BOM Master.`;
       errors.push(errorMsg);
-      console.error('❌ [aggregateProductionBySfg]', errorMsg);
+      console.error(`❌ [aggregateProductionBySfg] Entry ${i + 1}:`, errorMsg);
       continue;
     }
-    console.log(`✅ Found BOM for mold ${entry.product}:`, {
+    console.log(`✅ [aggregateProductionBySfg] Entry ${i + 1}: Found BOM for mold ${entry.product}:`, {
       sfg_code: sfgCode,
       rm_percentages: {
         hp: sfgBom.hp_percentage,
@@ -463,7 +524,11 @@ async function aggregateProductionBySfg(
     if (entry.machine_no && !agg.line_ids.includes(entry.machine_no)) {
       agg.line_ids.push(entry.machine_no);
     }
+    
+    console.log(`✅ [aggregateProductionBySfg] Entry ${i + 1} processed successfully. Aggregated totals for ${sfgCode}: pieces=${agg.total_pieces}, good_kgs=${agg.total_good_kgs}, rej_kgs=${agg.total_rej_kgs}`);
   }
+  
+  console.log(`📊 [aggregateProductionBySfg] Completed processing. Aggregated ${aggregated.size} unique SFG codes from ${entries.length} entries. Errors: ${errors.length}`);
   
   // If we have errors and no valid entries, throw
   if (aggregated.size === 0 && errors.length > 0) {

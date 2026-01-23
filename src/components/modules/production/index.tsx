@@ -3978,8 +3978,8 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
     }, 0);
   };
   
-  // Helper function to validate time sum (must equal 720)
-  // If there's a mold change, current Trg Run Time + changeover Trg Run Time should equal 720
+  // Helper function to validate time sum (must be between 0 and 720)
+  // If there's a mold change, current Trg Run Time + changeover Trg Run Time should be <= 720
   // Stoppage time is excluded from this validation
   const validateTimeSum = (entryId: string) => {
     const entry = machineEntries.find(e => e.id === entryId);
@@ -3994,17 +3994,21 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
       const errorKey = `${entryId}-timeSum`;
       
       if (hasChangeover) {
-        // If there's a changeover, current + changeover should equal 720
+        // If there's a changeover, validate each value and the sum
         const sum = currentRunTime + changeoverRunTime;
-        if (sum !== 720) {
-          updated[errorKey] = `Current + Changeover must equal 720 min. Sum: ${sum.toFixed(2)} min`;
+        if (currentRunTime < 0 || currentRunTime > 720) {
+          updated[errorKey] = `Trg Run Time (current) must be between 0 and 720 min. Current value: ${currentRunTime.toFixed(2)} min`;
+        } else if (changeoverRunTime < 0 || changeoverRunTime > 720) {
+          updated[errorKey] = `Trg Run Time (changeover) must be between 0 and 720 min. Current value: ${changeoverRunTime.toFixed(2)} min`;
+        } else if (sum > 720) {
+          updated[errorKey] = `Current + Changeover must not exceed 720 min. Sum: ${sum.toFixed(2)} min`;
         } else {
           delete updated[errorKey];
         }
       } else {
-        // If no changeover, current should equal 720
-        if (currentRunTime !== 720) {
-          updated[errorKey] = `Trg Run Time (current) must equal 720 min. Current value: ${currentRunTime.toFixed(2)} min`;
+        // If no changeover, current must be between 0 and 720
+        if (currentRunTime < 0 || currentRunTime > 720) {
+          updated[errorKey] = `Trg Run Time (current) must be between 0 and 720 min. Current value: ${currentRunTime.toFixed(2)} min`;
         } else {
           delete updated[errorKey];
         }
@@ -4155,13 +4159,13 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
         return 0;
       
       case 'okProdKgs':
-        // Formula: Ok Prod Qty (Nos) * (Act Part Wt (gm) / 1000)
-        if (prod.okProdQty && prod.actualPartWeight) {
-          const result = (prod.okProdQty * prod.actualPartWeight / 1000) || 0;
-          console.log(`  ✅ okProdKgs calculated: ${prod.okProdQty} * ${prod.actualPartWeight} / 1000 = ${result}`);
+        // Formula: Ok Prod Qty (Nos) * (Part Wt (gm) / 1000)
+        if (prod.okProdQty && prod.partWeight) {
+          const result = (prod.okProdQty * prod.partWeight / 1000) || 0;
+          console.log(`  ✅ okProdKgs calculated: ${prod.okProdQty} * ${prod.partWeight} / 1000 = ${result}`);
           return result;
         }
-        console.log(`  ⚠️ okProdKgs: Missing okProdQty (${prod.okProdQty}) or actualPartWeight (${prod.actualPartWeight}), returning 0`);
+        console.log(`  ⚠️ okProdKgs: Missing okProdQty (${prod.okProdQty}) or partWeight (${prod.partWeight}), returning 0`);
         return 0;
       
       case 'okProdPercent':
@@ -4645,23 +4649,27 @@ const ManualDPREntryForm: React.FC<ManualDPREntryFormProps> = ({
         }
       }
       
-      // Validate time sum: target run times must equal 720
-      // If there's a mold change, current Trg Run Time + changeover Trg Run Time should equal 720
+      // Validate time sum: target run times must be between 0 and 720
+      // If there's a mold change, current Trg Run Time + changeover Trg Run Time should be <= 720
       // Stoppage time is excluded from this validation
       const currentRunTime = entry.currentProduction.targetRunTime || 0;
       const changeoverRunTime = entry.changeover.product ? (entry.changeover.targetRunTime || 0) : 0;
       const hasChangeover = !!entry.changeover.product;
       
       if (hasChangeover) {
-        // If there's a changeover, current + changeover should equal 720
+        // If there's a changeover, validate each value and the sum
         const sum = currentRunTime + changeoverRunTime;
-        if (sum !== 720) {
-          errors[`${entry.id}-timeSum`] = `Current + Changeover must equal 720 min. Sum: ${sum.toFixed(2)} min`;
+        if (currentRunTime < 0 || currentRunTime > 720) {
+          errors[`${entry.id}-timeSum`] = `Trg Run Time (current) must be between 0 and 720 min. Current value: ${currentRunTime.toFixed(2)} min`;
+        } else if (changeoverRunTime < 0 || changeoverRunTime > 720) {
+          errors[`${entry.id}-timeSum`] = `Trg Run Time (changeover) must be between 0 and 720 min. Current value: ${changeoverRunTime.toFixed(2)} min`;
+        } else if (sum > 720) {
+          errors[`${entry.id}-timeSum`] = `Current + Changeover must not exceed 720 min. Sum: ${sum.toFixed(2)} min`;
         }
       } else {
-        // If no changeover, current should equal 720
-        if (currentRunTime !== 720) {
-          errors[`${entry.id}-timeSum`] = `Trg Run Time (current) must equal 720 min. Current value: ${currentRunTime.toFixed(2)} min`;
+        // If no changeover, current must be between 0 and 720
+        if (currentRunTime < 0 || currentRunTime > 720) {
+          errors[`${entry.id}-timeSum`] = `Trg Run Time (current) must be between 0 and 720 min. Current value: ${currentRunTime.toFixed(2)} min`;
         }
       }
     });

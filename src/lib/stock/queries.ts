@@ -69,85 +69,188 @@ export async function getStockBalances(
   }
   
   // If location_code filter is specified, transform to show only that location
+  // Include items that have a balance > 0 OR have a ledger entry at that location
   if (query.location_code) {
-    const filtered = data.map(item => ({
-      id: `${item.id}-${query.location_code}`,
-      item_code: item.item_code,
-      item_name: item.item_name,
-      item_type: item.item_type as ItemType,
-      sub_category: item.sub_category,
-      category: item.category,
-      location_code: query.location_code as LocationCode,
-      current_balance: getBalanceForLocation(item, query.location_code as LocationCode),
-      unit_of_measure: item.unit_of_measure,
-    }));
-    // Include items with 0 balance - they should still be shown if uploaded
+    const location = query.location_code as LocationCode;
+    const lastMovementField = getLastMovementFieldForLocation(location);
+    
+    const filtered = data
+      .filter(item => {
+        // Include items that have a balance > 0 OR have a last movement timestamp
+        // This ensures items with stock are shown even if last_movement_at is null
+        const balance = getBalanceForLocation(item, location);
+        const lastMovement = (item as any)[lastMovementField];
+        return balance > 0 || (lastMovement !== null && lastMovement !== undefined);
+      })
+      .map(item => {
+        const balance = getBalanceForLocation(item, location);
+        const boxes = getBoxesForLocation(item, location);
+        const totalQtyPcs = balance;
+        
+        return {
+          id: `${item.id}-${location}`,
+          item_code: item.item_code,
+          item_name: item.item_name,
+          item_type: item.item_type as ItemType,
+          sub_category: item.sub_category,
+          category: item.category,
+          location_code: location,
+          current_balance: balance,
+          unit_of_measure: item.unit_of_measure,
+          last_movement_at: getLastMovementForLocation(item, location),
+          // RM-specific fields
+          rm_supplier: (item as any).rm_supplier,
+          // SFG-specific fields
+          sfg_code: (item as any).sfg_code,
+          sfg_item_name: (item as any).sfg_item_name,
+          sfg_qty_pcs: (item as any)[`${location.toLowerCase().replace('_', '_')}_sfg_qty_pcs`] || undefined,
+          sfg_qty_kgs: (item as any)[`${location.toLowerCase().replace('_', '_')}_sfg_qty_kgs`] || undefined,
+          // PM-specific fields
+          pm_dimensions: (item as any).pm_dimensions,
+          pm_party_name: (item as any).pm_party_name,
+          pm_color_remarks: (item as any).pm_color_remarks,
+          // FG-specific fields
+          fg_code: (item as any).fg_code,
+          fg_color: (item as any).fg_color,
+          fg_party: (item as any).fg_party,
+          fg_pack_size: (item as any).fg_pack_size,
+          qty_boxes: boxes,
+          total_qty_pcs: totalQtyPcs,
+          total_qty_ton: (item as any)[`${location.toLowerCase().replace('_', '_')}_total_qty_ton`] || undefined,
+          qc_check: (item as any).qc_check,
+        };
+      });
     
     console.log(`📊 [getStockBalances] After filtering by location ${query.location_code}:`, {
-      totalItems: data.length,
-      itemsIncludingZero: filtered.length,
+      totalItemsInView: data.length,
+      itemsWithBalance: filtered.length,
       sample: filtered.slice(0, 3)
     });
     
     return filtered;
   }
   
-  // Return all locations with balances (including 0 balance items)
-  // Show items at all locations so uploaded items with 0 balance are visible
+  // Return all locations with balances
+  // Only show items in locations where they have at least one stock ledger entry
+  // This prevents cluttering the view with items that have never had stock movements at a location
   const results: StockBalanceResult[] = [];
+  
+  // Get all balance entries to check which items have entries at which locations
+  // This is more reliable than relying on last_movement_at from the view
+  const { data: balanceEntries } = await supabase
+    .from('stock_balances')
+    .select('item_code, location_code')
+    .limit(10000); // Should be enough for most cases
+  
+  // Create a set of item_code + location_code combinations that have balance entries
+  const hasBalanceEntry = new Set<string>();
+  if (balanceEntries) {
+    for (const entry of balanceEntries) {
+      hasBalanceEntry.add(`${entry.item_code}:${entry.location_code}`);
+    }
+  }
   
   for (const item of data) {
     const baseId = item.id as string;
     const storeBalance = item.store_balance || 0;
     const productionBalance = item.production_balance || 0;
     const fgStoreBalance = item.fg_store_balance || 0;
+    const storeLastMovement = (item as any).store_last_movement_at;
+    const productionLastMovement = (item as any).production_last_movement_at;
+    const fgStoreLastMovement = (item as any).fg_store_last_movement_at;
     
-    // Show item at all locations (including 0 balance) so uploaded items are visible
-    // Users can filter by location or use "Zero Stock" quick filter if needed
+    // Only add item to a location if it has at least one ledger entry at that location
+    // Check last_movement_at OR if there's a balance entry in stock_balances
+    // A balance entry means there are or were ledger entries for this item at this location
     
-    // Add STORE balance
-    results.push({
-      id: `${baseId}-STORE`,
-      item_code: item.item_code,
-      item_name: item.item_name,
-      item_type: item.item_type as ItemType,
-      sub_category: item.sub_category,
-      category: item.category,
-      location_code: 'STORE',
-      current_balance: storeBalance,
-      unit_of_measure: item.unit_of_measure,
-    });
+    // Add STORE balance only if there's a ledger entry
+    const hasStoreEntry = storeLastMovement || hasBalanceEntry.has(`${item.item_code}:STORE`);
+    if (hasStoreEntry) {
+      results.push({
+        id: `${baseId}-STORE`,
+        item_code: item.item_code,
+        item_name: item.item_name,
+        item_type: item.item_type as ItemType,
+        sub_category: item.sub_category,
+        category: item.category,
+        location_code: 'STORE',
+        current_balance: storeBalance,
+        unit_of_measure: item.unit_of_measure,
+        last_movement_at: storeLastMovement,
+        // RM-specific fields
+        rm_supplier: (item as any).rm_supplier,
+        // FG-specific fields
+        fg_code: (item as any).fg_code,
+        fg_color: (item as any).fg_color,
+        fg_party: (item as any).fg_party,
+        fg_pack_size: (item as any).fg_pack_size,
+        qty_boxes: (item as any).store_boxes,
+        total_qty_pcs: (item as any).store_total_qty_pcs,
+        total_qty_ton: (item as any).store_total_qty_ton,
+        qc_check: (item as any).qc_check,
+      });
+    }
     
-    // Add PRODUCTION balance
-    results.push({
-      id: `${baseId}-PRODUCTION`,
-      item_code: item.item_code,
-      item_name: item.item_name,
-      item_type: item.item_type as ItemType,
-      sub_category: item.sub_category,
-      category: item.category,
-      location_code: 'PRODUCTION',
-      current_balance: productionBalance,
-      unit_of_measure: item.unit_of_measure,
-    });
+    // Add PRODUCTION balance only if there's a ledger entry
+    const hasProductionEntry = productionLastMovement || hasBalanceEntry.has(`${item.item_code}:PRODUCTION`);
+    if (hasProductionEntry) {
+      results.push({
+        id: `${baseId}-PRODUCTION`,
+        item_code: item.item_code,
+        item_name: item.item_name,
+        item_type: item.item_type as ItemType,
+        sub_category: item.sub_category,
+        category: item.category,
+        location_code: 'PRODUCTION',
+        current_balance: productionBalance,
+        unit_of_measure: item.unit_of_measure,
+        last_movement_at: productionLastMovement,
+        // RM-specific fields
+        rm_supplier: (item as any).rm_supplier,
+        // FG-specific fields
+        fg_code: (item as any).fg_code,
+        fg_color: (item as any).fg_color,
+        fg_party: (item as any).fg_party,
+        fg_pack_size: (item as any).fg_pack_size,
+        qty_boxes: (item as any).production_boxes,
+        total_qty_pcs: (item as any).production_total_qty_pcs,
+        total_qty_ton: (item as any).production_total_qty_ton,
+        qc_check: (item as any).qc_check,
+      });
+    }
     
-    // Add FG_STORE balance
-    results.push({
-      id: `${baseId}-FG_STORE`,
-      item_code: item.item_code,
-      item_name: item.item_name,
-      item_type: item.item_type as ItemType,
-      sub_category: item.sub_category,
-      category: item.category,
-      location_code: 'FG_STORE',
-      current_balance: fgStoreBalance,
-      unit_of_measure: item.unit_of_measure,
-    });
+    // Add FG_STORE balance only if there's a ledger entry
+    const hasFgStoreEntry = fgStoreLastMovement || hasBalanceEntry.has(`${item.item_code}:FG_STORE`);
+    if (hasFgStoreEntry) {
+      results.push({
+        id: `${baseId}-FG_STORE`,
+        item_code: item.item_code,
+        item_name: item.item_name,
+        item_type: item.item_type as ItemType,
+        sub_category: item.sub_category,
+        category: item.category,
+        location_code: 'FG_STORE',
+        current_balance: fgStoreBalance,
+        unit_of_measure: item.unit_of_measure,
+        last_movement_at: fgStoreLastMovement,
+        // RM-specific fields
+        rm_supplier: (item as any).rm_supplier,
+        // FG-specific fields
+        fg_code: (item as any).fg_code,
+        fg_color: (item as any).fg_color,
+        fg_party: (item as any).fg_party,
+        fg_pack_size: (item as any).fg_pack_size,
+        qty_boxes: (item as any).fg_store_boxes,
+        total_qty_pcs: (item as any).fg_store_total_qty_pcs,
+        total_qty_ton: (item as any).fg_store_total_qty_ton,
+        qc_check: (item as any).qc_check,
+      });
+    }
   }
   
   console.log('📊 [getStockBalances] Final results:', {
     totalItemsInView: data.length,
-    itemsWithNonZeroBalance: results.length,
+    itemsWithLedgerEntries: results.length,
     byLocation: {
       STORE: results.filter(r => r.location_code === 'STORE').length,
       PRODUCTION: results.filter(r => r.location_code === 'PRODUCTION').length,
@@ -175,6 +278,56 @@ function getBalanceForLocation(
     default:
       return 0;
   }
+}
+
+/**
+ * Helper to get last movement timestamp for a specific location from view row
+ */
+function getLastMovementForLocation(
+  item: Record<string, unknown>,
+  location: LocationCode
+): string | undefined {
+  if (location === 'STORE') {
+    return (item.store_last_movement_at as string) || undefined;
+  } else if (location === 'PRODUCTION') {
+    return (item.production_last_movement_at as string) || undefined;
+  } else if (location === 'FG_STORE') {
+    return (item.fg_store_last_movement_at as string) || undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Helper to get the field name for last movement at a specific location
+ */
+function getLastMovementFieldForLocation(
+  location: LocationCode
+): string {
+  if (location === 'STORE') {
+    return 'store_last_movement_at';
+  } else if (location === 'PRODUCTION') {
+    return 'production_last_movement_at';
+  } else if (location === 'FG_STORE') {
+    return 'fg_store_last_movement_at';
+  }
+  return '';
+}
+
+/**
+ * Helper to get boxes for a specific location from view row (for FG items)
+ */
+function getBoxesForLocation(
+  item: Record<string, unknown>,
+  location: LocationCode
+): number | undefined {
+  if (location === 'STORE') {
+    return (item.store_boxes as number) || undefined;
+  } else if (location === 'PRODUCTION') {
+    return (item.production_boxes as number) || undefined;
+  } else if (location === 'FG_STORE') {
+    return (item.fg_store_boxes as number) || undefined;
+  }
+  return undefined;
 }
 
 /**

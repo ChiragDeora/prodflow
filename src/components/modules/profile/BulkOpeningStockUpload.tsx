@@ -15,7 +15,9 @@ import {
   Layers,
   ChevronDown,
   ChevronUp,
-  RefreshCw
+  RefreshCw,
+  ShoppingCart,
+  Globe
 } from 'lucide-react';
 
 // ============================================================================
@@ -55,10 +57,26 @@ interface SFGItem {
   message?: string;
 }
 
+interface FGItem {
+  fg_code: string;
+  item_name: string;
+  party: string;
+  color: string;
+  qty_boxes: number;
+  total_qty_pcs: number;
+  total_qty_ton: number;
+  qc: boolean;
+  status?: 'matched' | 'not_in_master' | 'error';
+  stock_item_code?: string;
+  message?: string;
+}
+
 interface ValidationResult {
   rm: { matched: RMItem[]; not_in_master: RMItem[]; total: number };
   pm: { matched: PMItem[]; not_in_master: PMItem[]; total: number };
   sfg: { matched: SFGItem[]; not_in_master: SFGItem[]; total: number };
+  fg_export: { matched: FGItem[]; not_in_master: FGItem[]; total: number };
+  fg_local: { matched: FGItem[]; not_in_master: FGItem[]; total: number };
 }
 
 interface BulkOpeningStockUploadProps {
@@ -67,7 +85,7 @@ interface BulkOpeningStockUploadProps {
   transactionDate?: string;
 }
 
-type TabType = 'rm' | 'pm' | 'sfg';
+type TabType = 'rm' | 'pm' | 'sfg' | 'fg_export' | 'fg_local';
 
 // ============================================================================
 // COMPONENT
@@ -78,6 +96,8 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
   const [rmItems, setRmItems] = useState<RMItem[]>([]);
   const [pmItems, setPmItems] = useState<PMItem[]>([]);
   const [sfgItems, setSfgItems] = useState<SFGItem[]>([]);
+  const [fgExportItems, setFgExportItems] = useState<FGItem[]>([]);
+  const [fgLocalItems, setFgLocalItems] = useState<FGItem[]>([]);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -85,12 +105,16 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     rm_matched: true, rm_unmatched: true,
     pm_matched: true, pm_unmatched: true,
-    sfg_matched: true, sfg_unmatched: true
+    sfg_matched: true, sfg_unmatched: true,
+    fg_export_matched: true, fg_export_unmatched: true,
+    fg_local_matched: true, fg_local_unmatched: true
   });
 
   const rmFileRef = useRef<HTMLInputElement>(null);
   const pmFileRef = useRef<HTMLInputElement>(null);
   const sfgFileRef = useRef<HTMLInputElement>(null);
+  const fgExportFileRef = useRef<HTMLInputElement>(null);
+  const fgLocalFileRef = useRef<HTMLInputElement>(null);
 
   // ============================================================================
   // EXCEL PARSING
@@ -328,6 +352,102 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
     reader.readAsArrayBuffer(file);
   }, []);
 
+  const parseFGExcel = useCallback((file: File, bomType: 'fg_export' | 'fg_local') => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+        
+        // Find header row - look for FG Code, Item Name, Party, Color, Qty columns
+        let headerRowIndex = 0;
+        for (let i = 0; i < Math.min(5, jsonData.length); i++) {
+          const row = jsonData[i];
+          if (row && row.some((cell: any) => 
+            String(cell).toLowerCase().includes('fg code') ||
+            String(cell).toLowerCase().includes('fg_code') ||
+            String(cell).toLowerCase().includes('item name') ||
+            String(cell).toLowerCase().includes('item_name')
+          )) {
+            headerRowIndex = i;
+            break;
+          }
+        }
+
+        const headerRow = jsonData[headerRowIndex];
+        const findColIndex = (names: string[]) => {
+          return headerRow.findIndex((h: any) => 
+            names.some(n => String(h).toLowerCase().includes(n.toLowerCase()))
+          );
+        };
+
+        const fgCodeCol = findColIndex(['fg code', 'fg_code', 'fgcode']);
+        const itemNameCol = findColIndex(['item name', 'item_name', 'itemname', 'name']);
+        const partyCol = findColIndex(['party', 'party name', 'party_name']);
+        const colorCol = findColIndex(['color', 'colour']);
+        const qtyBoxesCol = findColIndex(['qty (boxes)', 'qty_boxes', 'qty boxes', 'boxes', 'qty']);
+        const totalQtyPcsCol = findColIndex(['total qty (pcs)', 'total_qty_pcs', 'total qty pcs', 'pcs', 'total pcs']);
+        const totalQtyTonCol = findColIndex(['total qty (ton)', 'total_qty_ton', 'total qty ton', 'ton', 'total ton']);
+        const qcCol = findColIndex(['qc', 'quality', 'quality control']);
+
+        // Validate that required columns are found
+        if (fgCodeCol === -1) {
+          alert(`Error: Required column "FG Code" not found in Excel file. Please ensure your Excel file has the correct headers.`);
+          return;
+        }
+
+        const items: FGItem[] = [];
+        for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
+          const row = jsonData[i];
+          // Skip empty rows
+          if (!row || !row[fgCodeCol]) continue;
+          
+          const fgCode = String(row[fgCodeCol] || '').trim();
+          if (!fgCode) continue;
+
+          const itemName = itemNameCol >= 0 ? String(row[itemNameCol] || '').trim() : '';
+          const party = partyCol >= 0 ? String(row[partyCol] || '').trim() : '';
+          const color = colorCol >= 0 ? String(row[colorCol] || '').trim() : '';
+          const qtyBoxes = qtyBoxesCol >= 0 ? parseFloat(row[qtyBoxesCol]) || 0 : 0;
+          const totalQtyPcs = totalQtyPcsCol >= 0 ? parseFloat(row[totalQtyPcsCol]) || 0 : 0;
+          const totalQtyTon = totalQtyTonCol >= 0 ? parseFloat(row[totalQtyTonCol]) || 0 : 0;
+          
+          // Parse QC - can be Yes/No, true/false, 1/0, or checkbox
+          let qc = false;
+          if (qcCol >= 0) {
+            const qcValue = String(row[qcCol] || '').toLowerCase().trim();
+            qc = qcValue === 'yes' || qcValue === 'true' || qcValue === '1' || qcValue === 'y' || qcValue === 'checked';
+          }
+
+          items.push({
+            fg_code: fgCode,
+            item_name: itemName,
+            party: party,
+            color: color,
+            qty_boxes: qtyBoxes,
+            total_qty_pcs: totalQtyPcs,
+            total_qty_ton: totalQtyTon,
+            qc: qc
+          });
+        }
+
+        if (bomType === 'fg_export') {
+          setFgExportItems(items);
+        } else {
+          setFgLocalItems(items);
+        }
+        setValidationResult(null);
+      } catch (err) {
+        alert(`Error parsing ${bomType === 'fg_export' ? 'FG Export' : 'FG Local'} Excel file. Please check the format.`);
+        console.error(err);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }, []);
+
   // ============================================================================
   // API CALLS
   // ============================================================================
@@ -342,7 +462,9 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
           action: 'validate',
           rm_items: rmItems,
           pm_items: pmItems,
-          sfg_items: sfgItems
+          sfg_items: sfgItems,
+          fg_export_items: fgExportItems,
+          fg_local_items: fgLocalItems
         })
       });
 
@@ -359,6 +481,12 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
         if (result.data.sfg) {
           setSfgItems([...result.data.sfg.matched, ...result.data.sfg.not_in_master]);
         }
+        if (result.data.fg_export) {
+          setFgExportItems([...result.data.fg_export.matched, ...result.data.fg_export.not_in_master]);
+        }
+        if (result.data.fg_local) {
+          setFgLocalItems([...result.data.fg_local.matched, ...result.data.fg_local.not_in_master]);
+        }
       } else {
         alert('Validation failed: ' + result.error);
       }
@@ -368,7 +496,7 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
     } finally {
       setIsValidating(false);
     }
-  }, [rmItems, pmItems, sfgItems]);
+  }, [rmItems, pmItems, sfgItems, fgExportItems, fgLocalItems]);
 
   const uploadMatchedItems = useCallback(async () => {
     if (!validationResult) return;
@@ -376,8 +504,11 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
     const matchedRM = validationResult.rm.matched;
     const matchedPM = validationResult.pm.matched;
     const matchedSFG = validationResult.sfg.matched;
+    const matchedFGExport = validationResult.fg_export.matched;
+    const matchedFGLocal = validationResult.fg_local.matched;
 
-    if (matchedRM.length === 0 && matchedPM.length === 0 && matchedSFG.length === 0) {
+    if (matchedRM.length === 0 && matchedPM.length === 0 && matchedSFG.length === 0 && 
+        matchedFGExport.length === 0 && matchedFGLocal.length === 0) {
       alert('No matched items to upload');
       return;
     }
@@ -392,6 +523,8 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
           rm_items: matchedRM,
           pm_items: matchedPM,
           sfg_items: matchedSFG,
+          fg_export_items: matchedFGExport,
+          fg_local_items: matchedFGLocal,
           location_code: 'STORE',
           transaction_date: transactionDate || new Date().toISOString().split('T')[0],
           remarks: 'Bulk opening stock upload'
@@ -426,7 +559,7 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
     } finally {
       setIsUploading(false);
     }
-  }, [validationResult, onSuccess, onClose]);
+  }, [validationResult, onSuccess, onClose, transactionDate]);
 
   // ============================================================================
   // DOWNLOAD TEMPLATE
@@ -468,6 +601,24 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
         ];
         filename = 'sfg_opening_stock_template.xlsx';
         break;
+      case 'fg_export':
+        headers = ['FG Code', 'Item Name', 'Party', 'Color', 'Qty (boxes)', 'Total Qty (pcs)', 'Total Qty (ton)', 'QC'];
+        sampleData = [
+          ['210110101001', 'RP-Ro10-Ex', 'Regular', 'Black', '100', '30000', '1.82', 'Yes'],
+          ['210210101001', 'RP-Ro12-Ex', 'Regular', 'Black', '150', '45000', '2.73', 'Yes'],
+          ['210310101001', 'RP-Ro16-Ex', 'Regular', 'Black', '200', '30000', '2.18', 'Yes'],
+        ];
+        filename = 'fg_export_opening_stock_template.xlsx';
+        break;
+      case 'fg_local':
+        headers = ['FG Code', 'Item Name', 'Party', 'Color', 'Qty (boxes)', 'Total Qty (pcs)', 'Total Qty (ton)', 'QC'];
+        sampleData = [
+          ['310110101001', 'RP-Ro10-Gm', 'Local', 'Black', '50', '50000', '3.64', 'Yes'],
+          ['310210101001', 'RP-Ro12-Gm', 'Local', 'Black', '75', '75000', '5.46', 'Yes'],
+          ['310310101001', 'RP-Ro16T-Gm', 'Local', 'Black', '100', '80000', '5.82', 'Yes'],
+        ];
+        filename = 'fg_local_opening_stock_template.xlsx';
+        break;
     }
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleData]);
@@ -484,12 +635,14 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
   // RENDER
   // ============================================================================
 
-  const totalItems = rmItems.length + pmItems.length + sfgItems.length;
+  const totalItems = rmItems.length + pmItems.length + sfgItems.length + fgExportItems.length + fgLocalItems.length;
   const totalMatched = validationResult 
-    ? validationResult.rm.matched.length + validationResult.pm.matched.length + validationResult.sfg.matched.length 
+    ? validationResult.rm.matched.length + validationResult.pm.matched.length + validationResult.sfg.matched.length +
+      validationResult.fg_export.matched.length + validationResult.fg_local.matched.length
     : 0;
   const totalUnmatched = validationResult 
-    ? validationResult.rm.not_in_master.length + validationResult.pm.not_in_master.length + validationResult.sfg.not_in_master.length 
+    ? validationResult.rm.not_in_master.length + validationResult.pm.not_in_master.length + validationResult.sfg.not_in_master.length +
+      validationResult.fg_export.not_in_master.length + validationResult.fg_local.not_in_master.length
     : 0;
 
   return (
@@ -501,7 +654,7 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
             <Upload className="w-6 h-6 text-white mr-3" />
             <div>
               <h2 className="text-xl font-bold text-white">Bulk Opening Stock Upload</h2>
-              <p className="text-blue-100 text-sm">Upload Excel files to add opening stock for RM, PM, and SFG items</p>
+              <p className="text-blue-100 text-sm">Upload Excel files to add opening stock for RM, PM, SFG, and FG items</p>
             </div>
           </div>
           <button onClick={onClose} className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors">
@@ -515,6 +668,8 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
             { id: 'rm' as TabType, label: 'Raw Materials', icon: Package, count: rmItems.length },
             { id: 'pm' as TabType, label: 'Packing Materials', icon: Box, count: pmItems.length },
             { id: 'sfg' as TabType, label: 'SFG (Semi-Finished)', icon: Layers, count: sfgItems.length },
+            { id: 'fg_export' as TabType, label: 'FG Export', icon: Globe, count: fgExportItems.length },
+            { id: 'fg_local' as TabType, label: 'FG Local', icon: ShoppingCart, count: fgLocalItems.length },
           ].map(tab => (
             <button
               key={tab.id}
@@ -545,7 +700,12 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
             <div className="flex gap-4 items-center">
               <input
                 type="file"
-                ref={activeTab === 'rm' ? rmFileRef : activeTab === 'pm' ? pmFileRef : sfgFileRef}
+                ref={
+                  activeTab === 'rm' ? rmFileRef : 
+                  activeTab === 'pm' ? pmFileRef : 
+                  activeTab === 'sfg' ? sfgFileRef :
+                  activeTab === 'fg_export' ? fgExportFileRef : fgLocalFileRef
+                }
                 accept=".xlsx,.xls"
                 className="hidden"
                 onChange={(e) => {
@@ -553,7 +713,9 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
                   if (file) {
                     if (activeTab === 'rm') parseRMExcel(file);
                     else if (activeTab === 'pm') parsePMExcel(file);
-                    else parseSFGExcel(file);
+                    else if (activeTab === 'sfg') parseSFGExcel(file);
+                    else if (activeTab === 'fg_export') parseFGExcel(file, 'fg_export');
+                    else if (activeTab === 'fg_local') parseFGExcel(file, 'fg_local');
                   }
                 }}
               />
@@ -561,12 +723,14 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
                 onClick={() => {
                   if (activeTab === 'rm') rmFileRef.current?.click();
                   else if (activeTab === 'pm') pmFileRef.current?.click();
-                  else sfgFileRef.current?.click();
+                  else if (activeTab === 'sfg') sfgFileRef.current?.click();
+                  else if (activeTab === 'fg_export') fgExportFileRef.current?.click();
+                  else if (activeTab === 'fg_local') fgLocalFileRef.current?.click();
                 }}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <FileSpreadsheet className="w-4 h-4" />
-                Upload {activeTab.toUpperCase()} Excel
+                Upload {activeTab === 'fg_export' ? 'FG Export' : activeTab === 'fg_local' ? 'FG Local' : activeTab.toUpperCase()} Excel
               </button>
               <button
                 onClick={() => downloadTemplate(activeTab)}
@@ -668,6 +832,94 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
                         <td className="px-3 py-2 text-sm text-gray-900">{item.item_name}</td>
                         <td className="px-3 py-2 text-sm text-gray-900 font-mono">{item.sfg_code}</td>
                         <td className="px-3 py-2 text-sm text-gray-900 text-right">{item.quantity.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-center">
+                          {item.status === 'matched' && <CheckCircle2 className="w-4 h-4 text-green-500 inline" />}
+                          {item.status === 'not_in_master' && <AlertTriangle className="w-4 h-4 text-yellow-500 inline" />}
+                          {!item.status && <span className="text-gray-400">-</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'fg_export' && fgExportItems.length > 0 && (
+            <div className="mb-6">
+              <h4 className="font-medium text-gray-800 mb-2">FG Export Items Preview ({fgExportItems.length} items)</h4>
+              <div className="overflow-x-auto border rounded-lg max-h-64">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">FG Code</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Item Name</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Party</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Color</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty (boxes)</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total Qty (pcs)</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total Qty (ton)</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">QC</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {fgExportItems.map((item, idx) => (
+                      <tr key={idx} className={item.status === 'not_in_master' ? 'bg-yellow-50' : ''}>
+                        <td className="px-3 py-2 text-sm text-gray-900 font-mono">{item.fg_code}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900">{item.item_name}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900">{item.party}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900">{item.color}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900 text-right">{item.qty_boxes.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900 text-right">{item.total_qty_pcs.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900 text-right">{item.total_qty_ton.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-center">
+                          {item.qc ? <CheckCircle2 className="w-4 h-4 text-green-500 inline" /> : <span className="text-gray-400">-</span>}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {item.status === 'matched' && <CheckCircle2 className="w-4 h-4 text-green-500 inline" />}
+                          {item.status === 'not_in_master' && <AlertTriangle className="w-4 h-4 text-yellow-500 inline" />}
+                          {!item.status && <span className="text-gray-400">-</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'fg_local' && fgLocalItems.length > 0 && (
+            <div className="mb-6">
+              <h4 className="font-medium text-gray-800 mb-2">FG Local Items Preview ({fgLocalItems.length} items)</h4>
+              <div className="overflow-x-auto border rounded-lg max-h-64">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">FG Code</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Item Name</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Party</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Color</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty (boxes)</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total Qty (pcs)</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total Qty (ton)</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">QC</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {fgLocalItems.map((item, idx) => (
+                      <tr key={idx} className={item.status === 'not_in_master' ? 'bg-yellow-50' : ''}>
+                        <td className="px-3 py-2 text-sm text-gray-900 font-mono">{item.fg_code}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900">{item.item_name}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900">{item.party}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900">{item.color}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900 text-right">{item.qty_boxes.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900 text-right">{item.total_qty_pcs.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900 text-right">{item.total_qty_ton.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-center">
+                          {item.qc ? <CheckCircle2 className="w-4 h-4 text-green-500 inline" /> : <span className="text-gray-400">-</span>}
+                        </td>
                         <td className="px-3 py-2 text-center">
                           {item.status === 'matched' && <CheckCircle2 className="w-4 h-4 text-green-500 inline" />}
                           {item.status === 'not_in_master' && <AlertTriangle className="w-4 h-4 text-yellow-500 inline" />}
@@ -812,6 +1064,80 @@ const BulkOpeningStockUpload: React.FC<BulkOpeningStockUploadProps> = ({ onClose
                                   <td className="px-2 py-1">{item.item_name}</td>
                                   <td className="px-2 py-1 font-mono">{item.sfg_code}</td>
                                   <td className="px-2 py-1 text-right">{item.quantity}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* FG Export Unmatched */}
+                  {validationResult.fg_export.not_in_master.length > 0 && (
+                    <div>
+                      <button 
+                        onClick={() => toggleSection('fg_export_unmatched')}
+                        className="flex items-center text-sm font-medium text-yellow-800 hover:text-yellow-900"
+                      >
+                        {expandedSections.fg_export_unmatched ? <ChevronUp className="w-4 h-4 mr-1" /> : <ChevronDown className="w-4 h-4 mr-1" />}
+                        FG Export Items ({validationResult.fg_export.not_in_master.length})
+                      </button>
+                      {expandedSections.fg_export_unmatched && (
+                        <div className="mt-2 bg-white rounded border border-yellow-200 overflow-x-auto">
+                          <table className="min-w-full text-sm">
+                            <thead className="bg-yellow-100">
+                              <tr>
+                                <th className="px-2 py-1 text-left">FG Code</th>
+                                <th className="px-2 py-1 text-left">Item Name</th>
+                                <th className="px-2 py-1 text-left">Party</th>
+                                <th className="px-2 py-1 text-right">Qty (boxes)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {validationResult.fg_export.not_in_master.map((item, idx) => (
+                                <tr key={idx} className="border-t border-yellow-100">
+                                  <td className="px-2 py-1 font-mono">{item.fg_code}</td>
+                                  <td className="px-2 py-1">{item.item_name}</td>
+                                  <td className="px-2 py-1">{item.party}</td>
+                                  <td className="px-2 py-1 text-right">{item.qty_boxes}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* FG Local Unmatched */}
+                  {validationResult.fg_local.not_in_master.length > 0 && (
+                    <div>
+                      <button 
+                        onClick={() => toggleSection('fg_local_unmatched')}
+                        className="flex items-center text-sm font-medium text-yellow-800 hover:text-yellow-900"
+                      >
+                        {expandedSections.fg_local_unmatched ? <ChevronUp className="w-4 h-4 mr-1" /> : <ChevronDown className="w-4 h-4 mr-1" />}
+                        FG Local Items ({validationResult.fg_local.not_in_master.length})
+                      </button>
+                      {expandedSections.fg_local_unmatched && (
+                        <div className="mt-2 bg-white rounded border border-yellow-200 overflow-x-auto">
+                          <table className="min-w-full text-sm">
+                            <thead className="bg-yellow-100">
+                              <tr>
+                                <th className="px-2 py-1 text-left">FG Code</th>
+                                <th className="px-2 py-1 text-left">Item Name</th>
+                                <th className="px-2 py-1 text-left">Party</th>
+                                <th className="px-2 py-1 text-right">Qty (boxes)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {validationResult.fg_local.not_in_master.map((item, idx) => (
+                                <tr key={idx} className="border-t border-yellow-100">
+                                  <td className="px-2 py-1 font-mono">{item.fg_code}</td>
+                                  <td className="px-2 py-1">{item.item_name}</td>
+                                  <td className="px-2 py-1">{item.party}</td>
+                                  <td className="px-2 py-1 text-right">{item.qty_boxes}</td>
                                 </tr>
                               ))}
                             </tbody>

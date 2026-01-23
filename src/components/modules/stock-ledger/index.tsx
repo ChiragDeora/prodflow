@@ -75,6 +75,26 @@ interface StockBalance {
   item_type?: string;
   sub_category?: string;
   category?: string;
+  // RM-specific fields
+  rm_supplier?: string;
+  // SFG-specific fields
+  sfg_code?: string;
+  sfg_item_name?: string;
+  sfg_qty_pcs?: number;
+  sfg_qty_kgs?: number;
+  // PM-specific fields
+  pm_dimensions?: string;
+  pm_party_name?: string;
+  pm_color_remarks?: string;
+  // FG-specific fields
+  fg_code?: string;
+  fg_color?: string;
+  fg_party?: string;
+  fg_pack_size?: string;
+  qty_boxes?: number;
+  total_qty_pcs?: number;
+  total_qty_ton?: number;
+  qc_check?: boolean;
 }
 
 interface StockItem {
@@ -1129,10 +1149,34 @@ const formatItemDisplayTitle = (
     return itemCode;
   }
 
-  // For FG: Show item code and item name
+  // For FG: Show item name - color (avoid duplicates)
+  // Item code format is {fg_code}-{color}, so extract color from item_code
   if (itemType === 'FG') {
     if (itemName) {
-      return `${itemCode} ${itemName}`;
+      // Extract color from item_code (everything after the last dash)
+      const lastDashIndex = itemCode.lastIndexOf('-');
+      if (lastDashIndex > 0 && lastDashIndex < itemCode.length - 1) {
+        const color = itemCode.substring(lastDashIndex + 1);
+        // Remove color from item_name if it's already there (check for " - color" or " (color)" or just "color" at the end)
+        let cleanItemName = itemName.trim();
+        
+        // Remove trailing " - {color}" pattern
+        const dashColorPattern = new RegExp(`\\s*-\\s*${color.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
+        cleanItemName = cleanItemName.replace(dashColorPattern, '');
+        
+        // Remove trailing " ({color})" pattern
+        const parenColorPattern = new RegExp(`\\s*\\(${color.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)\\s*$`, 'i');
+        cleanItemName = cleanItemName.replace(parenColorPattern, '');
+        
+        // Only add color if it's not already in the name
+        const colorLower = color.toLowerCase();
+        if (!cleanItemName.toLowerCase().includes(colorLower)) {
+          return `${cleanItemName} - ${color}`;
+        }
+        return cleanItemName;
+      }
+      // If no color found in item_code, just show item name
+      return itemName;
     }
     return itemCode;
   }
@@ -1194,10 +1238,34 @@ const formatBalanceItemDisplayTitle = (item: StockBalance): string => {
     return itemCode;
   }
 
-  // For FG: Show item code and item name
+  // For FG: Show item name - color (avoid duplicates)
+  // Item code format is {fg_code}-{color}, so extract color from item_code
   if (itemType === 'FG') {
     if (itemName) {
-      return `${itemCode} ${itemName}`;
+      // Extract color from item_code (everything after the last dash)
+      const lastDashIndex = itemCode.lastIndexOf('-');
+      if (lastDashIndex > 0 && lastDashIndex < itemCode.length - 1) {
+        const color = itemCode.substring(lastDashIndex + 1);
+        // Remove color from item_name if it's already there (check for " - color" or " (color)" or just "color" at the end)
+        let cleanItemName = itemName.trim();
+        
+        // Remove trailing " - {color}" pattern
+        const dashColorPattern = new RegExp(`\\s*-\\s*${color.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
+        cleanItemName = cleanItemName.replace(dashColorPattern, '');
+        
+        // Remove trailing " ({color})" pattern
+        const parenColorPattern = new RegExp(`\\s*\\(${color.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)\\s*$`, 'i');
+        cleanItemName = cleanItemName.replace(parenColorPattern, '');
+        
+        // Only add color if it's not already in the name
+        const colorLower = color.toLowerCase();
+        if (!cleanItemName.toLowerCase().includes(colorLower)) {
+          return `${cleanItemName} - ${color}`;
+        }
+        return cleanItemName;
+      }
+      // If no color found in item_code, just show item name
+      return itemName;
     }
     return itemCode;
   }
@@ -1318,16 +1386,73 @@ const MovementsList: React.FC<{
                         
                         {/* Quantity */}
                         <div className="text-right">
-                          <div className={`text-lg font-bold ${
-                            entry.movement_type === 'IN' ? 'text-green-600' : 
-                            entry.movement_type === 'OUT' ? 'text-red-600' : 'text-blue-600'
-                          }`}>
-                            {entry.movement_type === 'IN' ? '+' : entry.movement_type === 'OUT' ? '-' : ''}
-                            {Math.abs(entry.quantity).toFixed(2)} {entry.unit_of_measure}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            Balance: <span className="font-medium text-gray-700">{entry.balance_after.toFixed(2)}</span>
-                          </div>
+                          {entry.stock_items?.item_type === 'FG' && entry.remarks ? (
+                            // For FG items, parse remarks to show boxes, pcs, and KG
+                            (() => {
+                              // Parse "FG produced: 1 boxes × 300 pcs (Weight: 123.45 KG)"
+                              const fgTransferMatch = entry.remarks.match(/(\d+)\s*boxes?\s*×\s*(\d+)\s*pcs/i);
+                              const kgMatch = entry.remarks.match(/Weight:\s*([\d.]+)\s*KG/i);
+                              if (fgTransferMatch) {
+                                const boxes = parseInt(fgTransferMatch[1]) || 0;
+                                const packSize = parseInt(fgTransferMatch[2]) || 0;
+                                const pcs = boxes * packSize; // total_qty_pcs = boxes × pack_size
+                                const kg = kgMatch ? parseFloat(kgMatch[1]) : 0;
+                                return (
+                                  <>
+                                    <div className={`text-lg font-bold ${
+                                      entry.movement_type === 'IN' ? 'text-green-600' : 
+                                      entry.movement_type === 'OUT' ? 'text-red-600' : 'text-blue-600'
+                                    }`}>
+                                      {entry.movement_type === 'IN' ? '+' : entry.movement_type === 'OUT' ? '-' : ''} {boxes} {boxes === 1 ? 'box' : 'boxes'}
+                                    </div>
+                                    <div className={`text-sm font-medium ${
+                                      entry.movement_type === 'IN' ? 'text-green-600' : 
+                                      entry.movement_type === 'OUT' ? 'text-red-600' : 'text-blue-600'
+                                    }`}>
+                                      {pcs.toLocaleString()} pcs
+                                    </div>
+                                    {kg > 0 && (
+                                      <div className={`text-xs font-medium ${
+                                        entry.movement_type === 'IN' ? 'text-green-600' : 
+                                        entry.movement_type === 'OUT' ? 'text-red-600' : 'text-blue-600'
+                                      }`}>
+                                        {kg.toFixed(2)} KG
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              }
+                              // Fallback to standard format if parsing fails
+                              return (
+                                <>
+                                  <div className={`text-lg font-bold ${
+                                    entry.movement_type === 'IN' ? 'text-green-600' : 
+                                    entry.movement_type === 'OUT' ? 'text-red-600' : 'text-blue-600'
+                                  }`}>
+                                    {entry.movement_type === 'IN' ? '+' : entry.movement_type === 'OUT' ? '-' : ''}
+                                    {Math.abs(entry.quantity).toFixed(2)} {entry.unit_of_measure}
+                                  </div>
+                                  <div className="text-sm text-gray-500">
+                                    Balance: <span className="font-medium text-gray-700">{entry.balance_after.toFixed(2)}</span>
+                                  </div>
+                                </>
+                              );
+                            })()
+                          ) : (
+                            // Standard format for non-FG items
+                            <>
+                              <div className={`text-lg font-bold ${
+                                entry.movement_type === 'IN' ? 'text-green-600' : 
+                                entry.movement_type === 'OUT' ? 'text-red-600' : 'text-blue-600'
+                              }`}>
+                                {entry.movement_type === 'IN' ? '+' : entry.movement_type === 'OUT' ? '-' : ''}
+                                {Math.abs(entry.quantity).toFixed(2)} {entry.unit_of_measure}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                Balance: <span className="font-medium text-gray-700">{entry.balance_after.toFixed(2)}</span>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
 
@@ -1363,7 +1488,8 @@ const StockItemDetailModal: React.FC<{
   item: StockBalance | null;
   onClose: () => void;
   onViewHistory: (itemCode: string) => void;
-}> = ({ item, onClose, onViewHistory }) => {
+  fgBomData?: Record<string, any>;
+}> = ({ item, onClose, onViewHistory, fgBomData = {} }) => {
   if (!item) return null;
 
   return (
@@ -1392,10 +1518,15 @@ const StockItemDetailModal: React.FC<{
                 }`} />
               </div>
               <div>
-                <h3 className="font-bold text-gray-900 text-lg">Stock Item Details</h3>
-                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${ITEM_TYPE_COLORS[item.item_type || 'RM']}`}>
-                  {item.item_type || 'Unknown'}
-                </span>
+                <h3 className="font-bold text-gray-900 text-lg">
+                  {formatBalanceItemDisplayTitle(item) || 'Stock Item Details'}
+                </h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="font-mono text-sm text-gray-600">{item.item_code}</span>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${ITEM_TYPE_COLORS[item.item_type || 'RM']}`}>
+                    {item.item_type || 'Unknown'}
+                  </span>
+                </div>
               </div>
             </div>
             <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/50 rounded-lg">
@@ -1406,19 +1537,19 @@ const StockItemDetailModal: React.FC<{
 
         {/* Content */}
         <div className="p-6 space-y-4">
-          {/* Item Code - Prominent */}
+          {/* Item Name / Description - Prominent (First) */}
+          {formatBalanceItemDisplayTitle(item) && (
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Item Name / Description</div>
+              <div className="text-xl font-bold text-gray-900">{formatBalanceItemDisplayTitle(item)}</div>
+            </div>
+          )}
+
+          {/* Item Code */}
           <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
             <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Item Code</div>
             <div className="font-mono text-xl font-bold text-gray-900">{item.item_code}</div>
           </div>
-
-          {/* Item Name */}
-          {item.item_name && (
-            <div>
-              <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Item Name / Description</div>
-              <div className="text-gray-900">{item.item_name}</div>
-            </div>
-          )}
 
           {/* Current Balance - Large */}
           <div className={`rounded-lg p-4 ${
@@ -1427,16 +1558,68 @@ const StockItemDetailModal: React.FC<{
             'bg-emerald-50 border border-emerald-200'
           }`}>
             <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Current Stock Balance</div>
-            <div className="flex items-baseline gap-2">
-              <span className={`text-3xl font-bold ${
-                item.current_balance < 0 ? 'text-red-600' :
-                item.current_balance === 0 ? 'text-yellow-600' :
-                'text-emerald-600'
-              }`}>
-                {item.current_balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-              <span className="text-gray-600">{item.unit_of_measure}</span>
-            </div>
+            {item.item_type === 'FG' && fgBomData[item.item_code] ? (
+              // For FG items, show boxes, pcs, and KG
+              (() => {
+                const bom = fgBomData[item.item_code];
+                const packSize = parseFloat(bom.pack_size || '0') || 1;
+                const pcs = Math.abs(item.current_balance);
+                const boxes = packSize > 0 ? Math.floor(pcs / packSize) : 0;
+                
+                // Calculate KG: Total Qty (KG) = Total Qty (pcs) × (SFG1_rp_int_wt + SFG2_rp_int_wt) / 1000
+                let totalKg = 0;
+                if (bom.sfg1_int_wt && bom.sfg2_int_wt && pcs > 0) {
+                  const sfg1RpIntWt = bom.sfg1_int_wt || 0;
+                  const sfg2RpIntWt = bom.sfg2_int_wt || 0;
+                  totalKg = pcs * (sfg1RpIntWt + sfg2RpIntWt) / 1000;
+                }
+                
+                return (
+                  <div className="space-y-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className={`text-3xl font-bold ${
+                        item.current_balance < 0 ? 'text-red-600' :
+                        item.current_balance === 0 ? 'text-yellow-600' :
+                        'text-emerald-600'
+                      }`}>
+                        {boxes} {boxes === 1 ? 'box' : 'boxes'}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className={`text-2xl font-semibold ${
+                        item.current_balance < 0 ? 'text-red-600' :
+                        item.current_balance === 0 ? 'text-yellow-600' :
+                        'text-emerald-600'
+                      }`}>
+                        {pcs.toLocaleString()} pcs
+                      </span>
+                    </div>
+                    {totalKg > 0 && (
+                      <div className="flex items-baseline gap-2">
+                        <span className={`text-xl font-semibold ${
+                          item.current_balance < 0 ? 'text-red-600' :
+                          item.current_balance === 0 ? 'text-yellow-600' :
+                          'text-emerald-600'
+                        }`}>
+                          {totalKg.toFixed(2)} KG
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
+            ) : (
+              <div className="flex items-baseline gap-2">
+                <span className={`text-3xl font-bold ${
+                  item.current_balance < 0 ? 'text-red-600' :
+                  item.current_balance === 0 ? 'text-yellow-600' :
+                  'text-emerald-600'
+                }`}>
+                  {item.current_balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                <span className="text-gray-600">{item.unit_of_measure}</span>
+              </div>
+            )}
             {item.current_balance < 0 && (
               <div className="mt-2 flex items-center gap-1 text-red-600 text-sm">
                 <AlertTriangle className="w-4 h-4" />
@@ -1504,6 +1687,34 @@ const BalancesGrid: React.FC<{
   setSortOrder: (sortOrder: 'asc' | 'desc') => void;
 }> = ({ balances, expandedItems, onToggleExpand, onViewHistory, filters, sortBy, sortOrder, stockFilter, setSortBy, setSortOrder }) => {
   const [selectedItem, setSelectedItem] = useState<StockBalance | null>(null);
+  const [fgBomData, setFgBomData] = useState<Record<string, any>>({});
+  
+  // Fetch FG BOM data for all FG items
+  useEffect(() => {
+    const fgItems = balances.filter(b => b.item_type === 'FG');
+    if (fgItems.length === 0) return;
+    
+    fetch('/api/production/fg-transfer-note/bom-data')
+      .then(res => res.json())
+      .then(result => {
+        if (result.success && result.data) {
+          const bomMap: Record<string, any> = {};
+          fgItems.forEach(item => {
+            // Extract FG code from item_code (format: fg_code-color)
+            const lastDashIndex = item.item_code.lastIndexOf('-');
+            if (lastDashIndex > 0) {
+              const fgCode = item.item_code.substring(0, lastDashIndex);
+              const bom = result.data.find((b: any) => b.item_code === fgCode);
+              if (bom) {
+                bomMap[item.item_code] = bom;
+              }
+            }
+          });
+          setFgBomData(bomMap);
+        }
+      })
+      .catch(err => console.error('Error fetching FG BOM data:', err));
+  }, [balances]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Filter and sort balances
@@ -1668,30 +1879,56 @@ const BalancesGrid: React.FC<{
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            {/* Item Type Badge */}
+                            {/* Show item name/description first, then item code */}
                             <div className="flex items-center gap-2 mb-1">
-                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${ITEM_TYPE_COLORS[item.item_type || 'RM']}`}>
-                                {item.item_type || '?'}
+                              {/* Show item name/description prominently first */}
+                              <span className="font-semibold text-gray-900">
+                                {formatBalanceItemDisplayTitle(item)}
                               </span>
-                              {/* Show sub_category without RM- prefix for RM items */}
-                              {item.sub_category && (
-                                <span className="font-mono text-xs text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
-                                  {item.sub_category.replace('RM-', '')}
+                              {/* Item Type Badge */}
+                              {item.item_type && (
+                                <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${ITEM_TYPE_COLORS[item.item_type]}`}>
+                                  {item.item_type}
                                 </span>
                               )}
+                              {/* Location Badge - Aligned with item type badge */}
+                              <span className={`px-1.5 py-0.5 rounded text-xs font-medium border ${LOCATION_COLORS[item.location_code] || 'bg-gray-100 text-gray-700'}`}>
+                                {item.location_code.replace('_', ' ')}
+                              </span>
                             </div>
-                            {/* Item Name - Format based on item type */}
-                            <div className="font-medium text-gray-900 text-sm truncate">
-                              {formatBalanceItemDisplayTitle(item)}
+                            {/* Show item code below (secondary information) */}
+                            <div className="text-sm text-gray-600 font-mono">
+                              {item.item_code}
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <div className={`text-right ${item.current_balance < 0 ? 'text-red-600' : item.current_balance === 0 ? 'text-yellow-600' : 'text-gray-900'}`}>
-                              <div className="font-bold text-lg">
-                                {item.current_balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {item.item_type === 'FG' && fgBomData[item.item_code] ? (
+                              // For FG items, show boxes and pcs
+                              (() => {
+                                const bom = fgBomData[item.item_code];
+                                const packSize = parseFloat(bom.pack_size || '0') || 1;
+                                const pcs = Math.abs(item.current_balance);
+                                const boxes = packSize > 0 ? Math.floor(pcs / packSize) : 0;
+                                const remainingPcs = pcs % packSize;
+                                return (
+                                  <div className={`text-right ${item.current_balance < 0 ? 'text-red-600' : item.current_balance === 0 ? 'text-yellow-600' : 'text-gray-900'}`}>
+                                    <div className="font-bold text-lg">
+                                      {boxes > 0 ? `${boxes} ${boxes === 1 ? 'box' : 'boxes'}` : ''}
+                                    </div>
+                                    <div className="text-sm font-medium">
+                                      {pcs.toLocaleString()} pcs
+                                    </div>
+                                  </div>
+                                );
+                              })()
+                            ) : (
+                              <div className={`text-right ${item.current_balance < 0 ? 'text-red-600' : item.current_balance === 0 ? 'text-yellow-600' : 'text-gray-900'}`}>
+                                <div className="font-bold text-lg">
+                                  {item.current_balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </div>
+                                <div className="text-xs text-gray-500">{item.unit_of_measure}</div>
                               </div>
-                              <div className="text-xs text-gray-500">{item.unit_of_measure}</div>
-                            </div>
+                            )}
                             <button
                               onClick={(e) => { e.stopPropagation(); onViewHistory(item.item_code); }}
                               className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded opacity-0 group-hover:opacity-100 transition-all"
@@ -1784,7 +2021,24 @@ const BalancesGrid: React.FC<{
                     <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">{item.item_code}</span>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900">
-                    {formatBalanceItemDisplayTitle(item) || '-'}
+                    {/* Show item name/description first, then item code */}
+                    <div className="flex items-center gap-2 mb-1">
+                      {/* Show item name/description prominently first */}
+                      <span className="font-semibold">
+                        {formatBalanceItemDisplayTitle(item)}
+                      </span>
+                      <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${ITEM_TYPE_COLORS[item.item_type || 'RM']}`}>
+                        {item.item_type || '?'}
+                      </span>
+                      {/* Location Badge - Aligned with item type badge */}
+                      <span className={`px-1.5 py-0.5 rounded text-xs font-medium border ${LOCATION_COLORS[item.location_code] || 'bg-gray-100 text-gray-700'}`}>
+                        {item.location_code.replace('_', ' ')}
+                      </span>
+                    </div>
+                    {/* Show item code below (secondary information) */}
+                    <div className="text-xs text-gray-600 font-mono mt-1">
+                      {item.item_code}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${LOCATION_COLORS[item.location_code]}`}>
@@ -1797,10 +2051,31 @@ const BalancesGrid: React.FC<{
                     item.current_balance === 0 ? 'text-yellow-600' : 
                     'text-gray-900'
                   }`}>
-                    {item.current_balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    {item.current_balance < 0 && <AlertTriangle className="w-3 h-3 ml-1 inline" />}
+                    {item.item_type === 'FG' && fgBomData[item.item_code] ? (
+                      // For FG items, show boxes and pcs
+                      (() => {
+                        const bom = fgBomData[item.item_code];
+                        const packSize = parseFloat(bom.pack_size || '0') || 1;
+                        const pcs = Math.abs(item.current_balance);
+                        const boxes = packSize > 0 ? Math.floor(pcs / packSize) : 0;
+                        return (
+                          <div>
+                            <div>{boxes > 0 ? `${boxes} ${boxes === 1 ? 'box' : 'boxes'}` : '0 boxes'}</div>
+                            <div className="text-sm font-medium">{pcs.toLocaleString()} pcs</div>
+                            {item.current_balance < 0 && <AlertTriangle className="w-3 h-3 ml-1 inline" />}
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <>
+                        {item.current_balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {item.current_balance < 0 && <AlertTriangle className="w-3 h-3 ml-1 inline" />}
+                      </>
+                    )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{item.unit_of_measure}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    {item.item_type === 'FG' ? 'pcs' : item.unit_of_measure}
+                  </td>
                   <td className="px-4 py-3 text-sm text-gray-500">{item.last_movement_at ? formatDateTime(item.last_movement_at) : '-'}</td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-1">
@@ -1834,6 +2109,7 @@ const BalancesGrid: React.FC<{
         item={selectedItem}
         onClose={() => setSelectedItem(null)}
         onViewHistory={(code) => { setSelectedItem(null); onViewHistory(code); }}
+        fgBomData={fgBomData}
       />
     </div>
   );
@@ -1930,6 +2206,185 @@ const DetailPanel: React.FC<{
         .catch(err => console.error('Error fetching supplier:', err));
     }
   }, [itemType, parsedInfo.grade]);
+
+  // For FG items, fetch data from source document or parse from remarks
+  const [fgDetails, setFgDetails] = useState<{
+    fgCode: string;
+    color: string;
+    itemName: string;
+    party: string;
+    packSize: number;
+    qtyBoxes: number;
+    totalQtyPcs: number;
+    totalQtyKg: number;
+  } | null>(null);
+  
+  useEffect(() => {
+    if (itemType === 'FG' && entry.item_code) {
+      // Extract FG code and color from item_code (format: {fg_code}-{color})
+      const lastDashIndex = entry.item_code.lastIndexOf('-');
+      let fgCode = entry.item_code;
+      let color = '';
+      
+      if (lastDashIndex > 0 && lastDashIndex < entry.item_code.length - 1) {
+        fgCode = entry.item_code.substring(0, lastDashIndex);
+        color = entry.item_code.substring(lastDashIndex + 1);
+      }
+      
+      // Try to get data from source document first (FG Transfer Note)
+      if (entry.document_type === 'FG_TRANSFER' && entry.document_id) {
+        fetch(`/api/production/fg-transfer-note/${entry.document_id}`)
+          .then(res => res.json())
+          .then(result => {
+            if (result.success && result.data && result.items) {
+              // Find matching item by FG code and color
+              const item = result.items.find((i: any) => 
+                i.fg_code === fgCode && i.color === color
+              );
+              
+              if (item) {
+                // All data is already calculated in FG Transfer Note
+                setFgDetails({
+                  fgCode,
+                  color: item.color || color,
+                  itemName: item.item_name || itemName || '',
+                  party: item.party || '',
+                  packSize: item.pack_size || 0,
+                  qtyBoxes: item.qty_boxes || 0,
+                  totalQtyPcs: item.total_qty_pcs || entry.quantity || 0,
+                  totalQtyKg: item.total_qty_kg || (item.total_qty_ton ? item.total_qty_ton * 1000 : 0) // Convert tons to KG if needed
+                });
+                return;
+              }
+            }
+            
+            // If not found in source doc, parse from remarks or use BOM for pack_size
+            parseFGDataFromRemarks(entry.remarks || '', fgCode, color, entry.quantity);
+          })
+          .catch(() => {
+            // If fetch fails, parse from remarks
+            parseFGDataFromRemarks(entry.remarks || '', fgCode, color, entry.quantity);
+          });
+      } else {
+        // For opening stock or other sources, parse from remarks
+        parseFGDataFromRemarks(entry.remarks || '', fgCode, color, entry.quantity);
+      }
+    }
+    
+    function parseFGDataFromRemarks(remarks: string, fgCode: string, color: string, quantity: number) {
+      let party = '';
+      let packSize = 0;
+      let qtyBoxes = 0;
+      let totalQtyKg = 0;
+      
+      // Parse opening stock remarks: "Bulk upload: FG Export RP-Ro10-Ex (Black) (30 boxes)"
+      const boxesMatch = remarks.match(/\((\d+)\s*boxes?\)/i);
+      if (boxesMatch) {
+        qtyBoxes = parseInt(boxesMatch[1]) || 0;
+      }
+      
+      // Parse FG Transfer Note remarks: "FG produced: 30 boxes × 300 pcs (Weight: 123.45 KG)"
+      const fgTransferMatch = remarks.match(/(\d+)\s*boxes?\s*×\s*(\d+)\s*pcs/i);
+      if (fgTransferMatch) {
+        qtyBoxes = parseInt(fgTransferMatch[1]) || 0;
+        packSize = parseInt(fgTransferMatch[2]) || 0;
+      }
+      
+      // Parse KG from remarks: "Weight: 123.45 KG"
+      const kgMatch = remarks.match(/Weight:\s*([\d.]+)\s*KG/i);
+      if (kgMatch) {
+        totalQtyKg = parseFloat(kgMatch[1]) || 0;
+      }
+      
+      // If boxes not found in remarks, calculate from quantity and pack_size
+      // Fetch pack_size from BOM (fg_bom or local_bom) if needed
+      if (qtyBoxes === 0 && quantity > 0) {
+        const isExport = fgCode.startsWith('2');
+        
+        fetch(`/api/production/fg-transfer-note/bom-data`)
+          .then(res => res.json())
+          .then(result => {
+            if (result.success && result.data) {
+              // Find matching BOM entry (only fg_bom or local_bom, never sfg_bom)
+              const bom = result.data.find((b: any) => 
+                b.item_code === fgCode && (b.category === 'FG' || b.category === 'LOCAL')
+              );
+              
+              if (bom) {
+                const packSizeStr = bom.pack_size || '0';
+                packSize = parseFloat(packSizeStr.toString().replace(/[^0-9.]/g, '')) || 0;
+                qtyBoxes = packSize > 0 ? quantity / packSize : 0;
+                
+                // Calculate KG from BOM if we have int_wt data
+                let calculatedKg = 0;
+                if (bom.sfg1_int_wt && bom.sfg2_int_wt && packSize > 0) {
+                  // Formula: Total Qty (KG) = Total Qty (pcs) × (SFG1_rp_int_wt + SFG2_rp_int_wt) / 1000
+                  const sfg1RpIntWt = bom.sfg1_int_wt || 0;
+                  const sfg2RpIntWt = bom.sfg2_int_wt || 0;
+                  calculatedKg = quantity * (sfg1RpIntWt + sfg2RpIntWt) / 1000;
+                }
+                
+                setFgDetails({
+                  fgCode,
+                  color,
+                  itemName: bom.item_name || itemName || '',
+                  party: bom.party_name || party || '',
+                  packSize,
+                  qtyBoxes: Math.round(qtyBoxes * 100) / 100,
+                  totalQtyPcs: quantity,
+                  totalQtyKg: totalQtyKg || calculatedKg
+                });
+              } else {
+                // BOM not found, just show what we have
+                setFgDetails({
+                  fgCode,
+                  color,
+                  itemName: itemName || '',
+                  party: '',
+                  packSize: 0,
+                  qtyBoxes: 0,
+                  totalQtyPcs: quantity,
+                  totalQtyKg: totalQtyKg
+                });
+              }
+            }
+          })
+          .catch(() => {
+            // BOM fetch failed, show what we have
+            setFgDetails({
+              fgCode,
+              color,
+              itemName: itemName || '',
+              party: '',
+              packSize: 0,
+              qtyBoxes: 0,
+              totalQtyPcs: quantity,
+              totalQtyKg: totalQtyKg
+            });
+          });
+      } else {
+        // We have boxes from remarks, set details
+        setFgDetails({
+          fgCode,
+          color,
+          itemName: itemName || '',
+          party,
+          packSize,
+          qtyBoxes,
+          totalQtyPcs: quantity,
+          totalQtyKg: totalQtyKg
+        });
+      }
+    }
+  }, [itemType, entry.item_code, entry.quantity, entry.remarks, entry.document_type, entry.document_id, itemName]);
+  
+  // Calculate boxes from balance_after for summary card display
+  const balanceBoxes = useMemo(() => {
+    if (itemType === 'FG' && fgDetails && fgDetails.packSize > 0) {
+      return Math.round((entry.balance_after / fgDetails.packSize) * 100) / 100;
+    }
+    return 0;
+  }, [itemType, fgDetails, entry.balance_after]);
   
   // For RM items, show grade as item name instead of the category name
   const displayItemName = itemType === 'RM' && parsedInfo.grade 
@@ -2078,10 +2533,22 @@ const DetailPanel: React.FC<{
               <div className="text-sm text-gray-600">
                 {entry.movement_type === 'IN' ? 'Received' : entry.movement_type === 'OUT' ? 'Issued' : 'Transferred'}
               </div>
+              {/* Show boxes for FG items based on movement quantity */}
+              {itemType === 'FG' && fgDetails && fgDetails.qtyBoxes > 0 && (
+                <div className="text-sm text-gray-700 mt-1">
+                  ({fgDetails.qtyBoxes.toFixed(0)} boxes)
+                </div>
+              )}
             </div>
           </div>
           <div className="text-sm text-gray-600">
             Balance after: <span className="font-semibold text-gray-900">{entry.balance_after.toFixed(2)}</span>
+            {/* Show boxes for FG items based on balance */}
+            {itemType === 'FG' && balanceBoxes > 0 && (
+              <span className="ml-2 text-gray-700">
+                ({balanceBoxes.toFixed(0)} boxes)
+              </span>
+            )}
           </div>
         </div>
 
@@ -2119,6 +2586,45 @@ const DetailPanel: React.FC<{
                 <span className="font-medium text-gray-900">{subCategory.replace('RM-', '')}</span>
               </div>
             )}
+            {/* FG-specific fields */}
+            {itemType === 'FG' && fgDetails && (
+              <>
+                <div className="flex justify-between items-start">
+                  <span className="text-gray-500">FG Code</span>
+                  <span className="font-mono font-medium text-gray-900 bg-gray-100 px-2 py-0.5 rounded">{fgDetails.fgCode}</span>
+                </div>
+                <div className="flex justify-between items-start">
+                  <span className="text-gray-500">Item Name</span>
+                  <span className="font-medium text-gray-900 text-right max-w-[180px]">{fgDetails.itemName}</span>
+                </div>
+                {fgDetails.party && (
+                  <div className="flex justify-between items-start">
+                    <span className="text-gray-500">Party</span>
+                    <span className="font-medium text-gray-900 text-right max-w-[180px]">{fgDetails.party}</span>
+                  </div>
+                )}
+                {fgDetails.color && (
+                  <div className="flex justify-between items-start">
+                    <span className="text-gray-500">Color</span>
+                    <span className="font-medium text-gray-900 text-right max-w-[180px]">{fgDetails.color}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-start">
+                  <span className="text-gray-500">Qty (boxes)</span>
+                  <span className="font-medium text-gray-900">{fgDetails.qtyBoxes.toFixed(0)}</span>
+                </div>
+                <div className="flex justify-between items-start">
+                  <span className="text-gray-500">Total Qty (pcs)</span>
+                  <span className="font-medium text-gray-900">{fgDetails.totalQtyPcs.toLocaleString()}</span>
+                </div>
+                {fgDetails.totalQtyKg > 0 && (
+                  <div className="flex justify-between items-start">
+                    <span className="text-gray-500">Total Qty (KG)</span>
+                    <span className="font-medium text-gray-900">{fgDetails.totalQtyKg.toFixed(2)}</span>
+                  </div>
+                )}
+              </>
+            )}
             <div className="flex justify-between items-center">
               <span className="text-gray-500">Location</span>
               <span className={`px-2 py-0.5 rounded text-xs font-medium border ${LOCATION_COLORS[entry.location_code] || 'bg-gray-100 text-gray-700'}`}>
@@ -2137,6 +2643,45 @@ const DetailPanel: React.FC<{
               <span className="text-gray-500">Unit</span>
               <span className="font-medium text-gray-900">{entry.unit_of_measure}</span>
             </div>
+            {/* JOB_WORK_CHALLAN specific: Show both bill_wt and int_wt */}
+            {entry.document_type === 'JOB_WORK_CHALLAN' && entry.remarks && (
+              <>
+                {(() => {
+                  // Parse bill_wt and int_wt from remarks
+                  // Format: "... (X Pcs, Bill Wt: Y.YY KG, Int Wt: Z.ZZ KG)"
+                  const billWtMatch = entry.remarks.match(/Bill Wt:\s*([\d.]+)\s*KG/i);
+                  const intWtMatch = entry.remarks.match(/Int Wt:\s*([\d.]+)\s*KG/i);
+                  const pcsMatch = entry.remarks.match(/\((\d+)\s*Pcs/i);
+                  
+                  const billWt = billWtMatch ? parseFloat(billWtMatch[1]) : null;
+                  const intWt = intWtMatch ? parseFloat(intWtMatch[1]) : null;
+                  const pcs = pcsMatch ? parseInt(pcsMatch[1]) : null;
+                  
+                  return (
+                    <>
+                      {pcs !== null && (
+                        <div className="flex justify-between items-start">
+                          <span className="text-gray-500">Qty (Pcs)</span>
+                          <span className="font-medium text-gray-900">-{pcs.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {billWt !== null && (
+                        <div className="flex justify-between items-start">
+                          <span className="text-gray-500">Bill Wt (KG)</span>
+                          <span className="font-medium text-gray-900">{billWt.toFixed(2)}</span>
+                        </div>
+                      )}
+                      {intWt !== null && (
+                        <div className="flex justify-between items-start">
+                          <span className="text-gray-500">Int Wt (KG)</span>
+                          <span className="font-medium text-gray-900">{intWt.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </>
+            )}
           </div>
         </div>
 

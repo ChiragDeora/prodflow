@@ -39,7 +39,7 @@ interface FGNItem {
   qty_boxes: number;
   pack_size: number;
   total_qty_pcs: number;
-  total_qty_ton: number;
+  total_qty_kg: number;
   sfg1_code: string;
   sfg1_qty: number;
   sfg1_int_wt: number;
@@ -94,7 +94,7 @@ const createEmptyItem = (): FGNItem => ({
   qty_boxes: 0,
   pack_size: 0,
   total_qty_pcs: 0,
-  total_qty_ton: 0,
+  total_qty_kg: 0,
   sfg1_code: '',
   sfg1_qty: 0,
   sfg1_int_wt: 0,
@@ -269,10 +269,17 @@ const FGNForm: React.FC = () => {
 
   const calculateDeductions = useCallback((item: FGNItem): FGNItem => {
     const qtyBoxes = item.qty_boxes || 0;
+    const totalQtyPcs = item.pack_size * qtyBoxes;
+    // Calculate Total Qty (KG) = Total Qty (pcs) × (SFG1_rp_int_wt + SFG2_rp_int_wt) / 1000
+    // int_wt is in grams, so divide by 1000 to convert to KG
+    const sfg1RpIntWt = item.sfg1_int_wt || 0;
+    const sfg2RpIntWt = item.sfg2_int_wt || 0;
+    const totalQtyKg = totalQtyPcs * (sfg1RpIntWt + sfg2RpIntWt) / 1000;
+    
     return {
       ...item,
-      total_qty_pcs: item.pack_size * qtyBoxes,
-      total_qty_ton: ((item.sfg1_qty * item.sfg1_int_wt) + (item.sfg2_qty * item.sfg2_int_wt)) * qtyBoxes / 1000000,
+      total_qty_pcs: totalQtyPcs,
+      total_qty_kg: totalQtyKg,
       sfg1_deduct: item.sfg1_qty * qtyBoxes,
       sfg2_deduct: item.sfg2_qty * qtyBoxes,
       cnt_deduct: item.cnt_qty * qtyBoxes,
@@ -397,7 +404,7 @@ const FGNForm: React.FC = () => {
           qty_boxes: item.qty_boxes,
           pack_size: item.pack_size,
           total_qty_pcs: item.total_qty_pcs,
-          total_qty_ton: item.total_qty_ton,
+          total_qty_kg: item.total_qty_kg,
           sfg1_code: item.sfg1_code || null,
           sfg1_qty: item.sfg1_qty || null,
           sfg1_deduct: item.sfg1_deduct || null,
@@ -482,11 +489,20 @@ const FGNForm: React.FC = () => {
         setStockStatus('ERROR');
         if (result.error?.code === 'INSUFFICIENT_STOCK') {
           const details = result.error.details || [];
-          const errorMsg = details.map((d: { item_code: string; shortage: number; location: string }) => 
-            `${d.item_code}: shortage of ${d.shortage} in ${d.location}`
-          ).join('\n');
-          setStockMessage(`Insufficient stock:\n${errorMsg}`);
-          alert(`Insufficient stock for components:\n${errorMsg}`);
+          console.error('[FGNForm] Insufficient stock details:', details);
+          const errorMsg = details.map((d: { 
+            item_code: string; 
+            item_name: string;
+            required: number;
+            available: number;
+            shortage: number;
+            location: string;
+          }) => 
+            `${d.item_name || d.item_code} (${d.item_code}) at ${d.location}:\n  Required: ${d.required}\n  Available: ${d.available}\n  Shortage: ${d.shortage}`
+          ).join('\n\n');
+          const errorSummary = `Insufficient stock for ${details.length} component(s):\n\n${errorMsg}`;
+          setStockMessage(errorSummary);
+          alert(errorSummary);
         } else {
           setStockMessage(result.error?.message || 'Failed to post to stock');
           alert(`Error: ${result.error?.message}`);
@@ -622,11 +638,12 @@ const FGNForm: React.FC = () => {
               <tr className="bg-gray-100">
                 <th className="border border-gray-300 px-2 py-2 text-center font-semibold w-10">SL</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold min-w-[140px]">FG Code</th>
+                <th className="border border-gray-300 px-2 py-2 text-left font-semibold min-w-[150px]">Item Name</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold min-w-[100px]">Party</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold min-w-[100px]">Color</th>
                 <th className="border border-gray-300 px-2 py-2 text-center font-semibold w-20">Qty (boxes)</th>
                 <th className="border border-gray-300 px-2 py-2 text-center font-semibold w-28">Total Qty (pcs)</th>
-                <th className="border border-gray-300 px-2 py-2 text-center font-semibold w-24">Total Qty (ton)</th>
+                <th className="border border-gray-300 px-2 py-2 text-center font-semibold w-24">Total Qty (KG)</th>
                 <th className="border border-gray-300 px-2 py-2 text-center font-semibold w-16">QC</th>
                 <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Remarks</th>
                 <th className="border border-gray-300 px-2 py-2 text-center font-semibold w-14 print:hidden">Action</th>
@@ -644,6 +661,11 @@ const FGNForm: React.FC = () => {
                     >
                       {item.fg_code || <span className="text-gray-400">Select FG...</span>}
                     </button>
+                  </td>
+                  <td className="border border-gray-300 px-2 py-2 bg-gray-50">
+                    <span className="text-sm text-gray-700">
+                      {item.item_name || <span className="text-gray-400">-</span>}
+                    </span>
                   </td>
                   <td className="border border-gray-300 px-2 py-2">
                     <select
@@ -682,7 +704,7 @@ const FGNForm: React.FC = () => {
                     {item.total_qty_pcs.toLocaleString()}
                   </td>
                   <td className="border border-gray-300 px-2 py-2 text-center bg-gray-50">
-                    {item.total_qty_ton.toFixed(2)}
+                    {item.total_qty_kg.toFixed(2)}
                   </td>
                   <td className="border border-gray-300 px-2 py-2 text-center">
                     <input

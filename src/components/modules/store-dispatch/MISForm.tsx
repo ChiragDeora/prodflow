@@ -159,16 +159,25 @@ const MISForm: React.FC = () => {
           // Also add types from raw_materials that might not have stock yet
           const uniqueRmTypes = [...new Set(rawMaterials.map((rm: any) => rm.type))];
           uniqueRmTypes.forEach(t => {
-            if (!subTypeGroups[t]) {
+            if (t && !subTypeGroups[t]) {
               subTypeGroups[t] = 0;
             }
           });
           
           // Convert to array - show all sub-types, sorted by stock descending
           const subTypesWithStockArray = Object.entries(subTypeGroups)
+            .filter(([type]) => type) // Filter out empty types
             .map(([type, stock]) => ({ type, stock }))
             .sort((a, b) => b.stock - a.stock);
           
+          setSubTypesWithStock(subTypesWithStockArray);
+        } else {
+          // If balance API fails, still show types from raw_materials with 0 stock
+          const uniqueRmTypes = [...new Set(rawMaterials.map((rm: any) => rm.type))];
+          const subTypesWithStockArray = uniqueRmTypes
+            .filter(t => t)
+            .map(t => ({ type: t, stock: 0 }))
+            .sort((a, b) => a.type.localeCompare(b.type));
           setSubTypesWithStock(subTypesWithStockArray);
         }
       } else if (type === 'PM') {
@@ -631,12 +640,36 @@ const MISForm: React.FC = () => {
     if (selectedItem) {
       // Batch all updates in a single state update to prevent re-renders from resetting the select
       const finalItemCode = selectedItem.itemCode;
+      const mainType = formData.typeOfIssue;
+      
+      // For RM items, also fetch fresh stock from API to ensure accuracy
+      let currentStock = selectedItem.stock;
+      if (mainType === 'RM') {
+        try {
+          const response = await fetch(`/api/stock/balance?item_code=${encodeURIComponent(finalItemCode)}&location=STORE`, {
+            credentials: 'include'
+          });
+          const result = await response.json();
+          if (result.success && result.data && result.data.length > 0) {
+            // Sum up all balances for this item code at STORE
+            const balance = result.data.reduce((sum: number, b: any) => sum + (b.current_balance || 0), 0);
+            currentStock = balance;
+            console.log(`[MISForm] Fetched fresh stock for ${finalItemCode}: ${currentStock}`);
+          } else {
+            console.warn(`[MISForm] No stock balance found for ${finalItemCode} at STORE, using cached value: ${currentStock}`);
+          }
+        } catch (error) {
+          console.error(`[MISForm] Error fetching stock for ${finalItemCode}:`, error);
+          // Use cached stock value if API call fails
+        }
+      }
+      
       setFormData(prev => {
         const updatedItems = prev.items.map(item => {
           if (item.id === itemId) {
             const updates: Partial<MISItem> = {
               itemCode: finalItemCode,
-              currentStock: selectedItem.stock.toString()
+              currentStock: currentStock.toString()
             };
             
             // Store grade for RM items (needed for stock ledger)
@@ -649,7 +682,6 @@ const MISForm: React.FC = () => {
               updates.uom = selectedItem.uom;
             } else {
               // Fallback: try to get UOM from cached stock items
-              const mainType = prev.typeOfIssue;
               const stockItems = stockItemsByType[mainType] || [];
               const stockItem = stockItems.find((item: any) => item.item_code === finalItemCode);
               if (stockItem && stockItem.unit_of_measure) {
@@ -667,21 +699,16 @@ const MISForm: React.FC = () => {
     }
   };
 
-  // Fetch current stock when item code changes (for PM and Spares)
+  // Fetch current stock when item code changes (for all item types)
   const fetchCurrentStock = async (itemCode: string, itemId: string, typeOfIssue?: string) => {
     if (!itemCode) {
       handleItemChange(itemId, 'currentStock', '');
       return;
     }
     
-    // For RM, stock is already set when grade is selected
-    if (typeOfIssue === 'RM') {
-      return;
-    }
-    
     try {
       // Fetch balance from STORE location specifically (not total across all locations)
-      const response = await fetch(`/api/stock/balance?item_code=${itemCode}&location=STORE`, {
+      const response = await fetch(`/api/stock/balance?item_code=${encodeURIComponent(itemCode)}&location=STORE`, {
         credentials: 'include'
       });
       const result = await response.json();
@@ -690,6 +717,7 @@ const MISForm: React.FC = () => {
         ? result.data.reduce((sum: number, b: any) => sum + (b.current_balance || 0), 0)
         : 0;
       
+      console.log(`[MISForm] Fetched stock for ${itemCode} at STORE: ${balance}`);
       handleItemChange(itemId, 'currentStock', balance.toString());
       
       // Get UOM from cached stock items if not already set
@@ -1031,10 +1059,14 @@ const MISForm: React.FC = () => {
                         ))}
                       </select>
                     ) : (
-                      <span className="text-gray-400 text-sm">-</span>
+                      loadingStock['main'] ? (
+                        <span className="text-gray-400 text-sm">Loading...</span>
+                      ) : (
+                        <span className="text-gray-400 text-sm">-</span>
+                      )
                     )}
                     {loadingStock[item.id] && (
-                      <span className="text-xs text-gray-500 block mt-1">Loading...</span>
+                      <span className="text-xs text-gray-500 block mt-1">Loading items...</span>
                     )}
                   </td>
                   <td className="border border-gray-300 px-2 py-2">

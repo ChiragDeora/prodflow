@@ -11,17 +11,23 @@ interface JobWorkChallanItem {
   itemCode: string;
   itemName: string;
   alternateQtyPcs: string;
-  quantityTon: string;
+  quantityKg: string;
   stockPcs?: number;
   stockTons?: number;
+  sfg1?: string;
+  sfg2?: string;
+  sfg1RpBillWt?: number; // For display on challan
+  sfg2RpBillWt?: number; // For display on challan
+  sfg1RpIntWt?: number; // For stock deduction
+  sfg2RpIntWt?: number; // For stock deduction
 }
 
 interface JobWorkChallanFormData {
   challanNo: string;
   dated: string;
+  jwNumber: string;
   motorVehicleNo: string;
   eWayBillNo: string;
-  placeOfSupply: string;
   customerId: string;
   customerName: string;
   customerAddress: string;
@@ -46,9 +52,9 @@ const JobWorkChallanForm: React.FC = () => {
   const [formData, setFormData] = useState<JobWorkChallanFormData>({
     challanNo: '',
     dated: new Date().toISOString().split('T')[0],
+    jwNumber: '',
     motorVehicleNo: '',
     eWayBillNo: '',
-    placeOfSupply: '',
     customerId: '',
     customerName: '',
     customerAddress: '',
@@ -59,7 +65,7 @@ const JobWorkChallanForm: React.FC = () => {
     taxAmount: 'NIL',
     companyPan: 'AATFD0618A',
     items: [
-      { id: '1', itemCode: '', itemName: '', alternateQtyPcs: '', quantityTon: '' }
+      { id: '1', itemCode: '', itemName: '', alternateQtyPcs: '', quantityKg: '' }
     ]
   });
 
@@ -138,6 +144,248 @@ const JobWorkChallanForm: React.FC = () => {
     }
   };
 
+  // Helper function to normalize mold name for matching
+  const normalizeMoldName = (name: string): string => {
+    if (!name) return '';
+    return name.trim().toLowerCase().replace(/\s+/g, '').replace(/-/g, '');
+  };
+
+  // Get rp_int_wt for SFG code (for stock deduction)
+  const getRpIntWtForSFG = async (sfgCode: string): Promise<number | null> => {
+    if (!sfgCode) return null;
+
+    try {
+      // Get item_name (mold name) from sfg_bom
+      const response = await fetch(`/api/bom?category=SFG&productCode=${sfgCode}`);
+      const result = await response.json();
+      
+      let moldName: string | null = null;
+      
+      if (result.success && result.data && result.data.length > 0) {
+        const sfgBom = result.data.find((bom: any) => bom.sfg_code === sfgCode || bom.item_code === sfgCode);
+        if (sfgBom?.item_name) {
+          moldName = sfgBom.item_name.trim();
+        }
+      }
+      
+      if (!moldName) {
+        const directResponse = await fetch('/api/admin/master-data?type=sfg');
+        const directResult = await directResponse.json();
+        if (directResult.success && directResult.data) {
+          const sfgBom = directResult.data.find((sfg: any) => 
+            sfg.sfg_code === sfgCode || sfg.item_code === sfgCode
+          );
+          if (sfgBom?.item_name) {
+            moldName = sfgBom.item_name.trim();
+          }
+        }
+      }
+
+      if (!moldName) {
+        console.error(`SFG ${sfgCode} not found in sfg_bom`);
+        return null;
+      }
+
+      // Fetch mold data using client-side Supabase
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
+      const { data: molds, error: moldsError } = await supabase
+        .from('molds')
+        .select('mold_name, int_wt');
+
+      if (moldsError || !molds) {
+        console.error('Error fetching molds:', moldsError);
+        return null;
+      }
+
+      const normalizedMoldName = normalizeMoldName(moldName);
+
+      // Try exact match first
+      let moldData = molds.find((m: any) => 
+        m.mold_name?.trim() === moldName
+      );
+
+      if (moldData?.int_wt !== undefined && moldData.int_wt !== null) {
+        return moldData.int_wt;
+      }
+
+      // Try case-insensitive match
+      moldData = molds.find((m: any) => 
+        m.mold_name?.trim().toLowerCase() === moldName.toLowerCase()
+      );
+
+      if (moldData?.int_wt !== undefined && moldData.int_wt !== null) {
+        return moldData.int_wt;
+      }
+
+      // Try normalized match
+      moldData = molds.find((m: any) => {
+        const normalizedMold = normalizeMoldName(m.mold_name || '');
+        return normalizedMold === normalizedMoldName && normalizedMold !== '';
+      });
+
+      if (moldData?.int_wt !== undefined && moldData.int_wt !== null) {
+        return moldData.int_wt;
+      }
+
+      console.error(`Mold ${moldName} not found in molds (tried exact, case-insensitive, and normalized matching)`);
+      return null;
+    } catch (error) {
+      console.error('Error getting rp_int_wt for SFG:', error);
+      return null;
+    }
+  };
+
+  // Get rp_bill_wt for SFG code (for challan display)
+  const getRpBillWtForSFG = async (sfgCode: string): Promise<number | null> => {
+    if (!sfgCode) return null;
+
+    try {
+      // Get item_name (mold name) from sfg_bom
+      const response = await fetch(`/api/bom?category=SFG&productCode=${sfgCode}`);
+      const result = await response.json();
+      
+      let moldName: string | null = null;
+      
+      if (result.success && result.data && result.data.length > 0) {
+        // Try to find SFG BOM entry
+        const sfgBom = result.data.find((bom: any) => bom.sfg_code === sfgCode || bom.item_code === sfgCode);
+        if (sfgBom?.item_name) {
+          moldName = sfgBom.item_name.trim();
+        }
+      }
+      
+      // If not found via API, try direct fetch
+      if (!moldName) {
+        const directResponse = await fetch('/api/admin/master-data?type=sfg');
+        const directResult = await directResponse.json();
+        if (directResult.success && directResult.data) {
+          const sfgBom = directResult.data.find((sfg: any) => 
+            sfg.sfg_code === sfgCode || sfg.item_code === sfgCode
+          );
+          if (sfgBom?.item_name) {
+            moldName = sfgBom.item_name.trim();
+          }
+        }
+      }
+
+      if (!moldName) {
+        console.error(`SFG ${sfgCode} not found in sfg_bom`);
+        return null;
+      }
+
+      // Fetch mold data using client-side Supabase
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
+      const { data: molds, error: moldsError } = await supabase
+        .from('molds')
+        .select('mold_name, rp_bill_wt');
+
+      if (moldsError || !molds) {
+        console.error('Error fetching molds:', moldsError);
+        return null;
+      }
+
+      const normalizedMoldName = normalizeMoldName(moldName);
+
+      // Try exact match first
+      let moldData = molds.find((m: any) => 
+        m.mold_name?.trim() === moldName
+      );
+
+      if (moldData?.rp_bill_wt !== undefined && moldData.rp_bill_wt !== null) {
+        return moldData.rp_bill_wt;
+      }
+
+      // Try case-insensitive match
+      moldData = molds.find((m: any) => 
+        m.mold_name?.trim().toLowerCase() === moldName.toLowerCase()
+      );
+
+      if (moldData?.rp_bill_wt !== undefined && moldData.rp_bill_wt !== null) {
+        return moldData.rp_bill_wt;
+      }
+
+      // Try normalized match
+      moldData = molds.find((m: any) => {
+        const normalizedMold = normalizeMoldName(m.mold_name || '');
+        return normalizedMold === normalizedMoldName && normalizedMold !== '';
+      });
+
+      if (moldData?.rp_bill_wt !== undefined && moldData.rp_bill_wt !== null) {
+        return moldData.rp_bill_wt;
+      }
+
+      console.error(`Mold ${moldName} not found in molds (tried exact, case-insensitive, and normalized matching)`);
+      return null;
+    } catch (error) {
+      console.error('Error getting rp_bill_wt for SFG:', error);
+      return null;
+    }
+  };
+
+  // Fetch FG BOM and calculate weights
+  const fetchFGBomAndCalculateWeight = async (itemCode: string, itemId: string, qtyPcs: string) => {
+    try {
+      const response = await fetch(`/api/bom?category=FG&productCode=${itemCode}`);
+      const result = await response.json();
+      
+      if (!result.success || !result.data || result.data.length === 0) {
+        console.warn(`No FG BOM found for item ${itemCode}`);
+        return;
+      }
+
+      const fgBom = result.data[0]; // Get first matching BOM
+      const sfg1 = fgBom.sfg_1;
+      const sfg2 = fgBom.sfg_2;
+
+      // Get rp_bill_wt for both SFG codes (for display)
+      // Get rp_int_wt for both SFG codes (for stock deduction)
+      const [sfg1RpBillWt, sfg2RpBillWt, sfg1RpIntWt, sfg2RpIntWt] = await Promise.all([
+        sfg1 ? getRpBillWtForSFG(sfg1) : Promise.resolve(null),
+        sfg2 ? getRpBillWtForSFG(sfg2) : Promise.resolve(null),
+        sfg1 ? getRpIntWtForSFG(sfg1) : Promise.resolve(null),
+        sfg2 ? getRpIntWtForSFG(sfg2) : Promise.resolve(null)
+      ]);
+
+      // Calculate KG for display: Qty (Pcs) × (SFG1_rp_bill_wt + SFG2_rp_bill_wt) / 1000
+      // rp_bill_wt is in grams, so divide by 1000 to get KG
+      const qtyPcsNum = parseFloat(qtyPcs) || 0;
+      const sfg1BillWt = (sfg1RpBillWt || 0) / 1000; // Convert grams to KG
+      const sfg2BillWt = (sfg2RpBillWt || 0) / 1000; // Convert grams to KG
+      const calculatedKg = qtyPcsNum * (sfg1BillWt + sfg2BillWt);
+
+      // Update the item with calculated weight and SFG info
+      setFormData(prev => ({
+        ...prev,
+        items: prev.items.map(item =>
+          item.id === itemId
+            ? {
+                ...item,
+                sfg1,
+                sfg2,
+                sfg1RpBillWt: sfg1RpBillWt || undefined,
+                sfg2RpBillWt: sfg2RpBillWt || undefined,
+                sfg1RpIntWt: sfg1RpIntWt || undefined,
+                sfg2RpIntWt: sfg2RpIntWt || undefined,
+                quantityKg: calculatedKg > 0 ? calculatedKg.toFixed(3) : ''
+              }
+            : item
+        )
+      }));
+    } catch (error) {
+      console.error('Error fetching FG BOM and calculating weight:', error);
+    }
+  };
+
   const handleInputChange = (field: keyof Omit<JobWorkChallanFormData, 'items'>, value: string) => {
     setFormData(prev => ({
       ...prev,
@@ -146,15 +394,41 @@ const JobWorkChallanForm: React.FC = () => {
   };
 
   const handleItemChange = (id: string, field: keyof JobWorkChallanItem, value: string) => {
+    const item = formData.items.find(i => i.id === id);
+    
     setFormData(prev => ({
       ...prev,
       items: prev.items.map(item =>
         item.id === id ? { ...item, [field]: value } : item
       )
     }));
+
+    // If Qty (Pcs) changed and item has FG BOM data, recalculate KG
+    if (field === 'alternateQtyPcs' && item?.itemCode) {
+      // If we already have SFG data, just recalculate. Otherwise fetch BOM first.
+      if (item.sfg1 && item.sfg2 && item.sfg1RpBillWt !== undefined && item.sfg2RpBillWt !== undefined) {
+        // Recalculate using existing SFG weights
+        const qtyPcsNum = parseFloat(value) || 0;
+        const sfg1Wt = (item.sfg1RpBillWt || 0) / 1000; // Convert grams to KG
+        const sfg2Wt = (item.sfg2RpBillWt || 0) / 1000; // Convert grams to KG
+        const calculatedKg = qtyPcsNum * (sfg1Wt + sfg2Wt);
+        
+        setFormData(prev => ({
+          ...prev,
+          items: prev.items.map(item =>
+            item.id === id ? { ...item, quantityKg: calculatedKg > 0 ? calculatedKg.toFixed(3) : '' } : item
+          )
+        }));
+      } else {
+        // Fetch BOM and calculate
+        fetchFGBomAndCalculateWeight(item.itemCode, id, value).catch(err => {
+          console.error('Error recalculating weight:', err);
+        });
+      }
+    }
   };
 
-  const handleFGItemSelect = (itemId: string, fgItem: FGStockItem) => {
+  const handleFGItemSelect = async (itemId: string, fgItem: FGStockItem) => {
     setFormData(prev => ({
       ...prev,
       items: prev.items.map(item =>
@@ -163,14 +437,23 @@ const JobWorkChallanForm: React.FC = () => {
               ...item, 
               itemCode: fgItem.item_code,
               itemName: fgItem.item_name,
-              alternateQtyPcs: (fgItem.stock_pcs || 0).toString(),
-              quantityTon: (fgItem.stock_tons || 0).toString(),
+              alternateQtyPcs: '',
+              quantityKg: '',
               stockPcs: fgItem.stock_pcs,
-              stockTons: fgItem.stock_tons
+              stockTons: fgItem.stock_tons,
+              sfg1: undefined,
+              sfg2: undefined,
+              sfg1RpBillWt: undefined,
+              sfg2RpBillWt: undefined
             } 
           : item
       )
     }));
+
+    // Fetch FG BOM and calculate weight if item code is available
+    if (fgItem.item_code) {
+      await fetchFGBomAndCalculateWeight(fgItem.item_code, itemId, '');
+    }
   };
 
   const handleCustomerSelect = (customer: any) => {
@@ -193,7 +476,7 @@ const JobWorkChallanForm: React.FC = () => {
       itemCode: '',
       itemName: '',
       alternateQtyPcs: '',
-      quantityTon: ''
+      quantityKg: ''
     };
     setFormData(prev => ({
       ...prev,
@@ -215,8 +498,8 @@ const JobWorkChallanForm: React.FC = () => {
     return sum + (parseFloat(item.alternateQtyPcs) || 0);
   }, 0);
 
-  const totalTon = formData.items.reduce((sum, item) => {
-    return sum + (parseFloat(item.quantityTon) || 0);
+  const totalKg = formData.items.reduce((sum, item) => {
+    return sum + (parseFloat(item.quantityKg) || 0);
   }, 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -231,7 +514,7 @@ const JobWorkChallanForm: React.FC = () => {
         gst_no: formData.customerGstin || undefined,
         vehicle_no: formData.motorVehicleNo || undefined,
         e_way_bill_no: formData.eWayBillNo || undefined,
-        place_of_supply: formData.placeOfSupply || undefined,
+        jw_number: formData.jwNumber || undefined,
         challan_no: formData.challanNo || undefined,
         challan_date: formData.dated || undefined
       };
@@ -239,15 +522,15 @@ const JobWorkChallanForm: React.FC = () => {
       const itemsData = formData.items
         .filter(item => {
           // Include items that have at least itemCode, itemName, qty, or qty_pcs
-          return item.itemCode?.trim() || item.itemName?.trim() || item.quantityTon || item.alternateQtyPcs;
+          return item.itemCode?.trim() || item.itemName?.trim() || item.quantityKg || item.alternateQtyPcs;
         })
         .map(item => ({
           item_code: item.itemCode || undefined,
           item_name: item.itemName || undefined,
           material_description: item.itemName || item.itemCode || 'Item', // Required field, use itemName or itemCode, fallback to 'Item'
-          qty: item.quantityTon ? parseFloat(item.quantityTon) : undefined,
+          qty: item.quantityKg ? parseFloat(item.quantityKg) : undefined,
           qty_pcs: item.alternateQtyPcs ? parseFloat(item.alternateQtyPcs) : undefined,
-          uom: 'ton',
+          uom: 'KG',
           remarks: undefined
         }));
 
@@ -267,9 +550,9 @@ const JobWorkChallanForm: React.FC = () => {
       setFormData({
         challanNo: '',
         dated: new Date().toISOString().split('T')[0],
+        jwNumber: '',
         motorVehicleNo: '',
         eWayBillNo: '',
-        placeOfSupply: '',
         customerId: '',
         customerName: '',
         customerAddress: '',
@@ -280,7 +563,7 @@ const JobWorkChallanForm: React.FC = () => {
         taxAmount: 'NIL',
         companyPan: 'AATFD0618A',
         items: [
-          { id: '1', itemCode: '', itemName: '', alternateQtyPcs: '', quantityTon: '' }
+          { id: '1', itemCode: '', itemName: '', alternateQtyPcs: '', quantityKg: '' }
         ]
       });
       setDate(new Date().toISOString().split('T')[0]);
@@ -468,6 +751,17 @@ const JobWorkChallanForm: React.FC = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
+                JW Number :-
+              </label>
+              <input
+                type="text"
+                value={formData.jwNumber}
+                onChange={(e) => handleInputChange('jwNumber', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Motor Vehicle No. :-
               </label>
               <input
@@ -488,17 +782,6 @@ const JobWorkChallanForm: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Place of supply :-
-              </label>
-              <input
-                type="text"
-                value={formData.placeOfSupply}
-                onChange={(e) => handleInputChange('placeOfSupply', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
           </div>
         </div>
 
@@ -513,7 +796,7 @@ const JobWorkChallanForm: React.FC = () => {
                   <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Item Code</th>
                   <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Item Name</th>
                   <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Qty (Pcs)</th>
-                  <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Quantity (ton)</th>
+                  <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-32">Quantity (KG)</th>
                   <th className="border border-gray-300 px-2 py-2 text-left font-semibold w-16 print:hidden">Action</th>
                 </tr>
               </thead>
@@ -532,7 +815,7 @@ const JobWorkChallanForm: React.FC = () => {
                             handleItemChange(item.id, 'itemCode', '');
                             handleItemChange(item.id, 'itemName', '');
                             handleItemChange(item.id, 'alternateQtyPcs', '');
-                            handleItemChange(item.id, 'quantityTon', '');
+                            handleItemChange(item.id, 'quantityKg', '');
                           }
                         }}
                         className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-white"
@@ -540,7 +823,7 @@ const JobWorkChallanForm: React.FC = () => {
                         <option value="">Select FG Item</option>
                         {fgStockItems.map(fgItem => (
                           <option key={fgItem.item_code} value={fgItem.item_code}>
-                            {fgItem.item_code} - {fgItem.item_name} (Stock: {fgItem.stock_pcs || 0} Pcs, {fgItem.stock_tons || 0} Tons)
+                            {fgItem.item_code} - {fgItem.item_name} (Stock: {fgItem.stock_pcs || 0} Pcs)
                           </option>
                         ))}
                       </select>
@@ -555,7 +838,7 @@ const JobWorkChallanForm: React.FC = () => {
                       />
                       {item.stockPcs !== undefined && (
                         <p className="text-xs text-gray-500 mt-1">
-                          Available: {item.stockPcs} Pcs, {item.stockTons || 0} Tons
+                          Available: {item.stockPcs} Pcs
                         </p>
                       )}
                     </td>
@@ -573,12 +856,12 @@ const JobWorkChallanForm: React.FC = () => {
                     <td className="border border-gray-300 px-2 py-2">
                       <input
                         type="number"
-                        value={item.quantityTon}
-                        onChange={(e) => handleItemChange(item.id, 'quantityTon', e.target.value)}
-                        className="w-full px-2 py-1 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded text-right"
+                        value={item.quantityKg}
+                        className="w-full px-2 py-1 border-none focus:outline-none rounded text-right bg-gray-50"
                         step="0.01"
                         min="0"
-                        max={item.stockTons}
+                        readOnly
+                        title="Calculated from Qty (Pcs) × (SFG1_rp_bill_wt + SFG2_rp_bill_wt)"
                       />
                     </td>
                     <td className="border border-gray-300 px-2 py-2 text-center print:hidden">
@@ -604,7 +887,7 @@ const JobWorkChallanForm: React.FC = () => {
                     {totalPcs.toFixed(2)} Pcs
                   </td>
                   <td className="border border-gray-300 px-4 py-2 font-bold text-right">
-                    {totalTon.toFixed(2)} ton
+                    {totalKg.toFixed(3)} KG
                   </td>
                   <td className="border border-gray-300 print:hidden"></td>
                 </tr>

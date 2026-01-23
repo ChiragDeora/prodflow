@@ -403,17 +403,203 @@ export async function getOrCreateSfgItem(
 // ============================================================================
 
 /**
+ * Get or create RM item by type and grade
+ * Looks up raw_materials by type and grade to get category and supplier,
+ * then creates/returns stock item with proper format: {category}-{type}-{grade}
+ * 
+ * @param rmType - Raw material type (e.g., "HP", "ICP", "RCP")
+ * @param grade - Raw material grade (e.g., "HJ333MO", "1750 MN")
+ * @returns StockItem with item_code like "PP-HP-HJ333MO"
+ */
+export async function getOrCreateRmItem(
+  rmType: string,
+  grade: string
+): Promise<StockItem | null> {
+  const supabase = getSupabase();
+  
+  if (!rmType || !grade) {
+    console.log(`[getOrCreateRmItem] Missing rmType or grade: rmType="${rmType}", grade="${grade}"`);
+    return null;
+  }
+  
+  const upperType = rmType.toUpperCase().trim();
+  const trimmedGrade = grade.trim();
+  
+  console.log(`[getOrCreateRmItem] Looking up raw_materials: type="${upperType}", grade="${trimmedGrade}"`);
+  
+  // Look up raw_materials by type and grade
+  const { data: rawMaterial, error: rmError } = await supabase
+    .from('raw_materials')
+    .select('category, type, grade, supplier')
+    .eq('type', upperType)
+    .eq('grade', trimmedGrade)
+    .limit(1)
+    .single();
+  
+  if (rmError || !rawMaterial) {
+    console.log(`[getOrCreateRmItem] Raw material not found in raw_materials table: type="${upperType}", grade="${trimmedGrade}"`);
+    return null;
+  }
+  
+  const category = rawMaterial.category || 'PP';
+  const supplier = rawMaterial.supplier || '';
+  
+  // Create item_code as {category}-{type}-{grade}
+  const itemCode = `${category}-${upperType}-${trimmedGrade}`;
+  
+  console.log(`[getOrCreateRmItem] Found raw material: category="${category}", supplier="${supplier}", item_code="${itemCode}"`);
+  
+  // Check if stock item already exists
+  let stockItem = await getStockItemByCode(itemCode);
+  if (stockItem) {
+    console.log(`[getOrCreateRmItem] Stock item already exists: ${itemCode}`);
+    return stockItem;
+  }
+  
+  // Create item_name as {type} {grade} or include supplier if available
+  const itemName = supplier 
+    ? `${category} ${upperType} ${trimmedGrade} (${supplier})`
+    : `${category} ${upperType} ${trimmedGrade}`;
+  
+  // Create new stock item
+  console.log(`[getOrCreateRmItem] Creating new stock item: ${itemCode}`);
+  const { data: newItem, error: createError } = await supabase
+    .from('stock_items')
+    .insert({
+      item_code: itemCode,
+      item_name: itemName,
+      item_type: 'RM',
+      category: category,
+      sub_category: upperType,
+      unit_of_measure: 'KG',
+      is_active: true,
+    })
+    .select()
+    .single();
+  
+  if (createError || !newItem) {
+    console.error(`[getOrCreateRmItem] Failed to create stock item:`, createError?.message);
+    return null;
+  }
+  
+  console.log(`[getOrCreateRmItem] Created stock item: ${newItem.item_code}`);
+  return newItem;
+}
+
+/**
+ * Get or create PM item by item_code
+ * Looks up packing_materials by item_code to get category, type, and other details,
+ * then creates/returns stock item if it doesn't exist
+ * 
+ * @param itemCode - Packing material item code (e.g., "CTN-Ro16T-GM", "CTN-Ro16")
+ * @returns StockItem with the provided item_code
+ */
+export async function getOrCreatePmItem(
+  itemCode: string
+): Promise<StockItem | null> {
+  const supabase = getSupabase();
+  
+  if (!itemCode || itemCode.trim() === '') {
+    console.log(`[getOrCreatePmItem] Empty itemCode, returning null`);
+    return null;
+  }
+  
+  const trimmedCode = itemCode.trim();
+  
+  console.log(`[getOrCreatePmItem] Looking up packing_materials master table first: item_code="${trimmedCode}"`);
+  
+  // FIRST: Look up packing_materials master table by item_code
+  const { data: packingMaterial, error: pmError } = await supabase
+    .from('packing_materials')
+    .select('category, type, item_code, pack_size, dimensions, brand, unit')
+    .eq('item_code', trimmedCode)
+    .limit(1)
+    .single();
+  
+  if (pmError || !packingMaterial) {
+    console.log(`[getOrCreatePmItem] Packing material not found in packing_materials master table: item_code="${trimmedCode}"`);
+    return null;
+  }
+  
+  // SECOND: Check if stock item already exists (if it was already created)
+  let stockItem = await getStockItemByCode(trimmedCode);
+  if (stockItem) {
+    console.log(`[getOrCreatePmItem] Stock item already exists: ${trimmedCode}`);
+    return stockItem;
+  }
+  
+  const category = packingMaterial.category || 'PACKING';
+  const type = packingMaterial.type || '';
+  const packSize = packingMaterial.pack_size || '';
+  const dimensions = packingMaterial.dimensions || '';
+  const brand = packingMaterial.brand || '';
+  
+  // Determine unit of measure based on category
+  let unitOfMeasure: UnitOfMeasure = 'NOS';
+  if (category.toUpperCase().includes('BOPP')) {
+    unitOfMeasure = 'METERS';
+  } else if (packingMaterial.unit) {
+    // Use unit from packing_materials if available
+    const unitUpper = packingMaterial.unit.toUpperCase();
+    if (['KG', 'NOS', 'METERS', 'PCS', 'LTR', 'MTR', 'SET'].includes(unitUpper)) {
+      unitOfMeasure = unitUpper as UnitOfMeasure;
+    }
+  }
+  
+  // Create item_name from available fields
+  const nameParts: string[] = [category];
+  if (type) nameParts.push(type);
+  if (packSize) nameParts.push(`Pack: ${packSize}`);
+  if (dimensions) nameParts.push(`(${dimensions})`);
+  if (brand) nameParts.push(`[${brand}]`);
+  const itemName = nameParts.join(' ') || trimmedCode;
+  
+  console.log(`[getOrCreatePmItem] Found packing material: category="${category}", type="${type}", item_code="${trimmedCode}"`);
+  
+  // Create new stock item
+  console.log(`[getOrCreatePmItem] Creating new stock item: ${trimmedCode}`);
+  const { data: newItem, error: createError } = await supabase
+    .from('stock_items')
+    .insert({
+      item_code: trimmedCode,
+      item_name: itemName,
+      item_type: 'PM',
+      category: category,
+      sub_category: type || undefined,
+      unit_of_measure: unitOfMeasure,
+      is_active: true,
+    })
+    .select()
+    .single();
+  
+  if (createError || !newItem) {
+    console.error(`[getOrCreatePmItem] Failed to create stock item:`, createError?.message);
+    return null;
+  }
+  
+  console.log(`[getOrCreatePmItem] Created stock item: ${newItem.item_code}`);
+  return newItem;
+}
+
+/**
  * Map document description to stock item code
  * Handles:
  * 1. Explicit mappings
  * 2. Direct item_code match
- * 3. Direct item_name match
- * 4. RM Type match (e.g., "HP" -> find RM with sub_category = "HP")
- * 5. PM Category match (e.g., "Boxes" -> find PM with category = "Boxes")
+ * 3. PM item_code auto-creation (if looks like PM code like "CTN-*", looks up packing_materials)
+ * 4. Direct item_name match
+ * 5. RM Type match (e.g., "HP" -> find RM with sub_category = "HP")
+ * 6. PM Category match (e.g., "Boxes" -> find PM with category = "Boxes")
+ * 7. RM Type + Grade match (when grade is provided) -> creates {category}-{type}-{grade}
+ * 
+ * @param sourceTable - Source table name for mapping lookup
+ * @param description - Item description (can be rmType like "HP" or item_code)
+ * @param grade - Optional grade code (e.g., "HJ333MO") - when provided with rmType, creates proper item_code
  */
 export async function mapItemToStockItem(
   sourceTable: string,
-  description: string
+  description: string,
+  grade?: string
 ): Promise<StockItem | null> {
   const supabase = getSupabase();
   
@@ -437,7 +623,23 @@ export async function mapItemToStockItem(
     return getStockItemByCode(mapping.stock_item_code);
   }
   
-  // Try direct match by item_code
+  // If description looks like a PM item_code (e.g., CTN-Ro16T-GM),
+  // check packing_materials master table FIRST before checking stock_items
+  // Common PM item_code patterns: CTN-*, BOPP-*, POLY-*, etc.
+  const pmPatterns = ['CTN-', 'BOPP-', 'POLY-', 'BOX-', 'CARTON-'];
+  const looksLikePmCode = pmPatterns.some(pattern => description.toUpperCase().startsWith(pattern));
+  
+  if (looksLikePmCode) {
+    console.log(`[mapItemToStockItem] Description "${description}" looks like PM item_code, checking packing_materials master first`);
+    const pmItem = await getOrCreatePmItem(description);
+    if (pmItem) {
+      console.log(`[mapItemToStockItem] Found/created PM item from master: ${pmItem.item_code}`);
+      return pmItem;
+    }
+    // If not found in master, continue to other lookup methods
+  }
+  
+  // Try direct match by item_code in stock_items (fallback)
   let item = await getStockItemByCode(description);
   if (item) return item;
   
@@ -457,6 +659,19 @@ export async function mapItemToStockItem(
   // Common RM Types: HP, ICP, RCP, LDPE, HDPE, GPPS, MB
   const rmTypes = ['HP', 'ICP', 'RCP', 'LDPE', 'HDPE', 'GPPS', 'MB'];
   const upperDescription = description.toUpperCase().trim();
+  
+  // If both rmType (description) and grade are provided, use getOrCreateRmItem
+  if (rmTypes.includes(upperDescription) && grade) {
+    console.log(`[mapItemToStockItem] Both rmType="${upperDescription}" and grade="${grade}" provided, using getOrCreateRmItem`);
+    const rmItem = await getOrCreateRmItem(upperDescription, grade);
+    if (rmItem) {
+      console.log(`[mapItemToStockItem] Found/created RM item: ${rmItem.item_code}`);
+      return rmItem;
+    }
+    // If getOrCreateRmItem fails (raw_materials lookup failed), fallback to current behavior
+    console.log(`[mapItemToStockItem] getOrCreateRmItem failed, falling back to standard RM behavior`);
+  }
+  
   if (rmTypes.includes(upperDescription)) {
     console.log(`[mapItemToStockItem] "${description}" is an RM type, trying RM-${upperDescription}`);
     // First try to find the standard RM item (e.g., "RM-HP")
@@ -674,27 +889,57 @@ export async function getSfgBomByMoldName(
 
 /**
  * Get FG BOM by item code
+ * Checks fg_bom if item code starts with "2", local_bom if it starts with "3"
+ * Trims color suffix (e.g., "-Black") from item code before lookup since BOM master doesn't include colors
  */
 export async function getFgBomByItemCode(
   itemCode: string
 ): Promise<FgBom | null> {
   const supabase = getSupabase();
   
-  const { data, error } = await supabase
-    .from('fg_bom')
+  if (!itemCode) {
+    return null;
+  }
+  
+  // Trim color suffix (e.g., "210110101001-Black" -> "210110101001")
+  // Color suffix is typically in format "-{Color}" after the base item code
+  const baseItemCode = itemCode.includes('-') ? itemCode.split('-')[0] : itemCode;
+  
+  // Determine which table to check based on item code prefix
+  const tableName = baseItemCode.startsWith('2') ? 'fg_bom' : 
+                    baseItemCode.startsWith('3') ? 'local_bom' : 
+                    'fg_bom'; // Default to fg_bom if no match
+  
+  // First try exact match (in case some BOMs do have color suffix)
+  let { data, error } = await supabase
+    .from(tableName)
     .select('*')
     .eq('item_code', itemCode)
-    .single();
+    .maybeSingle();
   
-  if (error) {
-    if (error.code === 'PGRST116') {
-      return null;
+  if (data) {
+    return data;
+  }
+  
+  // If exact match fails, try with trimmed color suffix
+  if (baseItemCode !== itemCode) {
+    ({ data, error } = await supabase
+      .from(tableName)
+      .select('*')
+      .eq('item_code', baseItemCode)
+      .maybeSingle());
+    
+    if (data) {
+      return data;
     }
-    handleSupabaseError(error, 'getting FG BOM');
+  }
+  
+  if (error && error.code !== 'PGRST116') {
+    handleSupabaseError(error, `getting ${tableName}`);
     throw error;
   }
   
-  return data;
+  return null;
 }
 
 // ============================================================================
@@ -738,8 +983,17 @@ export async function getRmItemsByType(
     }
   }
   
-  // Sort by earliest created (FIFO)
+  // Sort: Prioritize specific grade items (PP-HP-HJ333MO) over generic ones (RM-HP)
+  // Then by earliest created (FIFO) within each group
   result.sort((a, b) => {
+    const aIsGeneric = a.item.item_code.startsWith('RM-');
+    const bIsGeneric = b.item.item_code.startsWith('RM-');
+    
+    // Specific grade items come first
+    if (aIsGeneric && !bIsGeneric) return 1;
+    if (!aIsGeneric && bIsGeneric) return -1;
+    
+    // Within same group, sort by earliest created (FIFO)
     const dateA = new Date(a.item.created_at || 0);
     const dateB = new Date(b.item.created_at || 0);
     return dateA.getTime() - dateB.getTime();
@@ -915,6 +1169,9 @@ export async function updateDocumentStockStatus(
 
 /**
  * Validate that all required components are available for FG Transfer
+ * 
+ * NOTE: PM materials (carton, polybag, BOPP) are NOT validated - they are allowed to go negative
+ * Only SFG items are validated to ensure they are available before posting
  */
 export async function validateFgTransferComponents(
   fgCode: string,
@@ -985,73 +1242,12 @@ export async function validateFgTransferComponents(
     }
   }
   
-  // Check carton
-  if (fgBom.cnt_code && fgBom.cnt_qty) {
-    const required = boxes * fgBom.cnt_qty;
-    const available = await getBalance(fgBom.cnt_code, 'STORE');
-    components.push({
-      itemCode: fgBom.cnt_code,
-      itemName: `Carton: ${fgBom.cnt_code}`,
-      location: 'STORE',
-      required,
-      available,
-      unit: 'NOS',
-    });
-    if (available < required) {
-      missingComponents.push(`${fgBom.cnt_code}: Required ${required}, Available ${available}`);
-    }
-  }
-  
-  // Check polybag
-  if (fgBom.polybag_code && fgBom.poly_qty) {
-    const required = boxes * fgBom.poly_qty;
-    const available = await getBalance(fgBom.polybag_code, 'STORE');
-    components.push({
-      itemCode: fgBom.polybag_code,
-      itemName: `Polybag: ${fgBom.polybag_code}`,
-      location: 'STORE',
-      required,
-      available,
-      unit: 'NOS',
-    });
-    if (available < required) {
-      missingComponents.push(`${fgBom.polybag_code}: Required ${required}, Available ${available}`);
-    }
-  }
-  
-  // Check BOPP 1
-  if (fgBom.bopp_1 && fgBom.qty_meter) {
-    const required = boxes * fgBom.qty_meter;
-    const available = await getBalance(fgBom.bopp_1, 'STORE');
-    components.push({
-      itemCode: fgBom.bopp_1,
-      itemName: `BOPP 1: ${fgBom.bopp_1}`,
-      location: 'STORE',
-      required,
-      available,
-      unit: 'METERS',
-    });
-    if (available < required) {
-      missingComponents.push(`${fgBom.bopp_1}: Required ${required}m, Available ${available}m`);
-    }
-  }
-  
-  // Check BOPP 2
-  if (fgBom.bopp_2 && fgBom.qty_meter_2) {
-    const required = boxes * fgBom.qty_meter_2;
-    const available = await getBalance(fgBom.bopp_2, 'STORE');
-    components.push({
-      itemCode: fgBom.bopp_2,
-      itemName: `BOPP 2: ${fgBom.bopp_2}`,
-      location: 'STORE',
-      required,
-      available,
-      unit: 'METERS',
-    });
-    if (available < required) {
-      missingComponents.push(`${fgBom.bopp_2}: Required ${required}m, Available ${available}m`);
-    }
-  }
+  // PM materials (carton, polybag, BOPP) are NOT checked - allowed to go negative
+  // This allows posting even if PM materials are not available in stock
+  // - Carton (fgBom.cnt_code)
+  // - Polybag (fgBom.polybag_code)
+  // - BOPP 1 (fgBom.bopp_1)
+  // - BOPP 2 (fgBom.bopp_2)
   
   return {
     isValid: missingComponents.length === 0,

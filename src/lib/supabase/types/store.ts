@@ -115,7 +115,7 @@ export interface JobWorkChallan {
   vehicle_no?: string;
   lr_no?: string; // Kept for backward compatibility (was Dispatch Doc No)
   e_way_bill_no?: string; // E-Way Bill Number
-  place_of_supply?: string; // Place of Supply
+  jw_number?: string; // Job Work Number
   challan_no?: string;
   challan_date?: string;
   total_qty?: number;

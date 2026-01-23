@@ -2,7 +2,7 @@
 -- ADD qty_pcs TO store_job_work_challan_items
 -- ============================================================================
 -- Adds qty_pcs column to store quantity in pieces (Pcs)
--- This is separate from qty which stores quantity in tons
+-- This is separate from qty which stores quantity (unit specified by uom column, typically KG)
 -- ============================================================================
 
 -- Add qty_pcs column

@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { getSupabase } from '@/lib/supabase/utils';
+import { verifyAuth, unauthorized } from '@/lib/api-auth';
 
 // Allowed tables for security
 const ALLOWED_TABLES = [
@@ -17,7 +13,19 @@ const ALLOWED_TABLES = [
   'dispatch_delivery_challan',
 ];
 
+// Tables that have doc_no field
+const TABLES_WITH_DOC_NO = [
+  'store_jw_annexure_grn',
+  'store_job_work_challan',
+];
+
 export async function GET(request: NextRequest) {
+  // Verify authentication
+  const auth = await verifyAuth(request);
+  if (!auth.authenticated) {
+    return unauthorized(auth.error);
+  }
+
   const { searchParams } = new URL(request.url);
   const table = searchParams.get('table');
   const id = searchParams.get('id');
@@ -39,31 +47,62 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const supabase = getSupabase();
+    
+    // Build select query - only include doc_no if the table has it
+    const selectFields = TABLES_WITH_DOC_NO.includes(table)
+      ? `${field}, doc_no`
+      : field;
+
     // Fetch the document with the specified field
     const { data, error } = await supabase
       .from(table)
-      .select(`${field}, doc_no`)
+      .select(selectFields)
       .eq('id', id)
       .single();
 
     if (error) {
-      console.error('Error fetching source document:', error);
+      // Check if it's a "not found" error (PGRST116) or other error
+      if (error.code === 'PGRST116') {
+        console.log(`[source-doc] Document not found: table=${table}, id=${id}`);
+        return NextResponse.json(
+          { error: 'Document not found' },
+          { status: 404 }
+        );
+      }
+      
+      console.error('[source-doc] Error fetching source document:', {
+        table,
+        id,
+        field,
+        error: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
+      
+      return NextResponse.json(
+        { error: 'Error fetching document', details: error.message },
+        { status: 500 }
+      );
+    }
+
+    if (!data) {
       return NextResponse.json(
         { error: 'Document not found' },
         { status: 404 }
       );
     }
 
-    // Return the document number (prefer doc_no if available)
-    // Type assertion needed because Supabase returns a generic type
+    // Return the document number (prefer doc_no if available, otherwise use the requested field)
     const record = data as Record<string, any> | null;
     const docNo = record?.doc_no || (field ? record?.[field] : null) || null;
 
     return NextResponse.json({ doc_no: docNo });
   } catch (error) {
-    console.error('Error in source-doc API:', error);
+    console.error('[source-doc] Unexpected error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

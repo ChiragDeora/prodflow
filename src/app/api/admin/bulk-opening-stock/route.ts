@@ -49,11 +49,28 @@ interface SFGUploadItem {
   message?: string;
 }
 
+interface FGUploadItem {
+  fg_code: string;      // 210110101001 (Export) or 310110101001 (Local)
+  item_name: string;
+  party: string;
+  color: string;
+  qty_boxes: number;
+  total_qty_pcs: number;
+  total_qty_ton: number;
+  qc: boolean;
+  status?: 'matched' | 'not_in_master' | 'error';
+  master_id?: string;
+  stock_item_code?: string;
+  message?: string;
+}
+
 interface BulkUploadPayload {
   action: 'validate' | 'upload';
   rm_items?: RMUploadItem[];
   pm_items?: PMUploadItem[];
   sfg_items?: SFGUploadItem[];
+  fg_export_items?: FGUploadItem[];
+  fg_local_items?: FGUploadItem[];
   location_code?: 'STORE' | 'PRODUCTION' | 'FG_STORE';
   transaction_date?: string;
   remarks?: string;
@@ -75,6 +92,16 @@ interface ValidationResult {
     not_in_master: SFGUploadItem[];
     total: number;
   };
+  fg_export: {
+    matched: FGUploadItem[];
+    not_in_master: FGUploadItem[];
+    total: number;
+  };
+  fg_local: {
+    matched: FGUploadItem[];
+    not_in_master: FGUploadItem[];
+    total: number;
+  };
 }
 
 // ============================================================================
@@ -90,7 +117,7 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabase();
     const body: BulkUploadPayload = await request.json();
-    const { action, rm_items = [], pm_items = [], sfg_items = [], location_code = 'STORE', transaction_date, remarks } = body;
+    const { action, rm_items = [], pm_items = [], sfg_items = [], fg_export_items = [], fg_local_items = [], location_code = 'STORE', transaction_date, remarks } = body;
 
     if (action === 'validate') {
       // ====================================================================
@@ -101,6 +128,8 @@ export async function POST(request: NextRequest) {
         rm: { matched: [], not_in_master: [], total: rm_items.length },
         pm: { matched: [], not_in_master: [], total: pm_items.length },
         sfg: { matched: [], not_in_master: [], total: sfg_items.length },
+        fg_export: { matched: [], not_in_master: [], total: fg_export_items.length },
+        fg_local: { matched: [], not_in_master: [], total: fg_local_items.length },
       };
 
       // --- Validate Raw Materials ---
@@ -240,6 +269,85 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // --- Validate FG Export BOM ---
+      // For FG items, we check both fg_bom and local_bom to find matches
+      // This allows items to be found regardless of which tab they're uploaded in
+      if (fg_export_items.length > 0) {
+        const [fgExportMaster, fgLocalMaster] = await Promise.all([
+          supabase.from('fg_bom').select('id, item_code, party_name'),
+          supabase.from('local_bom').select('id, item_code, party_name')
+        ]);
+        
+        for (const item of fg_export_items) {
+          // Check both BOM tables - FG codes can be in either table
+          const matchExport = fgExportMaster.data?.find(fg => fg.item_code === item.fg_code);
+          const matchLocal = fgLocalMaster.data?.find(local => local.item_code === item.fg_code);
+          const match = matchExport || matchLocal;
+          
+          // FG stock item code must include color: {fg_code}-{color}
+          // This matches the format used in FG Transfer Note posting
+          const stockItemCode = item.color ? `${item.fg_code}-${item.color}` : item.fg_code;
+          
+          if (match) {
+            result.fg_export.matched.push({
+              ...item,
+              status: 'matched',
+              master_id: match.id,
+              stock_item_code: stockItemCode, // FG uses fg_code-color format
+              message: `Matched to ${match.item_code} (${match.party_name || ''}) in ${matchExport ? 'FG BOM' : 'Local BOM'}`
+            });
+          } else {
+            // For FG items, we still allow upload even if not in master
+            // Mark as matched so it can be uploaded (stock item will be created)
+            result.fg_export.matched.push({
+              ...item,
+              status: 'matched',
+              stock_item_code: stockItemCode, // FG uses fg_code-color format
+              message: `Not in master BOM, will create stock item: ${stockItemCode} (${item.item_name})`
+            });
+          }
+        }
+      }
+
+      // --- Validate FG Local BOM ---
+      // For FG items, we check both fg_bom and local_bom to find matches
+      if (fg_local_items.length > 0) {
+        const [fgExportMaster, fgLocalMaster] = await Promise.all([
+          supabase.from('fg_bom').select('id, item_code, party_name'),
+          supabase.from('local_bom').select('id, item_code, party_name')
+        ]);
+        
+        for (const item of fg_local_items) {
+          // Check both BOM tables - FG codes can be in either table
+          const matchExport = fgExportMaster.data?.find(fg => fg.item_code === item.fg_code);
+          const matchLocal = fgLocalMaster.data?.find(local => local.item_code === item.fg_code);
+          const match = matchExport || matchLocal;
+          
+          // FG stock item code must include color: {fg_code}-{color}
+          // This matches the format used in FG Transfer Note posting
+          const stockItemCode = item.color ? `${item.fg_code}-${item.color}` : item.fg_code;
+          
+          if (match) {
+            result.fg_local.matched.push({
+              ...item,
+              status: 'matched',
+              master_id: match.id,
+              stock_item_code: stockItemCode, // FG uses fg_code-color format
+              message: `Matched to ${match.item_code} (${match.party_name || ''}) in ${matchExport ? 'FG BOM' : 'Local BOM'}`
+            });
+          } else {
+            // For FG items, we still allow upload even if not in master
+            // Mark as matched so it can be uploaded (stock item will be created)
+            result.fg_local.matched.push({
+              ...item,
+              status: 'matched',
+              stock_item_code: stockItemCode, // FG uses fg_code-color format
+              message: `Not in master BOM, will create stock item: ${stockItemCode} (${item.item_name})`
+            });
+          }
+        }
+      }
+
       return NextResponse.json({
         success: true,
         action: 'validate',
@@ -248,6 +356,8 @@ export async function POST(request: NextRequest) {
           rm: { matched: result.rm.matched.length, not_matched: result.rm.not_in_master.length },
           pm: { matched: result.pm.matched.length, not_matched: result.pm.not_in_master.length },
           sfg: { matched: result.sfg.matched.length, not_matched: result.sfg.not_in_master.length },
+          fg_export: { matched: result.fg_export.matched.length, not_matched: result.fg_export.not_in_master.length },
+          fg_local: { matched: result.fg_local.matched.length, not_matched: result.fg_local.not_in_master.length },
         }
       });
     }
@@ -498,6 +608,142 @@ export async function POST(request: NextRequest) {
           }
         } catch (err) {
           results.errors.push(`Error processing SFG ${item.sfg_code}: ${err}`);
+        }
+      }
+
+      // --- Process FG Export Items ---
+      for (const item of fg_export_items) {
+        if (item.status !== 'matched') continue;
+        
+        try {
+          // Use stock_item_code from validation (includes color: fg_code-color)
+          // If not set, generate it from fg_code and color
+          const stockItemCode = item.stock_item_code || (item.color ? `${item.fg_code}-${item.color}` : item.fg_code);
+          const stockItemName = item.item_name ? `${item.item_name} (${item.color || 'N/A'})` : stockItemCode;
+          const locationForFG = 'FG_STORE'; // FG always goes to FG_STORE
+          
+          // Check/create stock item - use maybeSingle to avoid error on no match
+          let { data: stockItem } = await supabase
+            .from('stock_items')
+            .select('id, item_code')
+            .eq('item_code', stockItemCode)
+            .maybeSingle();
+          
+          if (!stockItem) {
+            const { data: newItem, error: createError } = await supabase
+              .from('stock_items')
+              .insert({
+                item_code: stockItemCode,
+                item_name: stockItemName,
+                item_type: 'FG',
+                unit_of_measure: 'NOS',
+                is_active: true
+              })
+              .select()
+              .single();
+            
+            if (createError || !newItem) {
+              results.errors.push(`Failed to create stock item for FG Export ${stockItemCode}: ${createError?.message || 'Unknown error'}`);
+              continue;
+            }
+            stockItem = newItem;
+            results.stock_items_created++;
+          }
+          
+          if (!stockItem) {
+            results.errors.push(`Stock item not found for ${stockItemCode}`);
+            continue;
+          }
+          
+          // Add opening stock - use total_qty_pcs as quantity (FG is measured in pieces)
+          // stockItem is guaranteed to be non-null after the check above
+          const openingResult = await addOpeningStock(
+            supabase, 
+            stockItem!.id, 
+            stockItemCode, 
+            locationForFG, 
+            item.total_qty_pcs, 
+            'NOS',
+            remarks || `Bulk upload: FG Export ${item.item_name} ${item.color ? `(${item.color})` : ''} (${item.qty_boxes} boxes)`,
+            transaction_date
+          );
+          
+          if (openingResult.success) {
+            results.opening_stock_added++;
+            results.details.push(`FG Export ${stockItemCode}: +${item.total_qty_pcs} NOS (${item.qty_boxes} boxes)`);
+          } else {
+            results.errors.push(`Failed to add opening stock for ${stockItemCode}: ${openingResult.error}`);
+          }
+        } catch (err) {
+          results.errors.push(`Error processing FG Export ${item.fg_code}: ${err}`);
+        }
+      }
+
+      // --- Process FG Local Items ---
+      for (const item of fg_local_items) {
+        if (item.status !== 'matched') continue;
+        
+        try {
+          // Use stock_item_code from validation (includes color: fg_code-color)
+          // If not set, generate it from fg_code and color
+          const stockItemCode = item.stock_item_code || (item.color ? `${item.fg_code}-${item.color}` : item.fg_code);
+          const stockItemName = item.item_name ? `${item.item_name} (${item.color || 'N/A'})` : stockItemCode;
+          const locationForFG = 'FG_STORE'; // FG always goes to FG_STORE
+          
+          // Check/create stock item - use maybeSingle to avoid error on no match
+          let { data: stockItem } = await supabase
+            .from('stock_items')
+            .select('id, item_code')
+            .eq('item_code', stockItemCode)
+            .maybeSingle();
+          
+          if (!stockItem) {
+            const { data: newItem, error: createError } = await supabase
+              .from('stock_items')
+              .insert({
+                item_code: stockItemCode,
+                item_name: stockItemName,
+                item_type: 'FG',
+                unit_of_measure: 'NOS',
+                is_active: true
+              })
+              .select()
+              .single();
+            
+            if (createError || !newItem) {
+              results.errors.push(`Failed to create stock item for FG Local ${stockItemCode}: ${createError?.message || 'Unknown error'}`);
+              continue;
+            }
+            stockItem = newItem;
+            results.stock_items_created++;
+          }
+          
+          if (!stockItem) {
+            results.errors.push(`Stock item not found for ${stockItemCode}`);
+            continue;
+          }
+          
+          // Add opening stock - use total_qty_pcs as quantity (FG is measured in pieces)
+          // stockItem is guaranteed to be non-null after the check above
+          const openingResult = await addOpeningStock(
+            supabase, 
+            stockItem!.id, 
+            stockItemCode, 
+            locationForFG, 
+            item.total_qty_pcs, 
+            'NOS',
+            remarks || `Bulk upload: FG Local ${item.item_name} ${item.color ? `(${item.color})` : ''} (${item.qty_boxes} boxes)`,
+            transaction_date
+          );
+          
+          if (openingResult.success) {
+            results.opening_stock_added++;
+            results.details.push(`FG Local ${stockItemCode}: +${item.total_qty_pcs} NOS (${item.qty_boxes} boxes)`);
+          } else {
+            results.errors.push(`Failed to add opening stock for ${stockItemCode}: ${openingResult.error}`);
+          }
+        } catch (err) {
+          results.errors.push(`Error processing FG Local ${item.fg_code}: ${err}`);
         }
       }
 

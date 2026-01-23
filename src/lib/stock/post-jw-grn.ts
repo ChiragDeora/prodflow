@@ -117,6 +117,7 @@ export async function postJwGrnToStock(
       
       // Map the item - try item_code first, then item_name
       // This handles cases where:
+      // - Item Name = "HP" (RM Type) + Item Code = "HJ333MO" (grade) -> creates PP-HP-HJ333MO
       // - Item Name = "HP" (RM Type) -> maps to RM with sub_category = "HP"
       // - Item Code = "HJ333MO" (grade) -> maps to stock item with that code
       // - Item Name = PM category -> maps to PM items
@@ -124,8 +125,17 @@ export async function postJwGrnToStock(
       
       console.log(`[JW GRN Stock] Mapping item: code="${item.item_code}", name="${item.item_name}"`);
       
-      // First try item_code if available
-      if (item.item_code) {
+      // If both item_name (RM type) and item_code (grade) are provided, use them together
+      // This creates proper item_code like PP-HP-HJ333MO
+      if (item.item_name && item.item_code) {
+        stockItem = await mapItemToStockItem('jw_grn', item.item_name, item.item_code);
+        if (stockItem) {
+          console.log(`[JW GRN Stock] Mapped by item_name+item_code to: ${stockItem.item_code}`);
+        }
+      }
+      
+      // First try item_code if available (as standalone)
+      if (!stockItem && item.item_code) {
         stockItem = await mapItemToStockItem('jw_grn', item.item_code);
         if (stockItem) {
           console.log(`[JW GRN Stock] Mapped by item_code to: ${stockItem.item_code}`);

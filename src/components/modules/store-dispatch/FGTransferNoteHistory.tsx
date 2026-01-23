@@ -156,7 +156,7 @@ const FGTransferNoteHistory: React.FC<{ onBack: () => void }> = ({ onBack }) => 
       { key: 'color', label: 'COLOR' },
       { key: 'qty_boxes', label: 'QTY (BOXES)' },
       { key: 'total_qty_pcs', label: 'TOTAL QTY (PCS)' },
-      { key: 'total_qty_ton', label: 'TOTAL QTY (TON)' },
+      { key: 'total_qty_kg', label: 'TOTAL QTY (KG)' },
       { key: 'qc_check', label: 'QC' },
       { key: 'remarks', label: 'REMARKS' }
     ];

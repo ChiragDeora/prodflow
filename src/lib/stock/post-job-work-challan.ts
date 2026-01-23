@@ -17,7 +17,11 @@ import {
   mapItemToStockItem,
   updateDocumentStockStatus,
   roundQuantity,
+  getFgBomByItemCode,
+  createStockItem,
 } from './helpers';
+import { getIntWtForSFG } from '../production/fg-transfer-note';
+import { getBillWtForSFG } from './job-work-challan-helpers';
 
 // ============================================================================
 // JOB WORK CHALLAN POSTING LOGIC
@@ -96,59 +100,174 @@ export async function postJobWorkChallanToStock(
     const documentNumber = challan.doc_no || challan.sr_no;
     
     for (const item of items) {
-      // Map the item to a stock item
-      // Priority: item_code > material_description > mapItemToStockItem
-      let stockItem = null;
+      // CORRECT VALIDATION FLOW:
+      // 1. Check if FG item exists in fg_bom or local_bom master (not stock_items)
+      // 2. Get sfg1, sfg2 from fg_bom or local_bom
+      // 3. Get rp_bill_wt, rp_int_wt from mold_master
+      // 4. Calculate KG values
+      // 5. Then get/create stock item (items are created when posting to stock_ledger)
       
-      // First try item_code if available
-      if (item.item_code) {
-        stockItem = await getStockItemByCode(item.item_code);
-      }
-      
-      // Fallback to material_description if item_code not found
-      if (!stockItem && item.material_description) {
-        stockItem = await getStockItemByCode(item.material_description);
-      }
-      
-      // Last resort: try mapping
-      if (!stockItem && item.material_description) {
-        stockItem = await mapItemToStockItem('job_work_challan', item.material_description);
-      }
-      
-      if (!stockItem) {
+      if (!item.item_code) {
         const itemIdentifier = item.item_code || item.material_description || 'Unknown';
-        warnings.push(`Could not map item "${itemIdentifier}" to stock item. Skipping.`);
+        warnings.push(`Item "${itemIdentifier}" has no item_code. Skipping.`);
         continue;
       }
       
-      // Get quantity - use quantityKg (in kg) for posting
-      // Convert kg to tons if needed, or use as-is based on unit_of_measure
-      const quantity = item.qty; // This is in kg from the form
-      if (!quantity || quantity <= 0) {
-        warnings.push(`Item "${item.material_description}" has no quantity. Skipping.`);
-        continue;
-      }
+      // Step 1: Validate item exists in BOM master (fg_bom or local_bom)
+      // getFgBomByItemCode checks fg_bom if code starts with "2", local_bom if starts with "3"
+      const fgBom = await getFgBomByItemCode(item.item_code);
       
-      // Get current balance at FG_STORE
-      const currentBalance = await getBalance(stockItem.item_code, 'FG_STORE');
-      
-      // Check if balance is sufficient - log warning if not, but continue (negative allowed)
-      if (currentBalance < quantity) {
-        warnings.push(
-          `Insufficient ${stockItem.item_code} at FG_STORE. Available: ${currentBalance}, Required: ${quantity}. Stock will go negative.`
+      if (!fgBom) {
+        const bomTable = item.item_code.startsWith('2') ? 'fg_bom' : 
+                         item.item_code.startsWith('3') ? 'local_bom' : 
+                         'fg_bom or local_bom';
+        throw new StockPostingError(
+          'VALIDATION_ERROR',
+          `FG item "${item.item_code}" not found in ${bomTable} master. Items must exist in BOM master before posting.`
         );
       }
       
-      // Calculate new balance (OUT)
-      const newBalance = roundQuantity(currentBalance - quantity);
+      // Step 2: Get sfg1 and sfg2 from BOM
+      if (!fgBom.sfg_1 || !fgBom.sfg_2) {
+        throw new StockPostingError(
+          'VALIDATION_ERROR',
+          `FG BOM for "${item.item_code}" is missing SFG components (sfg_1: ${fgBom.sfg_1 || 'missing'}, sfg_2: ${fgBom.sfg_2 || 'missing'}).`
+        );
+      }
+      
+      // Get qty_pcs for calculation
+      const qtyPcs = item.qty_pcs;
+      if (!qtyPcs || qtyPcs <= 0) {
+        warnings.push(`Item "${item.item_code}" has no quantity in pieces. Skipping.`);
+        continue;
+      }
+      
+      // Step 3: Get rp_bill_wt and rp_int_wt from mold_master
+      // Step 4: Calculate KG values
+      let stockDeductionKg = item.qty; // Fallback to stored qty if calculation fails
+      let billWtKg: number | null = null;
+      let intWtKg: number | null = null;
+      
+      try {
+        // Get both int_wt and bill_wt for both SFG codes
+        const [sfg1IntWt, sfg2IntWt, sfg1BillWt, sfg2BillWt] = await Promise.all([
+          getIntWtForSFG(fgBom.sfg_1),
+          getIntWtForSFG(fgBom.sfg_2),
+          getBillWtForSFG(fgBom.sfg_1),
+          getBillWtForSFG(fgBom.sfg_2)
+        ]);
+        
+        if (sfg1IntWt !== null && sfg2IntWt !== null) {
+          // Calculate: Qty (Pcs) × (SFG1_rp_int_wt + SFG2_rp_int_wt) / 1000
+          // int_wt is in grams, so divide by 1000 to get KG
+          const sfg1WtKg = (sfg1IntWt || 0) / 1000;
+          const sfg2WtKg = (sfg2IntWt || 0) / 1000;
+          stockDeductionKg = qtyPcs * (sfg1WtKg + sfg2WtKg);
+          intWtKg = stockDeductionKg;
+          
+          console.log(`[Job Work Challan] Calculated stock deduction (int_wt) for ${item.item_code}: ${qtyPcs} Pcs × (${sfg1IntWt}g + ${sfg2IntWt}g) / 1000 = ${stockDeductionKg} KG`);
+        } else {
+          warnings.push(
+            `Could not get internal weights for ${item.item_code} (SFG1: ${fgBom.sfg_1}, SFG2: ${fgBom.sfg_2}). Using stored qty: ${item.qty} KG.`
+          );
+        }
+        
+        // Calculate bill_wt_kg for display (customer-facing weight)
+        if (sfg1BillWt !== null && sfg2BillWt !== null) {
+          const sfg1BillWtKg = (sfg1BillWt || 0) / 1000;
+          const sfg2BillWtKg = (sfg2BillWt || 0) / 1000;
+          billWtKg = qtyPcs * (sfg1BillWtKg + sfg2BillWtKg);
+          
+          console.log(`[Job Work Challan] Calculated bill weight for ${item.item_code}: ${qtyPcs} Pcs × (${sfg1BillWt}g + ${sfg2BillWt}g) / 1000 = ${billWtKg} KG`);
+        }
+      } catch (error) {
+        console.error(`Error calculating weights for ${item.item_code}:`, error);
+        throw new StockPostingError(
+          'VALIDATION_ERROR',
+          `Failed to calculate weights for ${item.item_code}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+      
+      // Validate that both bill_wt and int_wt are calculated (required for proper tracking)
+      if (intWtKg === null || intWtKg <= 0) {
+        throw new StockPostingError(
+          'VALIDATION_ERROR',
+          `Internal weight (int_wt) could not be calculated for ${item.item_code}. ` +
+          `SFG1: ${fgBom.sfg_1}, SFG2: ${fgBom.sfg_2}. ` +
+          `Please ensure mold weights are configured in mold_master.`
+        );
+      }
+      
+      if (billWtKg === null || billWtKg <= 0) {
+        throw new StockPostingError(
+          'VALIDATION_ERROR',
+          `Bill weight (bill_wt) could not be calculated for ${item.item_code}. ` +
+          `SFG1: ${fgBom.sfg_1}, SFG2: ${fgBom.sfg_2}. ` +
+          `Please ensure mold weights are configured in mold_master.`
+        );
+      }
+      
+      // Step 5: Get or create stock item
+      // Items are auto-created if they don't exist (similar to SFG items)
+      let stockItem = await getStockItemByCode(item.item_code);
+      
+      if (!stockItem) {
+        // Auto-create FG stock item if it doesn't exist
+        // Use item name from BOM if available, otherwise use material_description
+        const itemName = fgBom.item_name || item.material_description || item.item_code;
+        console.log(`📦 Auto-creating FG item: ${item.item_code} (${itemName})`);
+        
+        stockItem = await createStockItem(
+          item.item_code,
+          itemName,
+          'FG',
+          'NOS', // FG items are tracked in pieces (NOS), not KG
+          'FG'
+        );
+        console.log(`✅ Created FG item: ${item.item_code}`);
+      }
+      
+      // Get current balance at FG_STORE (in pieces/NOS)
+      const currentBalance = await getBalance(stockItem.item_code, 'FG_STORE');
+      
+      // Note: Negative stock is allowed - no validation to prevent it
+      if (currentBalance < qtyPcs) {
+        warnings.push(
+          `Insufficient ${stockItem.item_code} at FG_STORE. Available: ${currentBalance} NOS, Required: ${qtyPcs} NOS. Stock will go negative.`
+        );
+      }
+      
+      // Calculate new balance (OUT) - using pieces, not KG
+      const newBalance = roundQuantity(currentBalance - qtyPcs);
+      
+      // Build remarks with both bill_wt and int_wt information
+      // Format: "JW Challan to [Party] - [Item] ([Qty] Pcs, Bill Wt: X.XX KG, Int Wt: Y.YY KG)"
+      // This format allows the stock ledger UI to parse and display both weights separately
+      let remarks = `JW Challan to ${challan.party_name || 'Job Worker'} - ${stockItem.item_name || stockItem.item_code} (${qtyPcs} Pcs`;
+      
+      // Add bill_wt_kg (customer-facing weight) if available
+      if (billWtKg !== null) {
+        remarks += `, Bill Wt: ${roundQuantity(billWtKg)} KG`;
+      }
+      
+      // Add int_wt_kg (internal weight) if available
+      if (intWtKg !== null) {
+        remarks += `, Int Wt: ${roundQuantity(intWtKg)} KG`;
+      }
+      
+      if (challan.vehicle_no) {
+        remarks += `, Vehicle: ${challan.vehicle_no}`;
+      }
+      remarks += ')';
       
       // Create OUT ledger entry at FG_STORE
+      // Post quantity in pieces (NOS), not KG
       await createLedgerEntry({
         item_id: stockItem.id,
         item_code: stockItem.item_code,
         location_code: 'FG_STORE',
-        quantity: roundQuantity(-quantity), // Negative for OUT
-        unit_of_measure: stockItem.unit_of_measure,
+        quantity: roundQuantity(-qtyPcs), // Negative for OUT - uses pieces (NOS)
+        unit_of_measure: 'NOS', // FG items are tracked in pieces
         balance_after: newBalance,
         transaction_date: transactionDate,
         document_type: 'JOB_WORK_CHALLAN',
@@ -156,16 +275,16 @@ export async function postJobWorkChallanToStock(
         document_number: documentNumber,
         movement_type: 'OUT',
         posted_by: postedBy,
-        remarks: `JW Challan to ${challan.party_name || 'Job Worker'} - ${stockItem.item_name || stockItem.item_code} (${roundQuantity(quantity)} ${stockItem.unit_of_measure || 'units'})${challan.job_work_type ? `, Type: ${challan.job_work_type}` : ''}${challan.vehicle_no ? `, Vehicle: ${challan.vehicle_no}` : ''}`,
+        remarks: remarks,
       });
       
-      // Update balance cache
+      // Update balance cache (in NOS)
       await updateBalance(
         stockItem.id,
         stockItem.item_code,
         'FG_STORE',
         newBalance,
-        stockItem.unit_of_measure
+        'NOS' // Balance is tracked in pieces
       );
       
       entriesCreated++;

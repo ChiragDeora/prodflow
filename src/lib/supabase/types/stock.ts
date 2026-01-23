@@ -332,6 +332,26 @@ export interface StockBalanceResult {
   current_balance: number;
   unit_of_measure: UnitOfMeasure;
   last_movement_at?: string;
+  // RM-specific fields
+  rm_supplier?: string | null;
+  // SFG-specific fields
+  sfg_code?: string | null;
+  sfg_item_name?: string | null;
+  sfg_qty_pcs?: number | null;
+  sfg_qty_kgs?: number | null;
+  // PM-specific fields
+  pm_dimensions?: string | null;
+  pm_party_name?: string | null;
+  pm_color_remarks?: string | null;
+  // FG-specific fields
+  fg_code?: string | null;
+  fg_color?: string | null;
+  fg_party?: string | null;
+  fg_pack_size?: string | null;
+  qty_boxes?: number | null;
+  total_qty_pcs?: number | null;
+  total_qty_ton?: number | null;
+  qc_check?: boolean | null;
 }
 
 // ============================================================================

@@ -98,11 +98,22 @@ export async function postMisToStock(
     const documentNumber = mis.issue_no || mis.doc_no;
     
     for (const item of items) {
+      // Extract grade from remarks if present (format: "Grade: {grade}" or "grade: {grade}")
+      // Do this BEFORE mapping so we can use it for proper RM item lookup
+      let grade: string | undefined;
+      if (item.remarks) {
+        const gradeMatch = item.remarks.match(/grade:\s*([^|]+)/i);
+        if (gradeMatch) {
+          grade = gradeMatch[1].trim();
+        }
+      }
+      
       // Map the item description to a stock item
-      const stockItem = await mapItemToStockItem('mis', item.description_of_material);
+      // If description is an RM type (like "HP") and grade is available, use both to find specific grade item
+      const stockItem = await mapItemToStockItem('mis', item.description_of_material, grade);
       
       if (!stockItem) {
-        warnings.push(`Could not map item "${item.description_of_material}" to stock item. Skipping.`);
+        warnings.push(`Could not map item "${item.description_of_material}"${grade ? ` with grade "${grade}"` : ''} to stock item. Skipping.`);
         continue;
       }
       
@@ -111,15 +122,6 @@ export async function postMisToStock(
       if (!quantity || quantity <= 0) {
         warnings.push(`Item "${item.description_of_material}" has no issue quantity. Skipping.`);
         continue;
-      }
-      
-      // Extract grade from remarks if present (format: "Grade: {grade}" or "grade: {grade}")
-      let grade: string | undefined;
-      if (item.remarks) {
-        const gradeMatch = item.remarks.match(/grade:\s*([^|]+)/i);
-        if (gradeMatch) {
-          grade = gradeMatch[1].trim();
-        }
       }
       
       // Get current balance at STORE
