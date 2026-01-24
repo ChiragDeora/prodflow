@@ -350,7 +350,7 @@ const SalesHistory: React.FC = () => {
                             e.stopPropagation();
                             handleViewForm(form);
                           }}
-                          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center justify-center gap-2 text-sm inline-flex"
+                          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center justify-center gap-2 text-sm"
                         >
                           <Eye className="w-4 h-4" />
                           View
@@ -410,7 +410,7 @@ const SalesHistory: React.FC = () => {
                             e.stopPropagation();
                             handleViewForm(form);
                           }}
-                          className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center justify-center gap-2 text-sm inline-flex"
+                          className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 inline-flex items-center justify-center gap-2 text-sm"
                         >
                           <Eye className="w-4 h-4" />
                           View

@@ -274,6 +274,7 @@ export async function POST(
       const fgItemCode = item.color ? `${item.fg_code}-${item.color}` : item.fg_code;
       
       // Post quantity in pieces (PCS/NOS) - include KG in remarks for display
+      // Single entry shows both NOS and KG to avoid duplicate entries in movement log
       const kgInfo = item.total_qty_kg && item.total_qty_kg > 0 
         ? ` (Weight: ${item.total_qty_kg.toFixed(2)} KG)`
         : '';
@@ -284,28 +285,11 @@ export async function POST(
         'FG_TRANSFER',
         note.doc_no,
         id,
-        `FG produced: ${item.qty_boxes} boxes × ${item.pack_size} pcs (Qty: ${item.total_qty_pcs} PCS)${kgInfo}`,
+        `FG produced: ${item.qty_boxes} boxes × ${item.pack_size} pcs${kgInfo}`,
         postedBy,
         'NOS' // UOM for pieces
       );
       entriesCreated++;
-      
-      // Post quantity in KG (if total_qty_kg is available)
-      // The unique constraint now includes unit_of_measure, so both NOS and KG entries are allowed
-      if (item.total_qty_kg && item.total_qty_kg > 0) {
-        await createStockEntry(
-          fgItemCode,
-          'FG_STORE',
-          item.total_qty_kg,
-          'FG_TRANSFER',
-          note.doc_no,
-          id,
-          `FG produced: ${item.qty_boxes} boxes × ${item.pack_size} pcs (Weight: ${item.total_qty_kg.toFixed(2)} KG)`,
-          postedBy,
-          'KG' // UOM for weight
-        );
-        entriesCreated++;
-      }
     }
 
     // Update FG Transfer Note status

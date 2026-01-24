@@ -3,10 +3,18 @@ import React from 'react';
 interface PrintHeaderProps {
   docNo?: string;
   date?: string;
+  indentNo?: string;
+  indentDate?: string;
   hideLogo?: boolean;
 }
 
-const PrintHeader: React.FC<PrintHeaderProps> = ({ docNo, date, hideLogo = false }) => {
+const PrintHeader: React.FC<PrintHeaderProps> = ({ 
+  docNo, 
+  date, 
+  indentNo, 
+  indentDate, 
+  hideLogo = false 
+}) => {
   return (
     <div className="hidden print:block border-b-2 border-black mb-4 bg-white print:mb-3">
       <div className="flex">
@@ -16,9 +24,9 @@ const PrintHeader: React.FC<PrintHeaderProps> = ({ docNo, date, hideLogo = false
             <img
               src="/dppl_comapct_logo.jpeg"
               alt="DEORA POLYPLAST LLP Logo"
-              width={180}
-              height={90}
-              className="object-contain print:w-24 print:h-12"
+              width={2800}
+              height={140}
+              className="object-contain print:w-40 print:h-20"
               onError={(e) => {
                 console.error('Failed to load logo:', e);
               }}
@@ -30,23 +38,23 @@ const PrintHeader: React.FC<PrintHeaderProps> = ({ docNo, date, hideLogo = false
         <div className={hideLogo ? "w-full p-3 bg-white print:p-2" : "w-2/3 p-3 bg-white print:p-2 print:w-3/4"}>
           <div className="flex justify-between items-start mb-2 print:mb-1">
             <h1 className="text-3xl font-bold text-gray-900 print:text-2xl print:font-bold">Deora Polyplast LLP</h1>
-            {(docNo || date) && (
+            {(indentNo || indentDate) && (
               <div className="text-right text-sm print:text-xs">
-                {docNo && (
+                {indentNo && (
                   <div className="mb-1 print:mb-0.5">
-                    <span className="font-semibold">Doc. No. :</span> <span>{docNo}</span>
+                    <span className="font-semibold">Indent No.:</span> <span>{indentNo}</span>
                   </div>
                 )}
-                {date && (
+                {indentDate && (
                   <div>
-                    <span className="font-semibold">Date :</span> <span>{new Date(date).toLocaleDateString('en-GB')}</span>
+                    <span className="font-semibold">Indent Date:</span> <span>{typeof indentDate === 'string' ? (indentDate.includes('T') ? new Date(indentDate).toLocaleDateString('en-GB') : indentDate) : indentDate}</span>
                   </div>
                 )}
               </div>
             )}
           </div>
-          <div className="text-sm font-semibold text-gray-700 mb-1.5 print:text-xs print:mb-1 print:whitespace-nowrap">
-            <span>Factory Address :- </span>
+          <div className="text-sm font-semibold text-gray-700 mb-1.5 print:text-xs print:mb-1 break-words">
+            <span>Factory Address - </span>
             <span className="font-normal">Plot no 32 & 33 Silver Industrial Estate, Village Bhimpore, Nani Daman - 396 210</span>
           </div>
           <div className="text-sm text-gray-700 mb-1.5 print:text-xs print:mb-1">
