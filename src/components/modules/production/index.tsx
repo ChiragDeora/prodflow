@@ -55,6 +55,7 @@ interface DPRData {
   summary: SummaryData;
   shiftTotal?: ShiftTotalData | null;
   achievement?: any | null;
+  stock_status?: string;
 }
 
 interface MachineData {
@@ -769,7 +770,8 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
               machines: finalMachines,
               summary,
               shiftTotal,
-              achievement: null
+              achievement: null,
+              stock_status: apiDpr.stock_status
             };
             
             console.log('📦 Converted DPR data item:', { id: dprDataItem.id, date: dprDataItem.date, shift: dprDataItem.shift });
@@ -2365,8 +2367,17 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
                     </button>
                   )}
                   
-                  {/* Post to Stock Button - Only show when there's existing DPR data AND it's NOT Excel data */}
+                  {/* Post to Stock / Posted - Only show when there's existing DPR data AND it's NOT Excel data */}
                   {getCurrentDPRData() && getCurrentDPRData()?.id && !(getCurrentDPRData() as any)?.is_excel_data && (
+                    getCurrentDPRData()?.stock_status === 'POSTED' ? (
+                      <span
+                        className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-md gap-2"
+                        title="DPR has been posted to stock ledger"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        Posted
+                      </span>
+                    ) : (
                     <button
                       onClick={async () => {
                         const currentData = getCurrentDPRData();
@@ -2400,6 +2411,7 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
                             }
                             setStockPostResult({ success: true, message });
                             alert(message);
+                            loadDprData();
                           } else {
                             const errorMsg = result.error?.message || 'Unknown error';
                             setStockPostResult({ success: false, message: errorMsg });
@@ -2428,6 +2440,7 @@ const ProductionModule: React.FC<ProductionModuleProps> = ({ onSubNavClick }) =>
                       )}
                       {isPostingToStock ? 'Posting...' : 'Post to Stock'}
                     </button>
+                    )
                   )}
                   
                   {/* Actions Dropdown Menu - Collapsible for cleaner UI */}

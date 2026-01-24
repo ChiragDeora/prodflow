@@ -13,7 +13,7 @@ interface HistoryDetailViewProps {
   loading?: boolean;
   // Stock posting props
   documentId?: string;
-  documentType?: 'grn' | 'jw-grn' | 'job-work-challan' | 'fg-transfer-note';
+  documentType?: 'grn' | 'jw-grn' | 'job-work-challan' | 'fg-transfer-note' | 'mis';
   stockStatus?: string;
   onStockPost?: () => void;
 }
@@ -87,6 +87,8 @@ const HistoryDetailView: React.FC<HistoryDetailViewProps> = ({
         endpoint = `/api/stock/post/job-work-challan/${documentId}`;
       } else if (documentType === 'fg-transfer-note') {
         endpoint = `/api/production/fg-transfer-note/${documentId}/post`;
+      } else if (documentType === 'mis') {
+        endpoint = `/api/stock/post/mis/${documentId}`;
       } else {
         endpoint = `/api/stock/post/grn/${documentId}`;
       }

@@ -4,14 +4,56 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { verifyAuth, unauthorized } from '@/lib/api-auth';
-import { getOrCreatePmItem, getFgBomByItemCode } from '@/lib/stock/helpers';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+// Local helpers using route's service-role supabase (getSupabase in @/lib/stock/helpers
+// uses the browser client which can fail in API routes).
+async function getFgBomByItemCodeLocal(
+  sb: SupabaseClient,
+  baseItemCode: string
+): Promise<{ item_name?: string; party_name?: string } | null> {
+  if (!baseItemCode) return null;
+  const table = baseItemCode.startsWith('2') ? 'fg_bom' : baseItemCode.startsWith('3') ? 'local_bom' : 'fg_bom';
+  const { data, error } = await sb.from(table).select('item_name, party_name').eq('item_code', baseItemCode).maybeSingle();
+  if (error && error.code !== 'PGRST116') {
+    console.warn(`[FG Transfer Post] getFgBom ${table} error:`, error.message);
+    return null;
+  }
+  return data;
+}
+
+async function getOrCreatePmItemLocal(
+  sb: SupabaseClient,
+  itemCode: string
+): Promise<{ id: number; item_code: string; unit_of_measure: string; item_type: string } | null> {
+  if (!itemCode?.trim()) return null;
+  const code = itemCode.trim();
+  // Check stock_items first
+  const { data: existing } = await sb.from('stock_items').select('id, item_code, unit_of_measure, item_type').eq('item_code', code).eq('is_active', true).single();
+  if (existing) return existing;
+  // Try packing_materials for name/uom
+  const { data: pm } = await sb.from('packing_materials').select('category, type, unit').eq('item_code', code).limit(1).maybeSingle();
+  const uom = (pm?.category ?? '').toUpperCase().includes('BOPP') ? 'METERS' : (['KG','NOS','METERS','PCS','LTR','MTR','SET'].includes((pm?.unit ?? '').toUpperCase()) ? (pm!.unit as string) : 'NOS');
+  const { data: created, error } = await sb.from('stock_items').insert({
+    item_code: code,
+    item_name: pm ? [pm.category, pm.type].filter(Boolean).join(' ') || code : code,
+    item_type: 'PM',
+    category: pm?.category || 'PACKING',
+    unit_of_measure: uom,
+    is_active: true,
+  }).select('id, item_code, unit_of_measure, item_type').single();
+  if (error || !created) {
+    console.warn(`[FG Transfer Post] getOrCreatePmItem failed for ${code}:`, error?.message);
+    return null;
+  }
+  return created;
+}
 
 interface StockValidationError {
   item_code: string;
@@ -176,118 +218,97 @@ export async function POST(
     
     console.log(`[FG Transfer Post] ✅ Stock validation passed - all SFG components are sufficient`);
 
-    // Create stock movements
-    let entriesCreated = 0;
+    // Aggregate stock movements by (item_code, location) to comply with stock_ledger unique constraint:
+    // UNIQUE (document_type, document_id, item_code, location_code, movement_type)
+    // Multiple line items can share the same component (SFG-1, SFG-2, carton, etc.); we must create
+    // one ledger entry per (item_code, location, movement_type) with summed quantities.
+    type AggregatedEntry = { quantity: number; remarks: string; unitOfMeasure?: string };
+    const aggregated = new Map<string, AggregatedEntry>();
+
+    function addToAggregate(
+      itemCode: string,
+      location: string,
+      quantity: number,
+      remarks: string,
+      unitOfMeasure?: string
+    ) {
+      const key = `${itemCode}|${location}`;
+      const existing = aggregated.get(key);
+      if (existing) {
+        existing.quantity += quantity;
+        // Keep generic remarks for aggregated component deductions
+        if (quantity < 0) existing.remarks = remarks;
+      } else {
+        aggregated.set(key, { quantity, remarks, unitOfMeasure });
+      }
+    }
 
     for (const item of items) {
-      // Deduct SFG-1 from FG_STORE
+      // Deduct SFG-1 from FG_STORE (aggregate when multiple lines use same SFG)
       if (item.sfg1_code && item.sfg1_deduct > 0) {
-        await createStockEntry(
-          item.sfg1_code,
-          'FG_STORE',
-          -item.sfg1_deduct,
-          'FG_TRANSFER',
-          note.doc_no,
-          id,
-          `SFG-1 consumed for FG ${item.fg_code}`,
-          postedBy
-        );
-        entriesCreated++;
+        addToAggregate(item.sfg1_code, 'FG_STORE', -item.sfg1_deduct, 'SFG-1 consumed for FG Transfer');
       }
-
       // Deduct SFG-2 from FG_STORE
       if (item.sfg2_code && item.sfg2_deduct > 0) {
-        await createStockEntry(
-          item.sfg2_code,
-          'FG_STORE',
-          -item.sfg2_deduct,
-          'FG_TRANSFER',
-          note.doc_no,
-          id,
-          `SFG-2 consumed for FG ${item.fg_code}`,
-          postedBy
-        );
-        entriesCreated++;
+        addToAggregate(item.sfg2_code, 'FG_STORE', -item.sfg2_deduct, 'SFG-2 consumed for FG Transfer');
       }
-
       // Deduct Carton from STORE
       if (item.cnt_code && item.cnt_deduct > 0) {
-        await createStockEntry(
-          item.cnt_code,
-          'STORE',
-          -item.cnt_deduct,
-          'FG_TRANSFER',
-          note.doc_no,
-          id,
-          `Carton consumed for FG ${item.fg_code}`,
-          postedBy
-        );
-        entriesCreated++;
+        addToAggregate(item.cnt_code, 'STORE', -item.cnt_deduct, 'Carton consumed for FG Transfer');
       }
-
       // Deduct Polybag from STORE
       if (item.polybag_code && item.polybag_deduct > 0) {
-        await createStockEntry(
-          item.polybag_code,
-          'STORE',
-          -item.polybag_deduct,
-          'FG_TRANSFER',
-          note.doc_no,
-          id,
-          `Polybag consumed for FG ${item.fg_code}`,
-          postedBy
-        );
-        entriesCreated++;
+        addToAggregate(item.polybag_code, 'STORE', -item.polybag_deduct, 'Polybag consumed for FG Transfer');
       }
-
       // Deduct BOPP-1 from STORE
       if (item.bopp1_code && item.bopp1_deduct > 0) {
-        await createStockEntry(
-          item.bopp1_code,
-          'STORE',
-          -item.bopp1_deduct,
-          'FG_TRANSFER',
-          note.doc_no,
-          id,
-          `BOPP-1 consumed for FG ${item.fg_code}`,
-          postedBy
-        );
-        entriesCreated++;
+        addToAggregate(item.bopp1_code, 'STORE', -item.bopp1_deduct, 'BOPP-1 consumed for FG Transfer');
       }
-
       // Deduct BOPP-2 from STORE
       if (item.bopp2_code && item.bopp2_deduct > 0) {
-        await createStockEntry(
-          item.bopp2_code,
-          'STORE',
-          -item.bopp2_deduct,
-          'FG_TRANSFER',
-          note.doc_no,
-          id,
-          `BOPP-2 consumed for FG ${item.fg_code}`,
-          postedBy
-        );
-        entriesCreated++;
+        addToAggregate(item.bopp2_code, 'STORE', -item.bopp2_deduct, 'BOPP-2 consumed for FG Transfer');
       }
+      // Add FG to FG_STORE (each fg_code+color is unique per line, no aggregation)
+      const totalPcs = item.total_qty_pcs ?? 0;
+      if (totalPcs > 0) {
+        const fgItemCode = item.color ? `${item.fg_code}-${item.color}` : item.fg_code;
+        const kgInfo = item.total_qty_kg && item.total_qty_kg > 0
+          ? ` (Weight: ${item.total_qty_kg.toFixed(2)} KG)`
+          : '';
+        addToAggregate(
+          fgItemCode,
+          'FG_STORE',
+          totalPcs,
+          `FG produced: ${item.qty_boxes} boxes × ${item.pack_size} pcs${kgInfo}`,
+          'NOS'
+        );
+      }
+    }
 
-      // Add FG to FG_STORE (with color suffix)
-      const fgItemCode = item.color ? `${item.fg_code}-${item.color}` : item.fg_code;
-      
-      // Post quantity in pieces (PCS/NOS) - include KG in remarks for display
-      // Single entry shows both NOS and KG to avoid duplicate entries in movement log
-      const kgInfo = item.total_qty_kg && item.total_qty_kg > 0 
-        ? ` (Weight: ${item.total_qty_kg.toFixed(2)} KG)`
-        : '';
+    // Use transfer date for ledger (not posting date)
+    const transactionDate =
+      (note.transfer_date_time ? new Date(note.transfer_date_time).toISOString().split('T')[0] : null) ||
+      note.date ||
+      new Date().toISOString().split('T')[0];
+
+    // Create one stock entry per aggregated group
+    let entriesCreated = 0;
+    for (const [key, entry] of aggregated) {
+      if (entry.quantity === 0) continue;
+      const lastPipe = key.lastIndexOf('|');
+      const itemCode = lastPipe >= 0 ? key.slice(0, lastPipe) : key;
+      const location = lastPipe >= 0 ? key.slice(lastPipe + 1) : 'FG_STORE';
       await createStockEntry(
-        fgItemCode,
-        'FG_STORE',
-        item.total_qty_pcs,
+        itemCode,
+        location,
+        entry.quantity,
         'FG_TRANSFER',
-        note.doc_no,
+        note.doc_no ?? id,
         id,
-        `FG produced: ${item.qty_boxes} boxes × ${item.pack_size} pcs${kgInfo}`,
+        entry.remarks,
         postedBy,
-        'NOS' // UOM for pieces
+        entry.unitOfMeasure,
+        transactionDate
       );
       entriesCreated++;
     }
@@ -308,14 +329,17 @@ export async function POST(
       message: `Successfully posted ${entriesCreated} stock entries`
     });
 
-  } catch (error) {
-    console.error('Error posting FG Transfer Note to stock:', error);
+  } catch (error: unknown) {
+    const err = error as { message?: string; code?: string; details?: string; hint?: string };
+    const message = typeof err?.message === 'string' ? err.message : (error instanceof Error ? error.message : 'An unexpected error occurred');
+    console.error('[FG Transfer Post] Error posting to stock:', { message, code: err?.code, details: err?.details, hint: err?.hint, error });
     return NextResponse.json(
       {
         success: false,
         error: {
           code: 'DATABASE_ERROR',
-          message: error instanceof Error ? error.message : 'An unexpected error occurred',
+          message,
+          ...(err?.code && { details: [err.details, err.hint].filter(Boolean).join(' ') }),
         },
       },
       { status: 500 }
@@ -392,7 +416,8 @@ async function createStockEntry(
   referenceId: string,
   remarks: string,
   createdBy: string,
-  unitOfMeasure?: string // Optional UOM override
+  unitOfMeasure?: string, // Optional UOM override
+  transactionDate?: string // YYYY-MM-DD; uses document's transfer date when provided
 ): Promise<void> {
   // Get item_id from stock_items (required for stock_ledger)
   const { data: stockItemData, error: itemError } = await supabase
@@ -420,7 +445,7 @@ async function createStockEntry(
     
     if (looksLikePm) {
       console.log(`[FG Transfer Post] Item "${itemCode}" looks like PM item, attempting to auto-create...`);
-      const pmItem = await getOrCreatePmItem(itemCode);
+      const pmItem = await getOrCreatePmItemLocal(supabase, itemCode);
       
       if (pmItem) {
         console.log(`[FG Transfer Post] ✅ Auto-created PM item: ${itemCode}`);
@@ -463,7 +488,7 @@ async function createStockEntry(
       const color = itemCode.includes('-') ? itemCode.split('-').slice(1).join('-') : null;
       
       // Look up FG BOM to get item name
-      const fgBom = await getFgBomByItemCode(baseFgCode);
+      const fgBom = await getFgBomByItemCodeLocal(supabase, baseFgCode);
       let itemName: string;
       
       if (fgBom?.item_name) {
@@ -550,7 +575,7 @@ async function createStockEntry(
     document_id: referenceId,
     remarks: remarks,
     posted_by: createdBy,
-    transaction_date: new Date().toISOString().split('T')[0],
+    transaction_date: transactionDate || new Date().toISOString().split('T')[0],
     movement_type: quantity >= 0 ? 'IN' : 'OUT'
   });
 

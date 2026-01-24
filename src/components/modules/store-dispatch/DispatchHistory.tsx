@@ -251,10 +251,12 @@ const DispatchHistory: React.FC = () => {
           { key: 'remarks', label: 'Remarks', format: (v: any) => v || '-' }
         ]
       : [
+          // Job Work Challan: match Job Work Annexure Delivery Challan form columns
           { key: 'sr_no', label: 'Sr. No.' },
-          { key: 'material_description', label: 'Material Description' },
-          { key: 'qty', label: 'Quantity' },
-          { key: 'uom', label: 'UOM' },
+          { key: 'item_code', label: 'Item Code' },
+          { key: 'material_description', label: 'Item Name', format: (v: any) => (v || '-') as string },
+          { key: 'qty_pcs', label: 'Qty (Pcs)', format: (v: any) => (v != null && v !== '') ? Number(v).toFixed(2) : '-' },
+          { key: 'qty', label: 'Quantity (KG)', format: (v: any) => (v != null && v !== '') ? Number(v).toFixed(3) : '-' },
           { key: 'remarks', label: 'Remarks', format: (v: any) => v || '-' }
         ];
 
@@ -263,8 +265,11 @@ const DispatchHistory: React.FC = () => {
       ? (detailedForm as any).stock_status 
       : undefined;
     
-    // Only enable stock posting for job work challan (FG stock ledger)
-    const documentType = selectedForm.type === 'job-work-challan' ? 'job-work-challan' : undefined;
+    // Enable stock posting for job work challan (FG) and Issue Slip (MIS)
+    const documentType =
+      selectedForm.type === 'job-work-challan' ? 'job-work-challan'
+      : selectedForm.type === 'mis' ? 'mis'
+      : undefined;
 
     return (
       <HistoryDetailView

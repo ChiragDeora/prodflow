@@ -6,6 +6,7 @@ import { useAuth } from '../../auth/AuthProvider';
 import { unitAPI, unitManagementSettingsAPI, Unit } from '../../../lib/supabase';
 import AdminDashboard from '../../admin/AdminDashboard';
 import BulkOpeningStockUpload from './BulkOpeningStockUpload';
+import { FORM_CODES, FORM_LABELS } from '../../../utils/formCodeUtils';
 
 // Stock item types
 interface StockItem {
@@ -21,7 +22,7 @@ interface StockItem {
   updated_at: string;
 }
 
-type TabType = 'profile' | 'user-management' | 'unit-management' | 'stock-management' | 'account-actions';
+type TabType = 'profile' | 'user-management' | 'unit-management' | 'stock-management' | 'form-deletion' | 'account-actions';
 
 const UserProfileModule: React.FC = () => {
   const { user, logout } = useAuth();
@@ -65,6 +66,18 @@ const UserProfileModule: React.FC = () => {
   const [showDeleteTypeModal, setShowDeleteTypeModal] = useState(false);
   const [showAddAllOpeningStockModal, setShowAddAllOpeningStockModal] = useState(false);
   const [addAllOpeningStockQuantity, setAddAllOpeningStockQuantity] = useState(0);
+  // Form deletion (root only)
+  const [formDeletionFormCode, setFormDeletionFormCode] = useState<string>(FORM_CODES.FG_TRANSFER_NOTE);
+  const [formDeletionDocNo, setFormDeletionDocNo] = useState('');
+  const [formDeletionResult, setFormDeletionResult] = useState<{
+    id: string; doc_no: string; stock_status: string | null; has_ledger: boolean;
+    can_form_only: boolean; can_form_and_ledger: boolean;
+  } | null>(null);
+  const [formDeletionLoading, setFormDeletionLoading] = useState(false);
+  const [formDeletionDeleteLoading, setFormDeletionDeleteLoading] = useState(false);
+  const [formDeletionMessage, setFormDeletionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [formDeletionDocList, setFormDeletionDocList] = useState<{ id: string; doc_no: string; stock_status: string | null }[]>([]);
+  const [formDeletionDocListLoading, setFormDeletionDocListLoading] = useState(false);
   // "As on" date for stock management - defaults to today
   const [stockAsOnDate, setStockAsOnDate] = useState<string>(() => {
     const today = new Date();
@@ -246,6 +259,27 @@ const UserProfileModule: React.FC = () => {
       loadStockItems();
     }
   }, [user?.isRootAdmin, activeTab, loadStockItems]);
+
+  // Fetch document list for Form Deletion when on tab and form type is set
+  useEffect(() => {
+    if (!user?.isRootAdmin || activeTab !== 'form-deletion' || !formDeletionFormCode) {
+      setFormDeletionDocList([]);
+      return;
+    }
+    let cancelled = false;
+    setFormDeletionDocListLoading(true);
+    setFormDeletionDocList([]);
+    fetch(`/api/admin/form-deletion/documents?formCode=${encodeURIComponent(formDeletionFormCode)}&limit=50`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (!cancelled && json.success && Array.isArray(json.data)) {
+          setFormDeletionDocList(json.data);
+        }
+      })
+      .catch(() => { if (!cancelled) setFormDeletionDocList([]); })
+      .finally(() => { if (!cancelled) setFormDeletionDocListLoading(false); });
+    return () => { cancelled = true; };
+  }, [user?.isRootAdmin, activeTab, formDeletionFormCode]);
 
   const handleStockItemSubmit = async () => {
     setIsSubmittingStockItem(true);
@@ -712,6 +746,64 @@ const handleBulkDeleteStockItems = async () => {
     }
   };
 
+  // Form deletion handlers (root only)
+  const handleFormDeletionLookup = async () => {
+    if (!formDeletionDocNo.trim()) {
+      setFormDeletionMessage({ type: 'error', text: 'Enter a document number' });
+      return;
+    }
+    setFormDeletionLoading(true);
+    setFormDeletionResult(null);
+    setFormDeletionMessage(null);
+    try {
+      const res = await fetch(
+        `/api/admin/form-deletion/lookup?formCode=${encodeURIComponent(formDeletionFormCode)}&docNo=${encodeURIComponent(formDeletionDocNo.trim())}`
+      );
+      const json = await res.json();
+      if (json.success && json.found) {
+        setFormDeletionResult(json.data);
+      } else {
+        setFormDeletionMessage({ type: 'error', text: json.error || 'Form not found' });
+      }
+    } catch (e) {
+      setFormDeletionMessage({ type: 'error', text: 'Lookup failed' });
+    } finally {
+      setFormDeletionLoading(false);
+    }
+  };
+
+  const formDeletionDelete = async (deleteLedger: boolean) => {
+    const msg = deleteLedger
+      ? `Delete form ${formDeletionDocNo} and its stock ledger entries? This cannot be undone.`
+      : `Delete form ${formDeletionDocNo} only? This cannot be undone.`;
+    if (!window.confirm(msg)) return;
+    setFormDeletionDeleteLoading(true);
+    setFormDeletionMessage(null);
+    try {
+      const res = await fetch('/api/admin/form-deletion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          formCode: formDeletionFormCode,
+          docNo: formDeletionDocNo.trim(),
+          deleteLedger,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setFormDeletionMessage({ type: 'success', text: json.message });
+        setFormDeletionResult(null);
+        setFormDeletionDocNo('');
+      } else {
+        setFormDeletionMessage({ type: 'error', text: json.error || 'Delete failed' });
+      }
+    } catch (e) {
+      setFormDeletionMessage({ type: 'error', text: 'Delete failed' });
+    } finally {
+      setFormDeletionDeleteLoading(false);
+    }
+  };
+
   const tabs = [
     {
       id: 'profile' as TabType,
@@ -738,6 +830,13 @@ const handleBulkDeleteStockItems = async () => {
       label: 'Stock Management',
       icon: Package,
       description: 'Manage stock items and add opening stock',
+      adminOnly: true
+    },
+    {
+      id: 'form-deletion' as TabType,
+      label: 'Form Deletion',
+      icon: Trash2,
+      description: 'Delete forms on command: form only or form + ledger (root only)',
       adminOnly: true
     },
     {
@@ -1926,6 +2025,122 @@ const handleBulkDeleteStockItems = async () => {
                 </div>
               </div>
             )}
+          </div>
+        );
+
+      case 'form-deletion':
+        if (!user?.isRootAdmin) {
+          return (
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="text-center py-12">
+                <Shield className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">Access Restricted</h3>
+                <p className="text-gray-600">Form deletion is only available to root administrators.</p>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-2 flex items-center">
+                <Trash2 className="w-5 h-5 mr-2" />
+                Form Deletion Management
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Delete forms on command. Use <strong>Form only</strong> when the form is not posted; use <strong>Form + Ledger</strong> when the form is posted to remove both the form and its stock ledger entries.
+              </p>
+              {formDeletionMessage && (
+                <div className={`mb-4 p-3 rounded-lg flex items-center ${
+                  formDeletionMessage.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'
+                }`}>
+                  {formDeletionMessage.type === 'success' ? <CheckCircle className="w-5 h-5 mr-2" /> : <AlertCircle className="w-5 h-5 mr-2" />}
+                  {formDeletionMessage.text}
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Form type</label>
+                  <select
+                    value={formDeletionFormCode}
+                    onChange={(e) => { setFormDeletionFormCode(e.target.value); setFormDeletionDocNo(''); setFormDeletionResult(null); }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  >
+                    {Object.entries(FORM_LABELS).map(([code, label]) => (
+                      <option key={code} value={code}>{label} ({code})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Document number</label>
+                  <select
+                    value={formDeletionDocList.some((d) => d.doc_no === formDeletionDocNo) ? formDeletionDocNo : ''}
+                    onChange={(e) => { setFormDeletionDocNo(e.target.value); setFormDeletionResult(null); }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-2"
+                    disabled={formDeletionDocListLoading}
+                  >
+                    <option value="">— Select from existing —</option>
+                    {formDeletionDocList.map((d) => (
+                      <option key={d.id} value={d.doc_no}>
+                        {d.doc_no}{d.stock_status ? ` (${d.stock_status})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    value={formDeletionDocNo}
+                    onChange={(e) => { setFormDeletionDocNo(e.target.value); setFormDeletionResult(null); }}
+                    placeholder="Or enter document number (e.g. 70025260001)"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={handleFormDeletionLookup}
+                    disabled={formDeletionLoading}
+                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {formDeletionLoading ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
+                    Lookup
+                  </button>
+                </div>
+              </div>
+              {formDeletionResult && (
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <span className="font-medium text-gray-800">Doc # {formDeletionResult.doc_no}</span>
+                      {formDeletionResult.stock_status != null && (
+                        <span className="ml-2 text-sm text-gray-600">Status: {formDeletionResult.stock_status}</span>
+                      )}
+                      {formDeletionResult.has_ledger && (
+                        <span className="ml-2 text-sm text-amber-700">(Posted to stock)</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => formDeletionDelete(false)}
+                      disabled={!formDeletionResult.can_form_only || formDeletionDeleteLoading}
+                      className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={formDeletionResult.has_ledger ? 'Not allowed when form is posted. Use Form + Ledger.' : undefined}
+                    >
+                      Delete form only
+                    </button>
+                    <button
+                      onClick={() => formDeletionDelete(true)}
+                      disabled={formDeletionDeleteLoading}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                    >
+                      Delete form + ledger
+                    </button>
+                  </div>
+                  {formDeletionResult.has_ledger && (
+                    <p className="text-xs text-amber-700 mt-2">Form is posted. &quot;Form only&quot; is disabled; use &quot;Form + ledger&quot; to remove form and ledger entries. Rebuild stock_balances from stock_ledger if needed.</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         );
 

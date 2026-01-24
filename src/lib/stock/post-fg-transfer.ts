@@ -348,7 +348,7 @@ interface FgnItem {
 /**
  * Validates that all components are available for all FG items
  * Returns validation result with any errors
- * 
+  * 
  * NOTE: PM materials (carton, polybag, BOPP) are NOT validated - they are allowed to go negative
  * Only SFG items are validated to ensure they are available before posting
  */

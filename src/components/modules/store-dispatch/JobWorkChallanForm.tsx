@@ -333,17 +333,20 @@ const JobWorkChallanForm: React.FC = () => {
   };
 
   // Fetch FG BOM and calculate weights
+  // Use /api/bom/fg-by-item-code so we resolve the BOM for this specific item (same logic as posting).
+  // Previously used /api/bom?category=FG&productCode=... which ignored productCode and took result.data[0],
+  // leading to wrong Quantity (KG) when the first FG BOM was for a different product.
   const fetchFGBomAndCalculateWeight = async (itemCode: string, itemId: string, qtyPcs: string) => {
     try {
-      const response = await fetch(`/api/bom?category=FG&productCode=${itemCode}`);
+      const response = await fetch(`/api/bom/fg-by-item-code?itemCode=${encodeURIComponent(itemCode)}`);
       const result = await response.json();
       
-      if (!result.success || !result.data || result.data.length === 0) {
+      if (!result.success || !result.data) {
         console.warn(`No FG BOM found for item ${itemCode}`);
         return;
       }
 
-      const fgBom = result.data[0]; // Get first matching BOM
+      const fgBom = result.data;
       const sfg1 = fgBom.sfg_1;
       const sfg2 = fgBom.sfg_2;
 

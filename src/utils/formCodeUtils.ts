@@ -44,6 +44,97 @@ const DOC_NO_COLUMNS: Record<string, string> = {
   [FORM_CODES.JOB_WORK_CHALLAN]: 'doc_no',
 };
 
+// ============================================================================
+// FORM DELETION CONFIG (for Root Admin form deletion management)
+// ============================================================================
+// Maps form code to: main table, doc-no column, child tables (with FK to parent),
+// and ledger document_type values when the form is posted to stock.
+// ============================================================================
+
+export interface FormDeletionChildTable {
+  table: string;
+  fkColumn: string;
+}
+
+export interface FormDeletionConfig {
+  table: string;
+  docNoColumn: string;
+  childTables: FormDeletionChildTable[];
+  /** Ledger document_type values for this form (main + cancel). null = form does not post to stock. */
+  ledgerDocTypes: string[] | null;
+  /** Column name for stock status (DRAFT/POSTED/CANCELLED). Omit if form does not post. */
+  stockStatusColumn?: string;
+}
+
+export const FORM_DELETION_CONFIG: Record<string, FormDeletionConfig> = {
+  [FORM_CODES.MATERIAL_INDENT]: {
+    table: 'purchase_material_indent_slip',
+    docNoColumn: 'ident_no',
+    childTables: [{ table: 'purchase_material_indent_slip_items', fkColumn: 'indent_slip_id' }],
+    ledgerDocTypes: null,
+  },
+  [FORM_CODES.PURCHASE_ORDER]: {
+    table: 'purchase_purchase_order',
+    docNoColumn: 'doc_no',
+    childTables: [{ table: 'purchase_purchase_order_items', fkColumn: 'purchase_order_id' }],
+    ledgerDocTypes: null,
+  },
+  [FORM_CODES.GRN]: {
+    table: 'store_grn',
+    docNoColumn: 'doc_no',
+    childTables: [{ table: 'store_grn_items', fkColumn: 'grn_id' }],
+    ledgerDocTypes: ['GRN', 'GRN_CANCEL'],
+    stockStatusColumn: 'stock_status',
+  },
+  [FORM_CODES.JW_ANNEXURE_GRN]: {
+    table: 'store_jw_annexure_grn',
+    docNoColumn: 'doc_no',
+    childTables: [{ table: 'store_jw_annexure_grn_items', fkColumn: 'jw_annexure_grn_id' }],
+    ledgerDocTypes: ['JW_GRN', 'JW_GRN_CANCEL'],
+    stockStatusColumn: 'stock_status',
+  },
+  [FORM_CODES.MIS]: {
+    table: 'store_mis',
+    docNoColumn: 'doc_no',
+    childTables: [{ table: 'store_mis_items', fkColumn: 'mis_id' }],
+    ledgerDocTypes: ['MIS', 'MIS_CANCEL'],
+    stockStatusColumn: 'stock_status',
+  },
+  [FORM_CODES.DELIVERY_CHALLAN]: {
+    table: 'dispatch_delivery_challan',
+    docNoColumn: 'doc_no',
+    childTables: [{ table: 'dispatch_delivery_challan_items', fkColumn: 'challan_id' }],
+    ledgerDocTypes: ['DISPATCH', 'DISPATCH_CANCEL'],
+    stockStatusColumn: 'stock_status',
+  },
+  [FORM_CODES.FG_TRANSFER_NOTE]: {
+    table: 'production_fg_transfer_note',
+    docNoColumn: 'doc_no',
+    childTables: [{ table: 'production_fg_transfer_note_items', fkColumn: 'transfer_note_id' }],
+    ledgerDocTypes: ['FG_TRANSFER', 'FG_TRANSFER_CANCEL'],
+    stockStatusColumn: 'stock_status',
+  },
+  [FORM_CODES.JOB_WORK_CHALLAN]: {
+    table: 'store_job_work_challan',
+    docNoColumn: 'doc_no',
+    childTables: [{ table: 'store_job_work_challan_items', fkColumn: 'challan_id' }],
+    ledgerDocTypes: ['JOB_WORK_CHALLAN', 'JOB_WORK_CHALLAN_CANCEL'],
+    stockStatusColumn: 'stock_status',
+  },
+};
+
+/** Human-readable labels for form types (for Form Deletion UI) */
+export const FORM_LABELS: Record<string, string> = {
+  [FORM_CODES.MATERIAL_INDENT]: 'Material Indent Slip',
+  [FORM_CODES.PURCHASE_ORDER]: 'Purchase Order',
+  [FORM_CODES.GRN]: 'GRN',
+  [FORM_CODES.JW_ANNEXURE_GRN]: 'JW Annexure GRN',
+  [FORM_CODES.MIS]: 'MIS (Material Issue Slip)',
+  [FORM_CODES.DELIVERY_CHALLAN]: 'Delivery Challan',
+  [FORM_CODES.FG_TRANSFER_NOTE]: 'FG Transfer Note',
+  [FORM_CODES.JOB_WORK_CHALLAN]: 'Job Work Challan',
+};
+
 /**
  * Get the current year (can be adjusted for financial year if needed)
  * Default: Calendar year (e.g., 2025)
